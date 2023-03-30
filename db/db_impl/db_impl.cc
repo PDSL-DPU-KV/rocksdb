@@ -292,6 +292,11 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   }
 }
 
+bool DBImpl::HaveBalancedDistribution(ColumnFamilyHandle* column_family) {
+  auto* cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
+  return cfd->HaveBalancedDistribution();
+}
+
 Status DBImpl::Resume() {
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Resuming DB");
 

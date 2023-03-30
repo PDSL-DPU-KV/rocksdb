@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <cinttypes>
+#include <cstdio>
 #include <string>
 
 #include "logging/logging.h"
@@ -18,6 +19,7 @@
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/compression_type.h"
 #include "rocksdb/env.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 #include "table/block_based/block.h"
 #include "table/block_based/block_based_table_reader.h"
 #include "table/block_based/block_type.h"
@@ -259,6 +261,12 @@ IOStatus BlockFetcher::ReadBlockContents() {
             &direct_io_buf_, read_options_.rate_limiter_priority);
         PERF_COUNTER_ADD(block_read_count, 1);
         used_buf_ = const_cast<char*>(slice_.data());
+#ifdef STATISTIC_OPEN
+        auto fmap = global_stats.file_access_freq[file_->FileLevel()];
+        auto key = (file_->FileID()<<32) + handle_.offset();
+        (*fmap)[key]++;
+        //printf("file name: %s, id: %ld, offset: %ld, hash id: %ld\n", file_->file_name().c_str(), file_->FileID(), handle_.offset(), key);
+#endif
       } else {
         PrepareBufferForBlockFromFile();
         PERF_TIMER_GUARD(block_read_time);

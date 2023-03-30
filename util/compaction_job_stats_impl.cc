@@ -39,10 +39,14 @@ void CompactionJobStats::Reset() {
 
   num_corrupt_keys = 0;
 
+  file_read_nanos = 0;
   file_write_nanos = 0;
   file_range_sync_nanos = 0;
   file_fsync_nanos = 0;
   file_prepare_write_nanos = 0;
+
+  compress_nanos = 0;
+  decompress_nanos = 0;
 
   smallest_output_key_prefix.clear();
   largest_output_key_prefix.clear();
@@ -79,10 +83,14 @@ void CompactionJobStats::Add(const CompactionJobStats& stats) {
 
   num_corrupt_keys += stats.num_corrupt_keys;
 
+  file_read_nanos += stats.file_read_nanos;
   file_write_nanos += stats.file_write_nanos;
   file_range_sync_nanos += stats.file_range_sync_nanos;
   file_fsync_nanos += stats.file_fsync_nanos;
   file_prepare_write_nanos += stats.file_prepare_write_nanos;
+
+  compress_nanos += stats.compress_nanos;
+  decompress_nanos += stats.decompress_nanos;
 
   num_single_del_fallthru += stats.num_single_del_fallthru;
   num_single_del_mismatch += stats.num_single_del_mismatch;

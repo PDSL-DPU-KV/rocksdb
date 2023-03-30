@@ -55,6 +55,8 @@
 #include "util/string_util.h"
 #include "util/work_queue.h"
 
+#include "monitoring/iostats_context_imp.h"
+
 namespace ROCKSDB_NAMESPACE {
 
 extern const std::string kHashIndexPrefixesBlock;
@@ -1144,11 +1146,15 @@ void BlockBasedTableBuilder::CompressAndVerifyBlock(
 
     std::string sampled_output_fast;
     std::string sampled_output_slow;
-    *block_contents = CompressBlock(
-        uncompressed_block_data, compression_info, type,
-        r->table_options.format_version, is_data_block /* do_sample */,
-        compressed_output, &sampled_output_fast, &sampled_output_slow);
-
+    {
+      auto prev_perf_level = GetPerfLevel();
+      IOSTATS_CPU_TIMER_GUARD(cpu_compress_nanos, nullptr);
+      *block_contents = CompressBlock(
+          uncompressed_block_data, compression_info, type,
+          r->table_options.format_version, is_data_block /* do_sample */,
+          compressed_output, &sampled_output_fast, &sampled_output_slow);
+      SetPerfLevel(prev_perf_level);
+    }
     if (sampled_output_slow.size() > 0 || sampled_output_fast.size() > 0) {
       // Currently compression sampling is only enabled for data block.
       assert(is_data_block);

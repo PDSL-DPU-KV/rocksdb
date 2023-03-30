@@ -89,6 +89,8 @@ class RandomAccessFileReader {
   std::vector<std::shared_ptr<EventListener>> listeners_;
   const Temperature file_temperature_;
   const bool is_last_level_;
+  const int level_;
+  const uint64_t fid_;
 
   struct ReadAsyncInfo {
     ReadAsyncInfo(std::function<void(const FSReadRequest&, void*)> cb,
@@ -127,7 +129,7 @@ class RandomAccessFileReader {
       RateLimiter* rate_limiter = nullptr,
       const std::vector<std::shared_ptr<EventListener>>& listeners = {},
       Temperature file_temperature = Temperature::kUnknown,
-      bool is_last_level = false)
+      bool is_last_level = false, int level = -1, uint64_t fid = -1)
       : file_(std::move(raf), io_tracer, _file_name),
         file_name_(std::move(_file_name)),
         clock_(clock),
@@ -137,7 +139,9 @@ class RandomAccessFileReader {
         rate_limiter_(rate_limiter),
         listeners_(),
         file_temperature_(file_temperature),
-        is_last_level_(is_last_level) {
+        is_last_level_(is_last_level),
+        level_(level),
+        fid_(fid) {
     std::for_each(listeners.begin(), listeners.end(),
                   [this](const std::shared_ptr<EventListener>& e) {
                     if (e->ShouldBeNotifiedOnFileIO()) {
@@ -205,5 +209,8 @@ class RandomAccessFileReader {
                      AlignedBuf* aligned_buf);
 
   void ReadAsyncCallback(const FSReadRequest& req, void* cb_arg);
+
+  int FileLevel() { return level_; }
+  uint64_t FileID() { return fid_; }
 };
 }  // namespace ROCKSDB_NAMESPACE

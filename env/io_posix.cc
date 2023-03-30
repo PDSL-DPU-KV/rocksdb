@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 #ifdef ROCKSDB_LIB_IO_POSIX
 #include "env/io_posix.h"
 
@@ -576,7 +577,10 @@ IOStatus PosixRandomAccessFile::Read(uint64_t offset, size_t n,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
+    // uint64_t pread_start = get_now_nanos();
     r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    // uint64_t pread_elapsed = get_now_nanos() - pread_start;
+    // printf("pread time: %ld\n", pread_elapsed);
     if (r <= 0) {
       if (r == -1 && errno == EINTR) {
         continue;

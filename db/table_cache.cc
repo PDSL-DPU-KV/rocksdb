@@ -8,6 +8,9 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/table_cache.h"
+#include <cstdio>
+#include <string>
+#include <utility>
 
 #include "db/dbformat.h"
 #include "db/range_tombstone_fragmenter.h"
@@ -30,6 +33,8 @@
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/stop_watch.h"
+
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 
 // Generate the regular and coroutine versions of some methods by
 // including table_cache_sync_and_async.h twice
@@ -130,7 +135,7 @@ Status TableCache::GetTableReader(
             std::move(file), fname, ioptions_.clock, io_tracer_,
             record_read_stats ? ioptions_.stats : nullptr, SST_READ_MICROS,
             file_read_hist, ioptions_.rate_limiter.get(), ioptions_.listeners,
-            file_temperature, level == ioptions_.num_levels - 1));
+            file_temperature, level == ioptions_.num_levels - 1, level, file_meta.fd.GetNumber()));
     UniqueId64x2 expected_unique_id;
     if (ioptions_.verify_sst_unique_id_in_manifest) {
       expected_unique_id = file_meta.unique_id;
@@ -460,6 +465,10 @@ Status TableCache::Get(
     if (s.ok()) {
       get_context->SetReplayLog(row_cache_entry);  // nullptr if no cache.
       s = t->Get(options, k, get_context, prefix_extractor.get(), skip_filters);
+#ifdef STATISTIC_OPEN
+      // auto fmap = global_stats.file_access_freq[level];
+      // (*fmap)[fd.GetNumber()]++;
+#endif
       get_context->SetReplayLog(nullptr);
     } else if (options.read_tier == kBlockCacheTier && s.IsIncomplete()) {
       // Couldn't find Table in cache but treat as kFound if no_io set

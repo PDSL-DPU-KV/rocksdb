@@ -33,6 +33,8 @@
 #include "util/string_util.h"
 #include "util/xxhash.h"
 
+#include "monitoring/iostats_context_imp.h"
+
 namespace ROCKSDB_NAMESPACE {
 
 extern const uint64_t kLegacyBlockBasedTableMagicNumber;
@@ -506,6 +508,9 @@ Status UncompressBlockData(const UncompressionInfo& uncompression_info,
   assert(uncompression_info.type() != kNoCompression &&
          "Invalid compression type");
 
+  auto prev_perf_level = GetPerfLevel();
+  IOSTATS_CPU_TIMER_GUARD(cpu_decompress_nanos, nullptr);
+
   StopWatchNano timer(ioptions.clock,
                       ShouldReportDetailedTime(ioptions.env, ioptions.stats));
   size_t uncompressed_size = 0;
@@ -525,6 +530,8 @@ Status UncompressBlockData(const UncompressionInfo& uncompression_info,
   }
 
   *out_contents = BlockContents(std::move(ubuf), uncompressed_size);
+  
+  SetPerfLevel(prev_perf_level);
 
   if (ShouldReportDetailedTime(ioptions.env, ioptions.stats)) {
     RecordTimeToHistogram(ioptions.stats, DECOMPRESSION_TIMES_NANOS,

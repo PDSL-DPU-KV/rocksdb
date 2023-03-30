@@ -154,6 +154,7 @@ class FlushJob {
   Statistics* stats_;
   EventLogger* event_logger_;
   TableProperties table_properties_;
+  InternalStats::CompactionStats flush_stats_;
   bool measure_io_stats_;
   // True if this flush job should call fsync on the output directory. False
   // otherwise.

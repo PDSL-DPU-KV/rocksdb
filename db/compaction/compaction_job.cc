@@ -57,6 +57,9 @@
 #include "test_util/sync_point.h"
 #include "util/stop_watch.h"
 
+#include "rocksdb/utilities/my_statistics/my_log.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
+
 namespace ROCKSDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
@@ -806,6 +809,22 @@ Status CompactionJob::Run() {
   LogFlush(db_options_.info_log);
   TEST_SYNC_POINT("CompactionJob::Run():End");
 
+#ifdef STATISTIC_OPEN
+  char thread_name[32];
+  int rc = pthread_getname_np(pthread_self(), thread_name, 32);
+  if (rc != 0) {
+    printf("Failed to get thread name!\n");
+  }
+  RECORD_INFO(0, "%ld,%.2f,%.2f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%d,%s\n",
+              ++global_stats.compaction_num,
+              1.0*(compaction_stats_.stats.bytes_read_non_output_levels+compaction_stats_.stats.bytes_read_output_level)/1048576.0, 
+              1.0*compaction_stats_.stats.bytes_written/1048576.0,
+              1.0*compaction_stats_.stats.micros*1e-6, 1.0*compaction_stats_.stats.cpu_micros*1e-6,
+              1.0*compaction_job_stats_->compress_nanos*1e-9, 1.0*compaction_job_stats_->decompress_nanos*1e-9, 
+              1.0*compaction_job_stats_->file_read_nanos*1e-9, 1.0*compaction_job_stats_->file_write_nanos*1e-9, 
+              compact_->compaction->output_level(), thread_name);
+#endif
+
   compact_->status = status;
   return status;
 }
@@ -1181,21 +1200,27 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   // I/O measurement variables
   PerfLevel prev_perf_level = PerfLevel::kEnableTime;
   const uint64_t kRecordStatsEvery = 1000;
+  uint64_t prev_read_nanos = 0;
   uint64_t prev_write_nanos = 0;
   uint64_t prev_fsync_nanos = 0;
   uint64_t prev_range_sync_nanos = 0;
   uint64_t prev_prepare_write_nanos = 0;
   uint64_t prev_cpu_write_nanos = 0;
   uint64_t prev_cpu_read_nanos = 0;
+  uint64_t prev_compress_nanos = 0;
+  uint64_t prev_decompress_nanos = 0;
   if (measure_io_stats_) {
     prev_perf_level = GetPerfLevel();
     SetPerfLevel(PerfLevel::kEnableTimeAndCPUTimeExceptForMutex);
+    prev_read_nanos = IOSTATS(read_nanos);
     prev_write_nanos = IOSTATS(write_nanos);
     prev_fsync_nanos = IOSTATS(fsync_nanos);
     prev_range_sync_nanos = IOSTATS(range_sync_nanos);
     prev_prepare_write_nanos = IOSTATS(prepare_write_nanos);
     prev_cpu_write_nanos = IOSTATS(cpu_write_nanos);
     prev_cpu_read_nanos = IOSTATS(cpu_read_nanos);
+    prev_compress_nanos = IOSTATS(cpu_compress_nanos);
+    prev_decompress_nanos = IOSTATS(cpu_decompress_nanos);
   }
 
   MergeHelper merge(
@@ -1381,6 +1406,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       db_options_.clock->CPUMicros() - prev_cpu_micros;
 
   if (measure_io_stats_) {
+    sub_compact->compaction_job_stats.file_read_nanos +=
+        IOSTATS(read_nanos) - prev_read_nanos;
     sub_compact->compaction_job_stats.file_write_nanos +=
         IOSTATS(write_nanos) - prev_write_nanos;
     sub_compact->compaction_job_stats.file_fsync_nanos +=
@@ -1393,6 +1420,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         (IOSTATS(cpu_write_nanos) - prev_cpu_write_nanos +
          IOSTATS(cpu_read_nanos) - prev_cpu_read_nanos) /
         1000;
+    sub_compact->compaction_job_stats.compress_nanos += 
+        IOSTATS(cpu_compress_nanos) - prev_compress_nanos;
+    sub_compact->compaction_job_stats.decompress_nanos += 
+        IOSTATS(cpu_decompress_nanos) - prev_decompress_nanos;
     if (prev_perf_level != PerfLevel::kEnableTimeAndCPUTimeExceptForMutex) {
       SetPerfLevel(prev_perf_level);
     }

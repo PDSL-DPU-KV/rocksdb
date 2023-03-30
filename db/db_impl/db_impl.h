@@ -182,6 +182,9 @@ class DBImpl : public DB {
 
   virtual ~DBImpl();
 
+  using DB::HaveBalancedDistribution;
+  virtual bool HaveBalancedDistribution(ColumnFamilyHandle* column_family) override;
+
   // ---- Implementations of the DB interface ----
 
   using DB::Resume;

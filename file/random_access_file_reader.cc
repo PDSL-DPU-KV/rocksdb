@@ -10,12 +10,14 @@
 #include "file/random_access_file_reader.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <mutex>
 
 #include "file/file_util.h"
 #include "monitoring/histogram.h"
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 #include "table/format.h"
 #include "test_util/sync_point.h"
 #include "util/random.h"
@@ -98,6 +100,7 @@ IOStatus RandomAccessFileReader::Read(
                  true /*delay_enabled*/);
     auto prev_perf_level = GetPerfLevel();
     IOSTATS_TIMER_GUARD(read_nanos);
+    // uint64_t read_start = get_now_nanos();
     if (use_direct_io()) {
       size_t alignment = file_->GetRequiredBufferAlignment();
       size_t aligned_offset =
@@ -225,6 +228,8 @@ IOStatus RandomAccessFileReader::Read(
       }
       *result = Slice(res_scratch, io_s.ok() ? pos : 0);
     }
+    // uint64_t read_elapsed = get_now_nanos() - read_start;
+    // printf("Read block time: %ld\n", read_elapsed);
     RecordIOStats(stats_, file_temperature_, is_last_level_, result->size());
     SetPerfLevel(prev_perf_level);
   }

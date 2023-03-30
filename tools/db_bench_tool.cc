@@ -7,6 +7,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <cstdint>
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
+#include "rocksdb/utilities/my_statistics/my_log.h"
 #ifdef GFLAGS
 #ifdef NUMA
 #include <numa.h>
@@ -3553,6 +3556,8 @@ class Benchmark {
       } else if (name == "block_cache_entry_stats") {
         // DB::Properties::kBlockCacheEntryStats
         PrintStats("rocksdb.block-cache-entry-stats");
+      } else if (name == "wait") { 
+        WaitBalanceLevel();
       } else if (name == "stats") {
         PrintStats("rocksdb.stats");
       } else if (name == "resetstats") {
@@ -8273,6 +8278,16 @@ class Benchmark {
     }
   }
 
+  void WaitBalanceLevel() {
+    if (db_.db == nullptr) return;
+    uint64_t sleep_time = 0;
+    while (!db_.db->HaveBalancedDistribution()) {
+      sleep(10);
+      sleep_time += 10;
+    }
+    printf("Wait balance:%lu s\n", sleep_time);
+  }  
+
   void PrintStats(const char* key) {
     if (db_.db != nullptr) {
       PrintStats(db_.db, key, false);
@@ -8409,6 +8424,7 @@ class Benchmark {
 };
 
 int db_bench_tool(int argc, char** argv) {
+  rocksdb::init_mylog_file();
   ROCKSDB_NAMESPACE::port::InstallStackTraceHandler();
   ConfigOptions config_options;
   static bool initialized = false;
@@ -8575,6 +8591,18 @@ int db_bench_tool(int argc, char** argv) {
 
   ROCKSDB_NAMESPACE::Benchmark benchmark;
   benchmark.Run();
+
+  // Dump file access statistics
+  for (uint64_t i = 0; i < global_stats.file_access_freq.size(); i++) {
+    auto fmap = global_stats.file_access_freq[i];
+    printf("level: %ld, map size: %ld\n", i, fmap->size());
+    if (!fmap->empty()) {
+      for (auto it = fmap->begin(); it != fmap->end(); ++it) {
+        auto key = it->first;
+        RECORD_INFO(2, "%ld,%ld,%d,%ld\n", key>>32, key&0xFFFFFFFF,i, it->second);
+      }
+    }
+  }
 
   if (FLAGS_print_malloc_stats) {
     std::string stats_string;

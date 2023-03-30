@@ -146,6 +146,13 @@ using TablePropertiesCollection =
 // and a number of wrapper implementations.
 class DB {
  public:
+  virtual bool HaveBalancedDistribution(ColumnFamilyHandle* ) {
+    printf("if run here, not complete HaveBalancedDistribution\n");
+    return false;
+  };
+  virtual bool HaveBalancedDistribution() {
+    return HaveBalancedDistribution(DefaultColumnFamily());
+  }
   // Open the database with the specified "name" for reads and writes.
   // Stores a pointer to a heap-allocated database in *dbptr and returns
   // OK on success.

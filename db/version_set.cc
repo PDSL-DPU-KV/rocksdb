@@ -38,6 +38,7 @@
 #include "db/table_cache.h"
 #include "db/version_builder.h"
 #include "db/version_edit_handler.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 #if USE_COROUTINES
 #include "folly/experimental/coro/BlockingWait.h"
 #include "folly/experimental/coro/Collect.h"
@@ -168,6 +169,7 @@ class FilePicker {
   }
 
   int GetCurrentLevel() const { return curr_level_; }
+  int GetNumLevel() const { return num_levels_; }
 
   FdWithKeyRange* GetNextFile() {
     while (!search_ended_) {  // Loops over different levels.
@@ -2313,6 +2315,10 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     bool timer_enabled =
         GetPerfLevel() >= PerfLevel::kEnableTimeExceptForMutex &&
         get_perf_context()->per_level_perf_context_enabled;
+    // uint64_t table_get_start = 0;
+    // if (fp.GetCurrentLevel() == fp.GetNumLevel() - 1) {
+    //   table_get_start = get_now_nanos();
+    // }
     StopWatchNano timer(clock_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
         read_options, *internal_comparator(), *f->file_metadata, ikey,
@@ -2321,6 +2327,10 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
                         fp.IsHitFileLastInLevel()),
         fp.GetHitFileLevel(), max_file_size_for_l0_meta_pin_);
+    // if (fp.GetCurrentLevel() == fp.GetNumLevel() - 1) {
+    //   uint64_t table_get_elapsed = get_now_nanos() - table_get_start;
+    //   printf("Table level:%d, get time: %ld\n", fp.GetCurrentLevel(), table_get_elapsed);
+    // }
     // TODO: examine the behavior for corrupted key
     if (timer_enabled) {
       PERF_COUNTER_BY_LEVEL_ADD(get_from_table_nanos, timer.ElapsedNanos(),

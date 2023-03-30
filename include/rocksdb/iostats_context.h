@@ -76,6 +76,11 @@ struct IOStatsContext {
   // CPU time spent in read() and pread()
   uint64_t cpu_read_nanos;
 
+  // CPU time spend in CompressBlock()
+  uint64_t cpu_compress_nanos;
+  // CPU time spend in DeCompressBlock()
+  uint64_t cpu_decompress_nanos;
+
   FileIOByTemperature file_io_stats_by_temperature;
 
   // It is not consistent that whether iostats follows PerfLevel.Timer counters

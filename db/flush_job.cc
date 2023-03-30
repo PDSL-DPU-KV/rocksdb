@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cstdio>
 #include <vector>
 
 #include "db/builder.h"
@@ -46,6 +47,9 @@
 #include "util/coding.h"
 #include "util/mutexlock.h"
 #include "util/stop_watch.h"
+
+#include "rocksdb/utilities/my_statistics/my_log.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -121,6 +125,7 @@ FlushJob::FlushJob(
       output_compression_(output_compression),
       stats_(stats),
       event_logger_(event_logger),
+      flush_stats_(CompactionReason::kFlush, 1),
       measure_io_stats_(measure_io_stats),
       sync_output_directory_(sync_output_directory),
       write_manifest_(write_manifest),
@@ -228,21 +233,27 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
 
   // I/O measurement variables
   PerfLevel prev_perf_level = PerfLevel::kEnableTime;
+  uint64_t prev_read_nanos = 0;
   uint64_t prev_write_nanos = 0;
   uint64_t prev_fsync_nanos = 0;
   uint64_t prev_range_sync_nanos = 0;
   uint64_t prev_prepare_write_nanos = 0;
   uint64_t prev_cpu_write_nanos = 0;
   uint64_t prev_cpu_read_nanos = 0;
+  uint64_t prev_compress_nanos = 0;
+  uint64_t prev_decompress_nanos = 0;
   if (measure_io_stats_) {
     prev_perf_level = GetPerfLevel();
     SetPerfLevel(PerfLevel::kEnableTime);
+    prev_read_nanos = IOSTATS(read_nanos);
     prev_write_nanos = IOSTATS(write_nanos);
     prev_fsync_nanos = IOSTATS(fsync_nanos);
     prev_range_sync_nanos = IOSTATS(range_sync_nanos);
     prev_prepare_write_nanos = IOSTATS(prepare_write_nanos);
     prev_cpu_write_nanos = IOSTATS(cpu_write_nanos);
     prev_cpu_read_nanos = IOSTATS(cpu_read_nanos);
+    prev_compress_nanos = IOSTATS(cpu_compress_nanos);
+    prev_decompress_nanos = IOSTATS(cpu_decompress_nanos);
   }
   Status mempurge_s = Status::NotFound("No MemPurge.");
   if ((mempurge_threshold > 0.0) &&
@@ -349,6 +360,21 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
            << (IOSTATS(cpu_write_nanos) - prev_cpu_write_nanos);
     stream << "file_cpu_read_nanos"
            << (IOSTATS(cpu_read_nanos) - prev_cpu_read_nanos);
+#ifdef STATISTIC_OPEN
+    char thread_name[32];
+    int rc = pthread_getname_np(pthread_self(), thread_name, 32);
+    if (rc != 0) {
+      printf("Failed to get thread name!\n");
+    }
+    RECORD_INFO(
+        1, "%ld,%.2f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%s\n",
+        ++global_stats.flush_num, 1.0 * flush_stats_.bytes_written / 1048576.0,
+        1.0 * flush_stats_.micros * 1e-6, 1.0 * flush_stats_.cpu_micros * 1e-6,
+        1.0 * (IOSTATS(cpu_compress_nanos) - prev_compress_nanos) * 1e-9,
+        1.0 * (IOSTATS(cpu_decompress_nanos) - prev_decompress_nanos) * 1e-9,
+        1.0 * (IOSTATS(read_nanos) - prev_read_nanos) * 1e-9,
+        1.0 * (IOSTATS(write_nanos) - prev_write_nanos) * 1e-9, thread_name);
+#endif
   }
 
   return s;
@@ -1011,8 +1037,8 @@ Status FlushJob::WriteLevel0Table() {
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   const uint64_t micros = clock_->NowMicros() - start_micros;
   const uint64_t cpu_micros = clock_->CPUMicros() - start_cpu_micros;
-  stats.micros = micros;
-  stats.cpu_micros = cpu_micros;
+  flush_stats_.micros = stats.micros = micros;
+  flush_stats_.cpu_micros = stats.cpu_micros = cpu_micros;
 
   ROCKS_LOG_INFO(db_options_.info_log,
                  "[%s] [JOB %d] Flush lasted %" PRIu64
@@ -1032,6 +1058,7 @@ Status FlushJob::WriteLevel0Table() {
 
   stats.num_output_files_blob = static_cast<int>(blobs.size());
 
+  flush_stats_.bytes_written = stats.bytes_written;
   RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, thread_pri_, stats);
   cfd_->internal_stats()->AddCFStats(

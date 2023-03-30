@@ -7,10 +7,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
+#include <cstdio>
 #include <type_traits>
 
 #include "block.h"
 #include "block_cache.h"
+#include "rocksdb/utilities/my_statistics/global_statistics.h"
 #include "table/block_based/block_based_table_reader.h"
 #include "table/block_based/reader_common.h"
 
@@ -52,6 +54,8 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
     Status& s) const {
   using IterBlocklike = typename IterTraits<TBlockIter>::IterBlocklike;
   PERF_TIMER_GUARD(new_table_block_iter_nanos);
+
+  // uint64_t new_start = get_now_nanos();
 
   TBlockIter* iter = input_iter != nullptr ? input_iter : new TBlockIter;
   if (!s.ok()) {
@@ -138,6 +142,9 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   }
 
   block.TransferTo(iter);
+
+  // uint64_t new_elpased = get_now_nanos() - new_start;
+  // printf("new data block iter level:%d, time: %ld\n", rep_->level, new_elpased);
 
   return iter;
 }
