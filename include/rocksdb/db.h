@@ -147,6 +147,13 @@ using TablePropertiesCollection =
 // and a number of wrapper implementations.
 class DB {
  public:
+  virtual bool HaveBalancedDistribution(ColumnFamilyHandle*) {
+    printf("if run here, not complete HaveBalancedDistribution\n");
+    return false;
+  };
+  virtual bool HaveBalancedDistribution() {
+    return HaveBalancedDistribution(DefaultColumnFamily());
+  }
   // Open the database with the specified "name" for reads and writes.
   // Stores a pointer to a heap-allocated database in *dbptr and returns
   // OK on success.
@@ -1828,7 +1835,6 @@ class DB {
 
   virtual Status VerifyChecksum() { return VerifyChecksum(ReadOptions()); }
 
-
   // Returns the unique ID which is read from IDENTITY file during the opening
   // of database by setting in the identity variable
   // Returns Status::OK if identity could be set properly
@@ -1843,7 +1849,6 @@ class DB {
 
   // Returns default column family handle
   virtual ColumnFamilyHandle* DefaultColumnFamily() const = 0;
-
 
   virtual Status GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
                                           TablePropertiesCollection* props) = 0;
@@ -1909,7 +1914,6 @@ class DB {
       std::unique_ptr<Replayer>* /*replayer*/) {
     return Status::NotSupported("NewDefaultReplayer() is not implemented.");
   }
-
 
   // Needed for StackableDB
   virtual DB* GetRootDB() { return this; }
@@ -2009,6 +2013,5 @@ Status RepairDB(const std::string& dbname, const DBOptions& db_options,
 // @param options These options will be used for the database and for ALL column
 //                families encountered during the repair
 Status RepairDB(const std::string& dbname, const Options& options);
-
 
 }  // namespace ROCKSDB_NAMESPACE
