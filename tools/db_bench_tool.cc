@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include "gflags/gflags.h"
 #ifdef GFLAGS
 #ifdef NUMA
 #include <numa.h>
@@ -568,6 +569,26 @@ DEFINE_double(cache_low_pri_pool_ratio, 0.0,
               "Ratio of block cache reserve for low pri blocks.");
 
 DEFINE_string(cache_type, "lru_cache", "Type of block cache.");
+
+DEFINE_bool(use_remote_secondary_cache, false,
+            "Use the remote memory as the secondary cache.");
+
+DEFINE_int64(remote_secondary_cache_size, 1 << 30,
+             "Number of bytes to use as a cache of data");
+
+DEFINE_int32(remote_secondary_cache_numshardbits, 6,
+             "Number of shards for the block cache"
+             " is 2 ** remote_secondary_cache_numshardbits."
+             " Negative means use default settings."
+             " This is applied only if FLAGS_cache_size is non-negative.");
+
+DEFINE_double(remote_secondary_cache_high_pri_pool_ratio, 0.0,
+              "Ratio of block cache reserve for high pri blocks. "
+              "If > 0.0, we also enable "
+              "cache_index_and_filter_blocks_with_high_priority.");
+
+DEFINE_double(remote_secondary_cache_low_pri_pool_ratio, 0.0,
+              "Ratio of block cache reserve for low pri blocks.");
 
 DEFINE_bool(use_compressed_secondary_cache, false,
             "Use the CompressedSecondaryCache as the secondary cache.");
@@ -3009,6 +3030,7 @@ class Benchmark {
 
   static std::shared_ptr<Cache> NewCache(int64_t capacity) {
     CompressedSecondaryCacheOptions secondary_cache_opts;
+    RemoteSecondaryCacheOptions remote_cache_opts;
     bool use_tiered_cache = false;
     if (capacity <= 0) {
       return nullptr;
@@ -3028,6 +3050,14 @@ class Benchmark {
       if (FLAGS_use_tiered_volatile_cache) {
         use_tiered_cache = true;
       }
+    } else if (FLAGS_use_remote_secondary_cache) {
+      remote_cache_opts.capacity = FLAGS_remote_secondary_cache_size;
+      remote_cache_opts.num_shard_bits =
+          FLAGS_remote_secondary_cache_numshardbits;
+      remote_cache_opts.high_pri_pool_ratio =
+          FLAGS_remote_secondary_cache_high_pri_pool_ratio;
+      remote_cache_opts.low_pri_pool_ratio =
+          FLAGS_remote_secondary_cache_low_pri_pool_ratio;
     }
     if (FLAGS_cache_type == "clock_cache") {
       fprintf(stderr, "Old clock cache implementation has been removed.\n");
@@ -3069,6 +3099,8 @@ class Benchmark {
       } else if (FLAGS_use_compressed_secondary_cache && !use_tiered_cache) {
         opts.secondary_cache =
             NewCompressedSecondaryCache(secondary_cache_opts);
+      } else if (FLAGS_use_remote_secondary_cache) {
+        opts.secondary_cache = NewRemoteSecondaryCache(remote_cache_opts);
       }
 
       if (use_tiered_cache) {

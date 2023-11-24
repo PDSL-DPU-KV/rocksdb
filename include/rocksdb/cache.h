@@ -367,6 +367,47 @@ inline std::shared_ptr<SecondaryCache> NewCompressedSecondaryCache(
   return opts.MakeSharedSecondaryCache();
 }
 
+struct RemoteSecondaryCacheOptions : LRUCacheOptions {
+  RemoteSecondaryCacheOptions() {}
+  RemoteSecondaryCacheOptions(
+      size_t _capacity, int _num_shard_bits, bool _strict_capacity_limit,
+      double _high_pri_pool_ratio, double _low_pri_pool_ratio = 0.0,
+      std::shared_ptr<MemoryAllocator> _memory_allocator = nullptr,
+      bool _use_adaptive_mutex = kDefaultToAdaptiveMutex,
+      CacheMetadataChargePolicy _metadata_charge_policy =
+          kDefaultCacheMetadataChargePolicy)
+      : LRUCacheOptions(_capacity, _num_shard_bits, _strict_capacity_limit,
+                        _high_pri_pool_ratio, std::move(_memory_allocator),
+                        _use_adaptive_mutex, _metadata_charge_policy,
+                        _low_pri_pool_ratio) {}
+
+  // Construct an instance of RemoteSecondaryCache using these options
+  std::shared_ptr<SecondaryCache> MakeSharedSecondaryCache() const;
+
+  // Avoid confusion with LRUCache
+  std::shared_ptr<Cache> MakeSharedCache() const = delete;
+};
+
+inline std::shared_ptr<SecondaryCache> NewRemoteSecondaryCache(
+    size_t capacity, int num_shard_bits = -1,
+    bool strict_capacity_limit = false, double high_pri_pool_ratio = 0.5,
+    double low_pri_pool_ratio = 0.0,
+    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr,
+    bool use_adaptive_mutex = kDefaultToAdaptiveMutex,
+    CacheMetadataChargePolicy metadata_charge_policy =
+        kDefaultCacheMetadataChargePolicy) {
+  return RemoteSecondaryCacheOptions(capacity, num_shard_bits,
+                                     strict_capacity_limit, high_pri_pool_ratio,
+                                     low_pri_pool_ratio, memory_allocator,
+                                     use_adaptive_mutex, metadata_charge_policy)
+      .MakeSharedSecondaryCache();
+}
+
+inline std::shared_ptr<SecondaryCache> NewRemoteSecondaryCache(
+    const RemoteSecondaryCacheOptions& opts) {
+  return opts.MakeSharedSecondaryCache();
+}
+
 // HyperClockCache - A lock-free Cache alternative for RocksDB block cache
 // that offers much improved CPU efficiency vs. LRUCache under high parallel
 // load or high contention, with some caveats:
