@@ -27,10 +27,9 @@ namespace ROCKSDB_NAMESPACE {
 
 class RemoteFileSystem : public FileSystem {
  public:
-  explicit RemoteFileSystem(RPCEngine* _rpc_engine,
-                            const std::shared_ptr<SystemClock>& clock)
+  explicit RemoteFileSystem(RPCEngine* _rpc_engine)
       : rpc_engine(_rpc_engine), allow_non_owner_access_(true) {}
-  ~RemoteFileSystem() override;
+  ~RemoteFileSystem() override{};
 
   static const char* kClassName() { return "RemoteFileSystem"; }
   const char* Name() const override { return kClassName(); }
@@ -139,15 +138,12 @@ class RemoteFileSystem : public FileSystem {
 class NasEnv : public CompositeEnvWrapper {
  public:
   static NasEnv* Create(Env* base, RPCEngine* rpc_engine);
-  static NasEnv* Create(Env* base, RPCEngine* rpc_engine,
-                        const std::shared_ptr<SystemClock>& clock);
 
   static const char* kClassName() { return "NasEnv"; }
   const char* Name() const override { return kClassName(); }
 
  private:
-  NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs,
-         const std::shared_ptr<SystemClock>& clock);
+  NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs);
 };
 
 }  // namespace ROCKSDB_NAMESPACE

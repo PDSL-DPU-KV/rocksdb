@@ -728,6 +728,8 @@ set(SOURCES
         env/fs_remap.cc
         env/mock_env.cc
         env/unique_id_gen.cc
+        env/nas_env.cc
+        env/nas_rpc.cc
         file/delete_scheduler.cc
         file/file_prefetch_buffer.cc
         file/file_util.cc

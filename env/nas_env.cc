@@ -76,7 +76,7 @@ class NasSequentailFile : public FSSequentialFile {
     assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
-    size_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("pread failed!", fname_);
@@ -87,7 +87,7 @@ class NasSequentailFile : public FSSequentialFile {
   IOStatus Read(size_t n, const IOOptions& options, Slice* result,
                 char* scratch, IODebugContext* dbg) override {
     assert(result != nullptr && !use_direct_io());
-    size_t res = rpc_engine_->Fread(fd_, n, scratch);
+    ssize_t res = rpc_engine_->Fread(fd_, n, scratch);
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("fread failed!", fname_);
@@ -133,7 +133,7 @@ class NasRandomAccessFile : public FSRandomAccessFile {
       assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
       assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
     }
-    size_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("pread failed!", fname_);
@@ -175,6 +175,7 @@ class NasWritableFile : public FSWritableFile {
   }
 
  public:
+  using FSWritableFile::Append;
   IOStatus Append(const Slice& data, const IOOptions& /*opts*/,
                   IODebugContext* /*dbg*/) override {
     if (use_direct_io()) {
@@ -183,13 +184,14 @@ class NasWritableFile : public FSWritableFile {
     }
     const char* src = data.data();
     size_t nbytes = data.size();
-    int res = rpc_engine_->Write(fd_, src, nbytes);
+    ssize_t res = rpc_engine_->Write(fd_, src, nbytes);
     if (!res) {
       return IOStatus::IOError("Append failed!", fname_);
     }
     filesize_ += nbytes;
     return IOStatus::OK();
   };
+  using FSWritableFile::PositionedAppend;
   IOStatus PositionedAppend(const Slice& data, uint64_t offset,
                             const IOOptions& /*opts*/,
                             IODebugContext* /*dbg*/) override {
@@ -359,7 +361,7 @@ class NasRandomRWFile : public FSRandomRWFile {
   IOStatus Read(uint64_t offset, size_t n, const IOOptions& /*opts*/,
                 Slice* result, char* scratch,
                 IODebugContext* /*dbg*/) const override {
-    int res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("While reading random read/write file offset " +
@@ -784,20 +786,12 @@ IOStatus RemoteFileSystem::IsDirectory(const std::string& path,
   return io_s;
 }
 
-NasEnv::NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs,
-               const std::shared_ptr<SystemClock>& clock)
-    : CompositeEnvWrapper(env, fs, clock) {}
+NasEnv::NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs)
+    : CompositeEnvWrapper(env, fs) {}
 
 NasEnv* NasEnv::Create(Env* env, RPCEngine* rpc_engine) {
-  auto clock =
-      std::make_shared<EmulatedSystemClock>(env->GetSystemClock(), true);
-  return NasEnv::Create(env, rpc_engine, clock);
-}
-
-NasEnv* NasEnv::Create(Env* env, RPCEngine* rpc_engine,
-                       const std::shared_ptr<SystemClock>& clock) {
-  auto fs = std::make_shared<RemoteFileSystem>(clock, rpc_engine);
-  return new NasEnv(env, fs, clock);
+  auto fs = std::make_shared<RemoteFileSystem>(rpc_engine);
+  return new NasEnv(env, fs);
 }
 
 Env* NewNasEnv(Env* base_env, RPCEngine* rpc_engine) {

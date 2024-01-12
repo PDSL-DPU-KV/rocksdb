@@ -13,13 +13,13 @@ class RPCEngine {
 
   int Close(int fd);  // close
 
-  size_t Fread(int fd, size_t n, char* buffer);  // fread
+  ssize_t Fread(int fd, size_t n, char* buffer);  // fread
 
   int Fseek(int fd, size_t n);  // fseek
 
-  size_t Pread(int fd, uint64_t offset, size_t n, char* buffer);  // pread
+  ssize_t Pread(int fd, uint64_t offset, size_t n, char* buffer);  // pread
 
-  int Write(int fd, const char* buffer, size_t n);  // write
+  ssize_t Write(int fd, const char* buffer, size_t n);  // write
 
   bool PWrite(int fd, const char* buffer, size_t n, uint64_t offset);  // pwrite
 
