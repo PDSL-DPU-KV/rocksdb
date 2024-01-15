@@ -162,7 +162,7 @@ class NasWritableFile : public FSWritableFile {
         use_direct_io_(options.use_direct_writes) {
     allow_fallocate_ = options.allow_fallocate;
     fallocate_with_keep_size_ = options.fallocate_with_keep_size;
-    sync_file_range_supported_ = rpc_engine_->IsSyncFileRangeSupported(fd_);
+    sync_file_range_supported_ = true;
   };
   ~NasWritableFile() override {
     if (fd_ > 0) {
@@ -451,10 +451,17 @@ IOStatus RemoteFileSystem::NewSequentialFile(
   if (file_opts.use_direct_reads) {
     flags |= O_DIRECT;
   }
-  int fd =
-      rpc_engine->Open(fname, flags, GetDBFileMode(allow_non_owner_access_));
+  int fd = rpc_engine->Open(fname.c_str(), flags,
+                            GetDBFileMode(allow_non_owner_access_));
   if (fd < 0) {
     return IOStatus::IOError("Open failed!\n", fname);
+  }
+  if (!file_opts.use_direct_reads) {
+    int ret = rpc_engine->Fopen(fd, "r");
+    if (ret < 0) {
+      rpc_engine->Close(fd);
+      return IOStatus::IOError("Open failed!\n", fname);
+    }
   }
   result->reset(new NasSequentailFile(fd, fname, rpc_engine));
   return IOStatus::OK();
@@ -468,8 +475,8 @@ IOStatus RemoteFileSystem::NewRandomAccessFile(
   if (file_opts.use_direct_reads) {
     flags |= O_DIRECT;
   }
-  int fd =
-      rpc_engine->Open(fname, flags, GetDBFileMode(allow_non_owner_access_));
+  int fd = rpc_engine->Open(fname.c_str(), flags,
+                            GetDBFileMode(allow_non_owner_access_));
   if (fd < 0) {
     return IOStatus::IOError("Open failed!\n", fname);
   }
@@ -483,8 +490,8 @@ IOStatus RemoteFileSystem::NewRandomRWFile(
     std::unique_ptr<FSRandomRWFile>* result, IODebugContext* /*dbg*/) {
   result->reset();
   int flags = O_RDWR;
-  int fd =
-      rpc_engine->Open(fname, flags, GetDBFileMode(allow_non_owner_access_));
+  int fd = rpc_engine->Open(fname.c_str(), flags,
+                            GetDBFileMode(allow_non_owner_access_));
   if (fd < 0) {
     return IOStatus::IOError("while open file for random read/write", fname);
   }
@@ -560,7 +567,7 @@ IOStatus RemoteFileSystem::NewDirectory(const std::string& name,
                                         IODebugContext* /*dbg*/) {
   result->reset();
   int flags = 0;
-  int fd = rpc_engine->Open(name, flags, 0);
+  int fd = rpc_engine->Open(name.c_str(), flags, 0);
   if (fd < 0) {
     return IOStatus::IOError("While open directory", name);
   } else {
@@ -786,16 +793,10 @@ IOStatus RemoteFileSystem::IsDirectory(const std::string& path,
   return io_s;
 }
 
-NasEnv::NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs)
-    : CompositeEnvWrapper(env, fs) {}
-
-NasEnv* NasEnv::Create(Env* env, RPCEngine* rpc_engine) {
-  auto fs = std::make_shared<RemoteFileSystem>(rpc_engine);
-  return new NasEnv(env, fs);
-}
-
-Env* NewNasEnv(Env* base_env, RPCEngine* rpc_engine) {
-  return NasEnv::Create(base_env, rpc_engine);
+std::shared_ptr<FileSystem> NewRemoteFileSystem(RPCEngine* rpc_engine) {
+  STATIC_AVOID_DESTRUCTION(std::shared_ptr<FileSystem>, instance)
+  (std::make_shared<RemoteFileSystem>(rpc_engine));
+  return instance;
 }
 
 }  // namespace ROCKSDB_NAMESPACE

@@ -7,6 +7,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <gflags/gflags.h>
+
+#include "env/nas_env.h"
+#include "rocksdb/rocksdb_namespace.h"
 #ifdef GFLAGS
 #ifdef NUMA
 #include <numa.h>
@@ -242,9 +246,11 @@ DEFINE_string(
     "operation includes a rare but possible retry in case it got "
     "`Status::Incomplete()`. This happens upon encountering more keys than "
     "have ever been seen by the thread (or eight initially)\n"
-    "\tbackup --  Create a backup of the current DB and verify that a new backup is corrected. "
+    "\tbackup --  Create a backup of the current DB and verify that a new "
+    "backup is corrected. "
     "Rate limit can be specified through --backup_rate_limit\n"
-    "\trestore -- Restore the DB from the latest backup available, rate limit can be specified through --restore_rate_limit\n");
+    "\trestore -- Restore the DB from the latest backup available, rate limit "
+    "can be specified through --restore_rate_limit\n");
 
 DEFINE_int64(num, 1000000, "Number of key/values to place in database");
 
@@ -1041,7 +1047,6 @@ DEFINE_string(
 static enum ROCKSDB_NAMESPACE::CompressionType
     FLAGS_blob_db_compression_type_e = ROCKSDB_NAMESPACE::kSnappyCompression;
 
-
 // Integrated BlobDB options
 DEFINE_bool(
     enable_blob_files,
@@ -1112,7 +1117,6 @@ DEFINE_int32(prepopulate_blob_cache, 0,
              "[Integrated BlobDB] Pre-populate hot/warm blobs in blob cache. 0 "
              "to disable and 1 to insert during flush.");
 
-
 // Secondary DB instance Options
 DEFINE_bool(use_secondary_db, false,
             "Open a RocksDB secondary instance. A primary instance can be "
@@ -1126,13 +1130,11 @@ DEFINE_int32(secondary_update_interval, 5,
              "Secondary instance attempts to catch up with the primary every "
              "secondary_update_interval seconds.");
 
-
 DEFINE_bool(report_bg_io_stats, false,
             "Measure times spents on I/Os while in compactions. ");
 
 DEFINE_bool(use_stderr_info_logger, false,
             "Write info logs to stderr instead of to LOG file. ");
-
 
 DEFINE_string(trace_file, "", "Trace workload to a file. ");
 
@@ -1355,6 +1357,11 @@ DEFINE_int64(preserve_internal_time_seconds, 0,
 static std::shared_ptr<ROCKSDB_NAMESPACE::Env> env_guard;
 
 static ROCKSDB_NAMESPACE::Env* FLAGS_env = ROCKSDB_NAMESPACE::Env::Default();
+
+DEFINE_bool(use_nas, false, "Use remote filesystem.");
+
+DEFINE_string(svr_addr_string, "ofi+tcp://192.168.1.10:12345",
+              "NAS server address.");
 
 DEFINE_int64(stats_interval, 0,
              "Stats are reported every N operations when this is greater than "
@@ -1929,11 +1936,7 @@ struct DBWithColumnFamilies {
   std::vector<int> cfh_idx_to_prob;  // ith index holds probability of operating
                                      // on cfh[i].
 
-  DBWithColumnFamilies()
-      : db(nullptr)
-        ,
-        opt_txn_db(nullptr)
-  {
+  DBWithColumnFamilies() : db(nullptr), opt_txn_db(nullptr) {
     cfh.clear();
     num_created = 0;
     num_hot = 0;
@@ -1945,8 +1948,7 @@ struct DBWithColumnFamilies {
         opt_txn_db(other.opt_txn_db),
         num_created(other.num_created.load()),
         num_hot(other.num_hot),
-        cfh_idx_to_prob(other.cfh_idx_to_prob) {
-  }
+        cfh_idx_to_prob(other.cfh_idx_to_prob) {}
 
   void DeleteDBs() {
     std::for_each(cfh.begin(), cfh.end(),
@@ -8361,7 +8363,6 @@ class Benchmark {
     }
   }
 
-
   void Replay(ThreadState* thread) {
     if (db_.db != nullptr) {
       Replay(thread, &db_);
@@ -8449,7 +8450,6 @@ class Benchmark {
     assert(s.ok());
     delete backup_engine;
   }
-
 };
 
 int db_bench_tool(int argc, char** argv) {
@@ -8535,6 +8535,13 @@ int db_bench_tool(int argc, char** argv) {
             /*throughput_multiplier=*/
             int{FLAGS_simulate_hybrid_hdd_multipliers},
             /*is_full_fs_warm=*/FLAGS_simulate_hdd));
+    FLAGS_env = composite_env.get();
+  }
+
+  if (FLAGS_use_nas) {
+    RPCEngine* rpc_engine = new RPCEngine(FLAGS_svr_addr_string);
+    static std::shared_ptr<ROCKSDB_NAMESPACE::Env> composite_env =
+        NewCompositeEnv(NewRemoteFileSystem(rpc_engine));
     FLAGS_env = composite_env.get();
   }
 

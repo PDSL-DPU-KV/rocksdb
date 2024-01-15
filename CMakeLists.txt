@@ -617,6 +617,19 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
+option(WITH_MERCURY "Build with mercury" ON)
+if(WITH_MERCURY)
+  find_package(PkgConfig REQUIRED)
+  if (PKGCONFIG_FOUND)
+    message(STATUS "pkg-config found")
+  else()
+    message(FATAL_ERROR "pkg-config not found")
+  endif()
+  set(ENV{PKG_CONFIG_PATH} "/home/dc/rpc/libs/deps/lib/pkgconfig")
+  pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
+
+endif()
+
 # Main library source code
 
 set(SOURCES
@@ -730,6 +743,8 @@ set(SOURCES
         env/unique_id_gen.cc
         env/nas_env.cc
         env/nas_rpc.cc
+        env/rpc_engine.cc
+        env/rpc.cc
         file/delete_scheduler.cc
         file/file_prefetch_buffer.cc
         file/file_util.cc
@@ -1106,12 +1121,12 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1525,7 +1540,7 @@ if(WITH_BENCHMARK_TOOLS)
     tools/db_bench.cc
     tools/db_bench_tool.cc)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX}
-    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS})
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 
   add_executable(cache_bench${ARTIFACT_SUFFIX}
     cache/cache_bench.cc

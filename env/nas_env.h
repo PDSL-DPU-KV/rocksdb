@@ -135,15 +135,6 @@ class RemoteFileSystem : public FileSystem {
   bool allow_non_owner_access_;
 };
 
-class NasEnv : public CompositeEnvWrapper {
- public:
-  static NasEnv* Create(Env* base, RPCEngine* rpc_engine);
-
-  static const char* kClassName() { return "NasEnv"; }
-  const char* Name() const override { return kClassName(); }
-
- private:
-  NasEnv(Env* env, const std::shared_ptr<FileSystem>& fs);
-};
+std::shared_ptr<FileSystem> NewRemoteFileSystem(RPCEngine* rpc_engine);
 
 }  // namespace ROCKSDB_NAMESPACE
