@@ -3597,6 +3597,10 @@ class Benchmark {
         PrintStats("rocksdb.block-cache-entry-stats");
       } else if (name == "stats") {
         PrintStats("rocksdb.stats");
+      } else if (name == "wait") {
+        WaitBalanceLevel();
+      } else if (name == "clean_cache") {
+        CleanCache();
       } else if (name == "resetstats") {
         ResetStats();
       } else if (name == "verify") {
@@ -8361,6 +8365,25 @@ class Benchmark {
       }
       fprintf(stdout, "%s: %s\n", key.c_str(), stats.c_str());
     }
+  }
+
+  void WaitBalanceLevel() {
+    if (db_.db == nullptr) return;
+    uint64_t sleep_time = 0;
+    while (!db_.db->HaveBalancedDistribution()) {
+      sleep(10);
+      sleep_time += 10;
+    }
+    printf("Wait balance:%lu s\n", sleep_time);
+  }
+
+  void CleanCache() {
+    int sys_res __attribute__((unused));
+    sys_res = system("sync");
+    sys_res = system("echo 3 > /proc/sys/vm/drop_caches");
+    sleep(5);
+    sys_res = system("free -h");
+    printf("clean cache ok!\n");
   }
 
   void Replay(ThreadState* thread) {

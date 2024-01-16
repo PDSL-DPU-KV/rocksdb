@@ -1110,6 +1110,16 @@ void ColumnFamilyData::CreateNewMemtable(
   mem_->Ref();
 }
 
+bool ColumnFamilyData::HaveBalancedDistribution() const {
+  auto* vstorage = current_->storage_info();
+  if (vstorage->NumLevelFiles(0) >=
+          mutable_cf_options_.level0_file_num_compaction_trigger ||
+      vstorage->NumLevelBytes(1) >=
+          mutable_cf_options_.max_bytes_for_level_base)
+    return false;
+  return !compaction_picker_->NeedsCompaction(vstorage);
+}
+
 bool ColumnFamilyData::NeedsCompaction() const {
   return !mutable_cf_options_.disable_auto_compactions &&
          compaction_picker_->NeedsCompaction(current_->storage_info());
