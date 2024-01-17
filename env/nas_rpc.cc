@@ -2,9 +2,13 @@
 
 #include <mercury_config.h>
 
+#include <cassert>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "env/rpc.h"
+#include "rocksdb/env.h"
 #include "rpc_engine.h"
 #include "rpc_util.h"
 
@@ -14,7 +18,7 @@ static hg_id_t open_rpc_id, fopen_rpc_id, close_rpc_id, fseek_rpc_id,
     write_rpc_id, read_rpc_id, fstat_rpc_id, ftruncate_rpc_id, fallocate_rpc_id,
     fdatasync_rpc_id, fsync_rpc_id, rangesync_rpc_id, rename_rpc_id,
     access_rpc_id, unlink_rpc_id, mkdir_rpc_id, rmdir_rpc_id, stat_rpc_id,
-    ls_rpc_id;
+    ls_rpc_id, lock_rpc_id;
 
 static void open_rpc(hg_addr_t svr_addr, open_rpc_in_t *in, FutureResponse *fr);
 static hg_return_t open_rpc_cb(const struct hg_cb_info *info);
@@ -69,6 +73,8 @@ static void stat_rpc(hg_addr_t svr_addr, stat_rpc_in_t *in, FutureResponse *fr);
 static hg_return_t stat_rpc_cb(const struct hg_cb_info *info);
 static void ls_rpc(hg_addr_t svr_addr, ls_rpc_in_t *in, FutureResponse *fr);
 static hg_return_t ls_rpc_cb(const struct hg_cb_info *info);
+static void lock_rpc(hg_addr_t svr_addr, lock_rpc_in_t *in, FutureResponse *fr);
+static hg_return_t lock_rpc_cb(const struct hg_cb_info *info);
 
 static void open_rpc(hg_addr_t svr_addr, open_rpc_in_t *in,
                      FutureResponse *fr) {
@@ -100,8 +106,9 @@ static hg_return_t open_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got open response fd: %d\n", out.fd);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -141,8 +148,9 @@ static hg_return_t fopen_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fopen response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -182,8 +190,9 @@ static hg_return_t close_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got close response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -223,8 +232,9 @@ static hg_return_t fseek_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fseek response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -271,8 +281,9 @@ static hg_return_t write_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got write response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -286,9 +297,17 @@ static void read_rpc(hg_addr_t svr_addr, read_rpc_in_t *in,
                      FutureResponse *fr) {
   hg_handle_t handle;
   hg_return_t ret;
+  const struct hg_info *hgi;
 
   /* create create handle to represent this rpc operation */
   hg_engine_create_handle(svr_addr, read_rpc_id, &handle);
+
+  hgi = HG_Get_info(handle);
+  assert(hgi);
+
+  ret = HG_Bulk_create(hgi->hg_class, 1, (void **)&fr->recv_buf, &in->n,
+                       HG_BULK_READWRITE, &in->bulk_handle);
+  assert(ret == HG_SUCCESS);
 
   /* Send rpc. Note that we are also transmitting the bulk handle in the
    * input struct.  It was set above.
@@ -311,8 +330,9 @@ static hg_return_t read_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
-  printf("Got read response size: %ld, buffer: %s\n", out.size, out.buffer);
+#ifdef NAS_DEBUG
+  printf("Got read response size: %ld\n", out.size);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -351,9 +371,10 @@ static hg_return_t fstat_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fstat response file size: %d, blk size: %d\n", out.st_size,
          out.st_blksize);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -392,8 +413,9 @@ static hg_return_t ftruncate_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got ftruncate response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -432,8 +454,9 @@ static hg_return_t fallocate_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fallocate response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -472,8 +495,9 @@ static hg_return_t fdatasync_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fdatasync response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -512,8 +536,9 @@ static hg_return_t fsync_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got fsync response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -552,8 +577,9 @@ static hg_return_t rangesync_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got rangesync response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -592,8 +618,9 @@ static hg_return_t rename_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got rename response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -632,8 +659,9 @@ static hg_return_t access_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got access response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -673,8 +701,9 @@ static hg_return_t unlink_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got unlink response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -714,8 +743,9 @@ static hg_return_t mkdir_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got mkdir response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -755,8 +785,9 @@ static hg_return_t rmdir_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got rmdir response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -796,8 +827,9 @@ static hg_return_t stat_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got stat response ret: %d\n", out.ret);
+#endif
   fr->func(&out, fr->data);
   /* clean up resources consumed by this rpc */
   HG_Free_output(info->info.forward.handle, &out);
@@ -836,13 +868,9 @@ static hg_return_t ls_rpc_cb(const struct hg_cb_info *info) {
   ret = HG_Get_output(info->info.forward.handle, &out);
   assert(ret == 0);
   (void)ret;
-
+#ifdef NAS_DEBUG
   printf("Got ls response, ret: %d\n", out.ret);
-  name_list_t cur = out.list;
-  while (cur != nullptr) {
-    printf("entry name: %s\n", cur->name);
-    cur = cur->next;
-  }
+#endif
   fr->func(&out, fr->data);
 
   /* clean up resources consumed by this rpc */
@@ -851,6 +879,48 @@ static hg_return_t ls_rpc_cb(const struct hg_cb_info *info) {
 
   fr->notify();
 
+  return HG_SUCCESS;
+}
+
+static void lock_rpc(hg_addr_t svr_addr, lock_rpc_in_t *in,
+                     FutureResponse *fr) {
+  hg_return_t ret;
+  hg_handle_t handle;
+
+  /* create create handle to represent this rpc operation */
+  hg_engine_create_handle(svr_addr, lock_rpc_id, &handle);
+
+  /* Send rpc. Note that we are also transmitting the bulk handle in the
+   * input struct.  It was set above.
+   */
+  ret = HG_Forward(handle, lock_rpc_cb, (void *)fr, in);
+  assert(ret == 0);
+  (void)ret;
+
+  return;
+}
+
+/* callback triggered upon receipt of rpc response */
+static hg_return_t lock_rpc_cb(const struct hg_cb_info *info) {
+  lock_rpc_out_t out;
+  hg_return_t ret;
+  FutureResponse *fr = (FutureResponse *)info->arg;
+
+  assert(info->ret == HG_SUCCESS);
+
+  /* decode response */
+  ret = HG_Get_output(info->info.forward.handle, &out);
+  assert(ret == 0);
+  (void)ret;
+#ifdef NAS_DEBUG
+  printf("Got lock response ret: %d\n", out.ret);
+#endif
+  fr->func(&out, fr->data);
+  /* clean up resources consumed by this rpc */
+  HG_Free_output(info->info.forward.handle, &out);
+  HG_Destroy(info->info.forward.handle);
+
+  fr->notify();
   return HG_SUCCESS;
 }
 
@@ -877,6 +947,7 @@ RPCEngine::RPCEngine(const std::string &svr_addr_string) {
   rmdir_rpc_id = rmdir_rpc_register();
   stat_rpc_id = stat_rpc_register();
   ls_rpc_id = ls_rpc_register();
+  lock_rpc_id = lock_rpc_register();
 }
 
 RPCEngine::~RPCEngine() { /* shut down */
@@ -889,7 +960,9 @@ int RPCEngine::Open(const char *fname, int flags, uint mode) {
   in.fname = fname;
   in.flags = flags;
   in.mode = mode;
-
+#ifdef NAS_DEBUG
+  printf("send open req, fname: %s, flags: %d, mode: %d\n", fname, flags, mode);
+#endif
   int open_fd = -1;
   FutureResponse fr;
   fr.data = &open_fd;
@@ -901,7 +974,6 @@ int RPCEngine::Open(const char *fname, int flags, uint mode) {
   open_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("open fd: %d\n", open_fd);
   return open_fd;
 }  // Open
 
@@ -909,7 +981,9 @@ bool RPCEngine::Fopen(int fd, const char *mode) {
   fopen_rpc_in_t in;
   in.fd = fd;
   in.mode = mode;
-
+#ifdef NAS_DEBUG
+  printf("send fopen req, fd: %d, mode: %s\n", fd, mode);
+#endif
   FutureResponse fr;
   bool ret = false;
   fr.data = &ret;
@@ -921,14 +995,15 @@ bool RPCEngine::Fopen(int fd, const char *mode) {
   fopen_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("fopen ret: %d\n", ret);
   return ret;
 }  // Fopen
 
 int RPCEngine::Close(int fd) {
   close_rpc_in_t in;
   in.fd = fd;
-
+#ifdef NAS_DEBUG
+  printf("send close req, fd: %d\n", fd);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -940,7 +1015,6 @@ int RPCEngine::Close(int fd) {
   close_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("close ret: %d\n", ret);
   return ret;
 }  // close
 
@@ -948,7 +1022,9 @@ int RPCEngine::Fseek(int fd, size_t n) {
   fseek_rpc_in_t in;
   in.fd = fd;
   in.n = n;
-
+#ifdef NAS_DEBUG
+  printf("send fseek req, fd: %d, n: %ld\n", fd, n);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -960,7 +1036,6 @@ int RPCEngine::Fseek(int fd, size_t n) {
   fseek_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("fseek ret: %d\n", ret);
   return ret;
 }  // fseek
 
@@ -969,51 +1044,51 @@ ssize_t RPCEngine::Fread(int fd, size_t n, char *buffer) {
   in.fd = fd;
   in.n = n;
   in.offset = -1;
-
+#ifdef NAS_DEBUG
+  printf("send fread req, fd: %d, n: %ld\n", fd, n);
+#endif
   FutureResponse fr;
-  struct read_ret ret;
-  ret.buffer = buffer;
-  ret.size = -1;
+  int re = posix_memalign((void **)&fr.recv_buf, 512, in.n);
+  assert(re == 0);
+  size_t ret = -1;
   fr.data = &ret;
   fr.func = [](void *out, void *result) {
     read_rpc_out_t *rpc_out = (read_rpc_out_t *)out;
-    read_ret *res = (read_ret *)result;
-    res->size = rpc_out->size;
-    if (res->size > 0) {
-      memcpy(res->buffer, rpc_out->buffer, rpc_out->size);
-    }
+    size_t *res = (size_t *)result;
+    *res = rpc_out->size;
   };
   read_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("fread size: %ld, buffer: %s\n", ret.size, ret.buffer);
-  return ret.size;
-}  // fread
+  memcpy(buffer, fr.recv_buf, in.n);
+  free(fr.recv_buf);
+  return ret;
+}
 
 ssize_t RPCEngine::Pread(int fd, uint64_t offset, size_t n, char *buffer) {
   read_rpc_in_t in;
   in.fd = fd;
   in.n = n;
   in.offset = offset;
-
+#ifdef NAS_DEBUG
+  printf("send pread req, fd: %d, offset: %ld, n: %ld\n", fd, offset, n);
+#endif
   FutureResponse fr;
-  struct read_ret ret;
-  ret.buffer = buffer;
-  ret.size = -1;
+  int re = posix_memalign((void **)&fr.recv_buf, 512, in.n);
+  assert(re == 0);
+  size_t ret = -1;
   fr.data = &ret;
   fr.func = [](void *out, void *result) {
     read_rpc_out_t *rpc_out = (read_rpc_out_t *)out;
-    read_ret *res = (read_ret *)result;
-    if (rpc_out->size > 0) {
-      memcpy(res->buffer, rpc_out->buffer, rpc_out->size);
-    }
-    res->size = rpc_out->size;
+    size_t *res = (size_t *)result;
+    *res = rpc_out->size;
   };
   read_rpc(svr_addr, &in, &fr);
   fr.wait();
 
-  printf("pread size: %ld, buffer: %s\n", ret.size, ret.buffer);
-  return ret.size;
+  memcpy(buffer, fr.recv_buf, in.n);
+  free(fr.recv_buf);
+  return ret;
 }
 
 bool RPCEngine::Write(int fd, const char *buffer, size_t n) {
@@ -1021,7 +1096,9 @@ bool RPCEngine::Write(int fd, const char *buffer, size_t n) {
   in.fd = fd;
   in.n = n;
   in.offset = -1;
-
+#ifdef NAS_DEBUG
+  printf("send write req, fd: %d, n: %ld\n", fd, n);
+#endif
   FutureResponse fr;
   bool ret = false;
   fr.data = &ret;
@@ -1033,17 +1110,17 @@ bool RPCEngine::Write(int fd, const char *buffer, size_t n) {
   fr.send_buf = buffer;
   write_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("write ret: %d\n", ret);
   return ret;
-}  // write
+}
 
 bool RPCEngine::PWrite(int fd, const char *buffer, size_t n, uint64_t offset) {
   write_rpc_in_t in;
   in.fd = fd;
   in.n = n;
-  in.offset = offset;
-
+  in.offset = static_cast<off_t>(offset);
+#ifdef NAS_DEBUG
+  printf("send pwrite req, fd: %d, n: %ld, offset: %ld\n", fd, n, offset);
+#endif
   FutureResponse fr;
   bool ret = false;
   fr.data = &ret;
@@ -1055,15 +1132,15 @@ bool RPCEngine::PWrite(int fd, const char *buffer, size_t n, uint64_t offset) {
   fr.send_buf = buffer;
   write_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("pwrite ret: %d\n", ret);
   return ret;
-}  // pwrite
+}
 
 int RPCEngine::Fstat(int fd, struct stat *stat_buf) {
   fstat_rpc_in_t in;
   in.fd = fd;
-
+#ifdef NAS_DEBUG
+  printf("send stat req, fd: %d\n", fd);
+#endif
   FutureResponse fr;
   struct stat_ret ret;
   ret.stat_buf = stat_buf;
@@ -1083,17 +1160,16 @@ int RPCEngine::Fstat(int fd, struct stat *stat_buf) {
   };
   fstat_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("file size: %ld, blk size: %ld\n", ret.stat_buf->st_size,
-         ret.stat_buf->st_blksize);
   return ret.ret;
-}  // fstat
+}
 
 int RPCEngine::Ftruncate(int fd, uint64_t size) {
   ftruncate_rpc_in_t in;
   in.fd = fd;
   in.size = size;
-
+#ifdef NAS_DEBUG
+  printf("send ftruncate req, fd: %d, size: %ld\n", fd, size);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1104,10 +1180,8 @@ int RPCEngine::Ftruncate(int fd, uint64_t size) {
   };
   ftruncate_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("ret: %d\n", ret);
   return ret;
-}  // ftruncate
+}
 
 int RPCEngine::Fallocate(int fd, int mode, uint64_t offset, uint64_t len) {
   fallocate_rpc_in_t in;
@@ -1115,7 +1189,10 @@ int RPCEngine::Fallocate(int fd, int mode, uint64_t offset, uint64_t len) {
   in.mode = mode;
   in.offset = offset;
   in.len = len;
-
+#ifdef NAS_DEBUG
+  printf("send fallocate req, fd: %d, mode: %d, offset: %ld, len: %ld\n", fd,
+         mode, offset, len);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1126,15 +1203,15 @@ int RPCEngine::Fallocate(int fd, int mode, uint64_t offset, uint64_t len) {
   };
   fallocate_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("ret: %d\n", ret);
   return ret;
-}  // fallocate
+}
 
 int RPCEngine::Fdatasync(int fd) {
   fdatasync_rpc_in_t in;
   in.fd = fd;
-
+#ifdef NAS_DEBUG
+  printf("send fdatasync req, fd: %d\n", fd);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1145,15 +1222,15 @@ int RPCEngine::Fdatasync(int fd) {
   };
   fdatasync_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("ret: %d\n", ret);
   return ret;
-}  // fdatasync
+}
 
 int RPCEngine::Fsync(int fd) {
   fsync_rpc_in_t in;
   in.fd = fd;
-
+#ifdef NAS_DEBUG
+  printf("send fsync req, fd: %d\n", fd);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1164,10 +1241,8 @@ int RPCEngine::Fsync(int fd) {
   };
   fsync_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("ret: %d\n", ret);
   return ret;
-}  // fsync
+}
 
 int RPCEngine::RangeSync(int fd, uint64_t offset, uint64_t count, int flags) {
   rangesync_rpc_in_t in;
@@ -1175,7 +1250,10 @@ int RPCEngine::RangeSync(int fd, uint64_t offset, uint64_t count, int flags) {
   in.offset = offset;
   in.count = count;
   in.flags = flags;
-
+#ifdef NAS_DEBUG
+  printf("send rangesync req, fd: %d, offset: %ld, count: %ld, flags: %d\n", fd,
+         offset, count, flags);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1186,16 +1264,16 @@ int RPCEngine::RangeSync(int fd, uint64_t offset, uint64_t count, int flags) {
   };
   rangesync_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("ret: %d\n", ret);
   return ret;
-}  // sync_file_range
+}
 
 int RPCEngine::Rename(const char *old_name, const char *new_name) {
   rename_rpc_in_t in;
   in.old_name = old_name;
   in.new_name = new_name;
-
+#ifdef NAS_DEBUG
+  printf("send rename req, old: %s, new: %s\n", old_name, new_name);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1206,35 +1284,36 @@ int RPCEngine::Rename(const char *old_name, const char *new_name) {
   };
   rename_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("rename ret: %d\n", ret);
   return ret;
-}  // rename
+}
 
-int RPCEngine::Access(const char *name, int type) {
+ret_with_errno RPCEngine::Access(const char *name, int type) {
   access_rpc_in_t in;
   in.name = name;
   in.type = type;
-
+#ifdef NAS_DEBUG
+  printf("send access req, name: %s, type: %d\n", name, type);
+#endif
   FutureResponse fr;
-  int ret = -1;
+  ret_with_errno ret;
   fr.data = &ret;
   fr.func = [](void *out, void *result) {
     access_rpc_out_t *rpc_out = (access_rpc_out_t *)out;
-    int *res = (int *)result;
-    *res = rpc_out->ret;
+    ret_with_errno *res = (ret_with_errno *)result;
+    res->ret = rpc_out->ret;
+    res->errn = rpc_out->errn;
   };
   access_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("access ret: %d\n", ret);
   return ret;
-}  // access
+}
 
 int RPCEngine::Unlink(const char *name) {
   unlink_rpc_in_t in;
   in.name = name;
-
+#ifdef NAS_DEBUG
+  printf("send unlink req, name: %s\n", name);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1245,35 +1324,38 @@ int RPCEngine::Unlink(const char *name) {
   };
   unlink_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("unlink ret: %d\n", ret);
   return ret;
-}  // unlink
+}
 
-int RPCEngine::Mkdir(const char *name, uint mode) {
+ret_with_errno RPCEngine::Mkdir(const char *name, uint mode) {
   mkdir_rpc_in_t in;
   in.name = name;
   in.mode = mode;
-
+#ifdef NAS_DEBUG
+  printf("Send mkdir req, fname: %s, mode: %d\n", name, mode);
+#endif
   FutureResponse fr;
-  int ret = -1;
+  struct ret_with_errno ret;
+  ret.ret = -1;
+  ret.errn = -1;
   fr.data = &ret;
   fr.func = [](void *out, void *result) {
     mkdir_rpc_out_t *rpc_out = (mkdir_rpc_out_t *)out;
-    int *res = (int *)result;
-    *res = rpc_out->ret;
+    ret_with_errno *res = (ret_with_errno *)result;
+    res->ret = rpc_out->ret;
+    res->errn = rpc_out->errn;
   };
   mkdir_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("mkdir ret: %d\n", ret);
   return ret;
-}  // mkdir
+}
 
 int RPCEngine::Rmdir(const char *name) {
   rmdir_rpc_in_t in;
   in.name = name;
-
+#ifdef NAS_DEBUG
+  printf("send rmdir req, name: %s\n", name);
+#endif
   FutureResponse fr;
   int ret = -1;
   fr.data = &ret;
@@ -1284,15 +1366,15 @@ int RPCEngine::Rmdir(const char *name) {
   };
   rmdir_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("rmdir ret: %d\n", ret);
   return ret;
-}  // rmdir
+}
 
 int RPCEngine::Stat(const char *name, struct stat *stat_buf) {
   stat_rpc_in_t in;
   in.name = name;
-
+#ifdef NAS_DEBUG
+  printf("send stat req, name: %s\n", name);
+#endif
   FutureResponse fr;
   struct stat_ret ret;
   ret.stat_buf = stat_buf;
@@ -1312,34 +1394,54 @@ int RPCEngine::Stat(const char *name, struct stat *stat_buf) {
   };
   stat_rpc(svr_addr, &in, &fr);
   fr.wait();
-
-  printf("stat ret: %d, id_dir: %d\n", ret.ret, S_ISDIR(ret.stat_buf->st_mode));
   return ret.ret;
-}  // stat
+}
 
 int RPCEngine::GetChildren(const char *dir_name,
                            std::vector<std::string> *result) {
   ls_rpc_in_t in;
   in.name = dir_name;
-
+#ifdef NAS_DEBUG
+  printf("send ls req, dir name: %s\n", dir_name);
+#endif
   FutureResponse fr;
-  fr.data = result;
+  struct ret_with_name_list ret;
+  ret.name_list = result;
+  ret.ret = -1;
+  fr.data = &ret;
   fr.func = [](void *out, void *result1) {
     ls_rpc_out_t *ls_out = (ls_rpc_out_t *)out;
-    std::vector<std::string> *res = (std::vector<std::string> *)result1;
+    ret_with_name_list *res = (ret_with_name_list *)result1;
     name_list_t cur = ls_out->list;
     while (cur != nullptr) {
-      res->push_back(cur->name);
+      res->name_list->push_back(cur->name);
       cur = cur->next;
     }
+    res->ret = ls_out->ret;
   };
   ls_rpc(svr_addr, &in, &fr);
   fr.wait();
+  return ret.ret;
+}
 
-  for (uint i = 0; i < result->size(); i++) {
-    printf("name: %s\n", result->at(i).c_str());
-  }
-  return 0;
+int RPCEngine::SetLock(int fd, bool lock) {
+  lock_rpc_in_t in;
+  in.fd = fd;
+  in.lock = lock;
+#ifdef NAS_DEBUG
+  printf("send lock req, fd: %d, lock: %d\n", fd, lock);
+#endif
+  FutureResponse fr;
+  int ret = -1;
+  fr.data = &ret;
+  fr.func = [](void *out, void *result) {
+    lock_rpc_out_t *rpc_out = (lock_rpc_out_t *)out;
+    int *res = (int *)result;
+    *res = rpc_out->ret;
+  };
+  lock_rpc(svr_addr, &in, &fr);
+  fr.wait();
+  return ret;
 }
 
 }  // namespace ROCKSDB_NAMESPACE

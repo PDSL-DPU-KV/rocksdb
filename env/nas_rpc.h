@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 
+#include "env/rpc.h"
 #include "rocksdb/io_status.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -32,13 +33,14 @@ class RPCEngine {
   int RangeSync(int fd, uint64_t offset, uint64_t count,
                 int flags);                                // sync_file_range
   int Rename(const char* old_name, const char* new_name);  // rename
-  int Access(const char* name, int type);                  // access
+  ret_with_errno Access(const char* name, int type);       // access
   int Unlink(const char* name);                            // unlink
-  int Mkdir(const char* name, uint mode);                  // mkdir
+  ret_with_errno Mkdir(const char* name, uint mode);       // mkdir
   int Rmdir(const char* name);                             // rmdir
   int Stat(const char* name, struct stat* stat_buf);       // stat
   int GetChildren(const char* dir_name,
                   std::vector<std::string>* result);  // ls
+  int SetLock(int fd, bool lock);                     // fcntl(F_SETLK)
 
  private:
   hg_addr_t svr_addr;

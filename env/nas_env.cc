@@ -8,10 +8,12 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 
 #include "env/emulated_clock.h"
 #include "env/io_posix.h"
+#include "env/rpc.h"
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/io_status.h"
@@ -28,19 +30,6 @@ struct LockHoldingInfo {
 };
 static std::map<std::string, LockHoldingInfo> locked_files;
 static port::Mutex mutex_locked_files;
-
-static int LockOrUnlock(int fd, bool lock) {
-  errno = 0;
-  struct flock f;
-  memset(&f, 0, sizeof(f));
-  f.l_type = (lock ? F_WRLCK : F_UNLCK);
-  f.l_whence = SEEK_SET;
-  f.l_start = 0;
-  f.l_len = 0;  // Lock/unlock entire file
-  int value = fcntl(fd, F_SETLK, &f);
-
-  return value;
-}
 
 class NasFileLock : public FileLock {
  public:
@@ -64,7 +53,8 @@ inline mode_t GetDBFileMode(bool allow_non_owner_access) {
 
 class NasSequentailFile : public FSSequentialFile {
  public:
-  NasSequentailFile(int fd, const std::string& fname, RPCEngine* rpc_engine)
+  NasSequentailFile(int fd, const std::string& fname,
+                    std::shared_ptr<RPCEngine> rpc_engine)
       : fd_(fd), fname_(fname), rpc_engine_(rpc_engine){};
   ~NasSequentailFile() override { rpc_engine_->Close(fd_); };
 
@@ -106,12 +96,13 @@ class NasSequentailFile : public FSSequentialFile {
  private:
   int fd_;
   const std::string fname_;
-  RPCEngine* rpc_engine_;
+  std::shared_ptr<RPCEngine> rpc_engine_;
 };
 
 class NasRandomAccessFile : public FSRandomAccessFile {
  public:
-  NasRandomAccessFile(int fd, const std::string& fname, RPCEngine* rpc_engine,
+  NasRandomAccessFile(int fd, const std::string& fname,
+                      std::shared_ptr<RPCEngine> rpc_engine,
                       size_t logical_block_size, const EnvOptions& options)
       : fd_(fd),
         fname_(fname),
@@ -145,7 +136,7 @@ class NasRandomAccessFile : public FSRandomAccessFile {
  private:
   int fd_;
   const std::string fname_;
-  RPCEngine* rpc_engine_;
+  std::shared_ptr<RPCEngine> rpc_engine_;
   size_t logical_sector_size_;
   bool use_direct_io_;
 };
@@ -153,7 +144,8 @@ class NasRandomAccessFile : public FSRandomAccessFile {
 class NasWritableFile : public FSWritableFile {
  public:
   NasWritableFile(int fd, const std::string& fname, size_t logical_block_size,
-                  RPCEngine* rpc_engine, const FileOptions& options)
+                  std::shared_ptr<RPCEngine> rpc_engine,
+                  const FileOptions& options)
       : fd_(fd),
         fname_(fname),
         filesize_(0),
@@ -328,7 +320,7 @@ class NasWritableFile : public FSWritableFile {
   const std::string fname_;
   size_t filesize_;
   size_t logical_sector_size_;
-  RPCEngine* rpc_engine_;
+  std::shared_ptr<RPCEngine> rpc_engine_;
   bool use_direct_io_;
   bool allow_fallocate_;
   bool fallocate_with_keep_size_;
@@ -337,7 +329,8 @@ class NasWritableFile : public FSWritableFile {
 
 class NasRandomRWFile : public FSRandomRWFile {
  public:
-  NasRandomRWFile(int fd, const std::string& fname, RPCEngine* rpc_engine,
+  NasRandomRWFile(int fd, const std::string& fname,
+                  std::shared_ptr<RPCEngine> rpc_engine,
                   const FileOptions& /*options*/)
       : fd_(fd), fname_(fname), rpc_engine_(rpc_engine){};
   ~NasRandomRWFile() override {
@@ -403,12 +396,13 @@ class NasRandomRWFile : public FSRandomRWFile {
  private:
   int fd_;
   const std::string fname_;
-  RPCEngine* rpc_engine_;
+  std::shared_ptr<RPCEngine> rpc_engine_;
 };
 
 class NasDirectory : public FSDirectory {
  public:
-  NasDirectory(int fd, const std::string& dir_name, RPCEngine* rpc_engine)
+  NasDirectory(int fd, const std::string& dir_name,
+               std::shared_ptr<RPCEngine> rpc_engine)
       : fd_(fd), dir_name_(dir_name), rpc_engine_(rpc_engine){};
   ~NasDirectory() override {
     if (fd_ >= 0) {
@@ -440,7 +434,7 @@ class NasDirectory : public FSDirectory {
  private:
   int fd_;
   const std::string dir_name_;
-  RPCEngine* rpc_engine_;
+  std::shared_ptr<RPCEngine> rpc_engine_;
 };
 
 IOStatus RemoteFileSystem::NewSequentialFile(
@@ -457,10 +451,11 @@ IOStatus RemoteFileSystem::NewSequentialFile(
     return IOStatus::IOError("Open failed!\n", fname);
   }
   if (!file_opts.use_direct_reads) {
-    int ret = rpc_engine->Fopen(fd, "r");
-    if (ret < 0) {
+    bool ret = rpc_engine->Fopen(fd, "r");
+    if (!ret) {
       rpc_engine->Close(fd);
-      return IOStatus::IOError("Open failed!\n", fname);
+      return IOStatus::IOError("While opening file for sequentially read\n",
+                               fname);
     }
   }
   result->reset(new NasSequentailFile(fd, fname, rpc_engine));
@@ -579,11 +574,24 @@ IOStatus RemoteFileSystem::NewDirectory(const std::string& name,
 IOStatus RemoteFileSystem::FileExists(const std::string& fname,
                                       const IOOptions& /*opts*/,
                                       IODebugContext* /*dbg*/) {
-  int res = rpc_engine->Access(fname.c_str(), F_OK);
-  if (res < 0) {
+  struct ret_with_errno ret = rpc_engine->Access(fname.c_str(), F_OK);
+  if (ret.ret == 0) {
+    return IOStatus::OK();
     return IOStatus::IOError("While access file", fname);
   }
-  return IOStatus::OK();
+  int err = ret.errn;
+  switch (err) {
+    case EACCES:
+    case ELOOP:
+    case ENAMETOOLONG:
+    case ENOENT:
+    case ENOTDIR:
+      return IOStatus::NotFound();
+    default:
+      assert(err == EIO || err == ENOMEM);
+      return IOStatus::IOError("Unexpected error(" + std::to_string(err) +
+                               ") accessing file `" + fname + "' ");
+  }
 }
 
 IOStatus RemoteFileSystem::GetChildren(const std::string& dir,
@@ -610,7 +618,8 @@ IOStatus RemoteFileSystem::DeleteFile(const std::string& fname,
 IOStatus RemoteFileSystem::CreateDir(const std::string& name,
                                      const IOOptions& /*opts*/,
                                      IODebugContext* /*dbg*/) {
-  if (rpc_engine->Mkdir(name.c_str(), 0755) != 0) {
+  struct ret_with_errno ret = rpc_engine->Mkdir(name.c_str(), 0755);
+  if (ret.ret != 0) {
     return IOStatus::IOError("While mkdir", name);
   }
   return IOStatus::OK();
@@ -619,8 +628,15 @@ IOStatus RemoteFileSystem::CreateDir(const std::string& name,
 IOStatus RemoteFileSystem::CreateDirIfMissing(const std::string& name,
                                               const IOOptions& /*opts*/,
                                               IODebugContext* /*dbg*/) {
-  if (rpc_engine->Mkdir(name.c_str(), 0755) != 0) {
-    return IOStatus::IOError("While mkdir if missing", name);
+  struct ret_with_errno ret = rpc_engine->Mkdir(name.c_str(), 0755);
+  if (ret.ret != 0) {
+    if (ret.errn != EEXIST) {
+      return IOError("While mkdir if missing", name, ret.errn);
+    } else if (!DirExists(name)) {  // Check that name is actually a
+                                    // directory.
+      // Message is taken from mkdir
+      return IOStatus::IOError("`" + name + "' exists but is not a directory");
+    }
   }
   return IOStatus::OK();
 }

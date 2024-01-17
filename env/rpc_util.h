@@ -41,6 +41,7 @@ class FutureResponse {
   std::atomic_bool b{false};
 
  public:
+  void *recv_buf;
   const void *send_buf;
   void *data;
   std::function<void(void *, void *)> func;

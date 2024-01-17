@@ -32,6 +32,7 @@ static hg_return_t fopen_rpc_handler(hg_handle_t handle);
 static hg_return_t close_rpc_handler(hg_handle_t handle);
 static hg_return_t fseek_rpc_handler(hg_handle_t handle);
 static hg_return_t read_rpc_handler(hg_handle_t handle);
+static hg_return_t read_rpc_handler_bulk_cb(const struct hg_cb_info *info);
 static hg_return_t write_rpc_handler(hg_handle_t handle);
 static hg_return_t write_rpc_handler_bulk_cb(const struct hg_cb_info *info);
 static hg_return_t fstat_rpc_handler(hg_handle_t handle);
@@ -47,6 +48,7 @@ static hg_return_t mkdir_rpc_handler(hg_handle_t handle);
 static hg_return_t rmdir_rpc_handler(hg_handle_t handle);
 static hg_return_t stat_rpc_handler(hg_handle_t handle);
 static hg_return_t ls_rpc_handler(hg_handle_t handle);
+static hg_return_t lock_rpc_handler(hg_handle_t handle);
 
 /* register this particular rpc type with Mercury */
 hg_id_t open_rpc_register(void) {
@@ -235,6 +237,15 @@ hg_id_t ls_rpc_register(void) {
   return (tmp);
 }
 
+hg_id_t lock_rpc_register(void) {
+  hg_class_t *hg_class;
+  hg_id_t tmp;
+  hg_class = hg_engine_get_class();
+  tmp = MERCURY_REGISTER(hg_class, "lock_rpc", lock_rpc_in_t, lock_rpc_out_t,
+                         lock_rpc_handler);
+  return (tmp);
+}
+
 /* callback/handler triggered upon receipt of rpc request */
 static hg_return_t open_rpc_handler(hg_handle_t handle) {
   hg_return_t ret;
@@ -245,10 +256,10 @@ static hg_return_t open_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
-  printf("Got RPC request with fname: %s, flags: %d, mode: %d\n", in.fname,
+#ifdef NAS_DEBUG
+  printf("Got open RPC request with fname: %s, flags: %d, mode: %d\n", in.fname,
          in.flags, in.mode);
-
+#endif
   /* open file */
   fd = open(in.fname, in.flags, in.mode);
   if (fd < 0) {
@@ -256,14 +267,9 @@ static hg_return_t open_rpc_handler(hg_handle_t handle) {
   }
   out.fd = fd;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -276,9 +282,9 @@ static hg_return_t fopen_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got fopen RPC request with fd: %d, mode: %s\n", in.fd, in.mode);
-
+#endif
   /* fopen file */
   if (!fmap[in.fd]) {
     do {
@@ -296,15 +302,10 @@ static hg_return_t fopen_rpc_handler(hg_handle_t handle) {
     out.ret = false;
   }
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
 res:
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -317,24 +318,21 @@ static hg_return_t close_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got close RPC request with fd: %d\n", in.fd);
-
+#endif
   /* close file */
   res = close(in.fd);
   if (res < 0) {
     printf("fail to close file! %s\n", strerror(errno));
+  } else {
+    fmap.erase(in.fd);
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -347,9 +345,9 @@ static hg_return_t fseek_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got fseek RPC request with fd: %d, n: %lu\n", in.fd, in.n);
-
+#endif
   /* fseek file */
   if (!fmap[in.fd]) {
     printf("fail to fseek file %d! not open!\n", in.fd);
@@ -365,39 +363,49 @@ static hg_return_t fseek_rpc_handler(hg_handle_t handle) {
     }
   }
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
+
+struct read_state {
+  read_rpc_out_t out;
+  char *local_buffer;
+  hg_bulk_t local_bulk_handle;
+  hg_handle_t handle;
+};
 
 static hg_return_t read_rpc_handler(hg_handle_t handle) {
   hg_return_t ret;
   read_rpc_in_t in;
   read_rpc_out_t out;
+  const struct hg_info *hgi;
+  hg_bulk_t local_buffer_handle;
+  read_state *state = (read_state *)malloc(sizeof(read_state));
 
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got read RPC request with fd: %d, n: %lu, offset: %lu\n", in.fd, in.n,
          in.offset);
-  out.buffer = (char *)calloc(1, in.n);
-  char *ptr = out.buffer;
+#endif
+  if (in.offset < 0) {
+    state->local_buffer = (char *)calloc(1, in.n);
+  } else {
+    int res = posix_memalign((void **)&state->local_buffer, 512, in.n);
+    assert(res == 0);
+  }
+
+  char *ptr = state->local_buffer;
 
   /* open file */
   if (in.offset < 0) {
     // fread
-    printf("fread!\n");
     if (!fmap[in.fd]) {
       printf("while fread file %d! not open!\n", in.fd);
       out.size = -1;
-      out.buffer = nullptr;
     } else {
       FILE *file = fmap[in.fd];
       size_t r = 0;
@@ -417,13 +425,11 @@ static hg_return_t read_rpc_handler(hg_handle_t handle) {
           // An error: return a non-ok status
           printf("while fread file! fd:%d, err:%s\n", in.fd, strerror(errno));
           out.size = -1;
-          out.buffer = nullptr;
         }
       }
     }
   } else {
     // pread
-    printf("pread!\n");
     ssize_t r = -1;
     size_t left = in.n;
     size_t offset = in.offset;
@@ -448,21 +454,40 @@ static hg_return_t read_rpc_handler(hg_handle_t handle) {
       // An error: return a non-ok status
       printf("while pread file! fd:%d, err:%s\n", in.fd, strerror(errno));
       out.size = -1;
-      out.buffer = nullptr;
     } else {
       out.size = in.n - left;
     }
   }
+#ifdef NAS_DEBUG
+  printf("read size: %ld\n", out.size);
+#endif
+  hgi = HG_Get_info(handle);
+  assert(hgi);
 
-  printf("read size: %ld, buffer: %s\n", out.size, out.buffer);
-
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
-  ret = HG_Respond(handle, NULL, NULL, &out);
+  ret = HG_Bulk_create(hgi->hg_class, 1, (void **)&state->local_buffer, &in.n,
+                       HG_BULK_READ_ONLY, &local_buffer_handle);
   assert(ret == HG_SUCCESS);
-  (void)ret;
+  state->local_bulk_handle = local_buffer_handle;
+  state->handle = handle;
+  state->out = out;
+
+  ret = HG_Bulk_transfer(hgi->context, read_rpc_handler_bulk_cb, state,
+                         HG_BULK_PUSH, hgi->addr, in.bulk_handle, 0,
+                         local_buffer_handle, 0, in.n, HG_OP_ID_IGNORE);
+  assert(ret == HG_SUCCESS);
+  return ret;
+}
+
+static hg_return_t read_rpc_handler_bulk_cb(const struct hg_cb_info *info) {
+  hg_return_t ret;
+  read_state *state = (read_state *)info->arg;
+
+  ret = HG_Respond(state->handle, NULL, NULL, &state->out);
+  assert(ret == HG_SUCCESS);
+
+  HG_Bulk_free(state->local_bulk_handle);
+  free(state->local_buffer);
+  free(state);
 
   return ret;
 }
@@ -482,13 +507,18 @@ static hg_return_t write_rpc_handler(hg_handle_t handle) {
 
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got write RPC request with fd: %d, n: %lu, offset: %lu\n", in.fd,
          in.n, in.offset);
-
+#endif
   state->handle = handle;
   state->in = in;
-  state->src = (char *)calloc(1, in.n);
+  if (state->in.offset < 0) {
+    state->src = (char *)calloc(1, in.n);
+  } else {
+    int res = posix_memalign((void **)&state->src, 512, state->in.n);
+    assert(res == 0);
+  }
   /* register local target buffer for bulk access */
   hgi = HG_Get_info(handle);
   assert(hgi);
@@ -502,7 +532,6 @@ static hg_return_t write_rpc_handler(hg_handle_t handle) {
                          state->local_bulk_handle, 0, in.n, HG_OP_ID_IGNORE);
   assert(ret == 0);
   (void)ret;
-
   return ret;
 }
 
@@ -518,16 +547,23 @@ static hg_return_t write_rpc_handler_bulk_cb(const struct hg_cb_info *info) {
   while (left != 0) {
     size_t bytes_to_write = std::min(left, kLimit1Gb);
     if (state->in.offset >= 0) {
-      printf("pwrite! src:%s\n", src);
-      done = pwrite(state->in.fd, src, bytes_to_write, state->in.offset);
+#ifdef NAS_DEBUG
+      printf("pwrite! bytes_to_write: %ld, offset: %ld\n", bytes_to_write,
+             state->in.offset);
+#endif
+      done = pwrite(state->in.fd, src, bytes_to_write,
+                    static_cast<off_t>(state->in.offset));
     } else {
-      printf("write! src:%s\n", src);
+#ifdef NAS_DEBUG
+      printf("write! bytes_to_write: %ld\n", bytes_to_write);
+#endif
       done = write(state->in.fd, src, bytes_to_write);
     }
     if (done < 0) {
       if (errno == EINTR) {
         continue;
       }
+      printf("write error: %s\n", strerror(errno));
       out.ret = false;
       goto res;
     }
@@ -560,9 +596,9 @@ static hg_return_t fstat_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got fstat RPC request with fd: %d\n", in.fd);
-
+#endif
   /* fstat file */
   res = fstat(in.fd, &stat_buf);
   if (res < 0) {
@@ -576,18 +612,13 @@ static hg_return_t fstat_rpc_handler(hg_handle_t handle) {
   out.st_dev = stat_buf.st_dev;
   out.st_mode = stat_buf.st_mode;
   out.st_mtime_ = stat_buf.st_mtime;
-
+#ifdef NAS_DEBUG
   printf("stat buf, file size: %ld, block size: %ld\n", stat_buf.st_size,
          stat_buf.st_blksize);
-
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
+#endif
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -600,9 +631,9 @@ static hg_return_t ftruncate_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got ftruncate RPC request with fd: %d, size: %ld\n", in.fd, in.size);
-
+#endif
   /* fstat file */
   res = ftruncate(in.fd, in.size);
   if (res < 0) {
@@ -610,14 +641,9 @@ static hg_return_t ftruncate_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -630,12 +656,12 @@ static hg_return_t fallocate_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf(
       "Got fallocate RPC request with fd: %d, mode: %d, offset: %lu, len: "
       "%lu\n",
       in.fd, in.mode, in.offset, in.len);
-
+#endif
   /* fallocate file */
   res = fallocate(in.fd, in.mode, in.offset, in.len);
   if (res < 0) {
@@ -643,14 +669,9 @@ static hg_return_t fallocate_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -663,9 +684,9 @@ static hg_return_t fdatasync_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got fdatasync RPC request with fd: %d\n", in.fd);
-
+#endif
   /* fallocate file */
   res = fdatasync(in.fd);
   if (res < 0) {
@@ -673,14 +694,9 @@ static hg_return_t fdatasync_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -693,9 +709,9 @@ static hg_return_t fsync_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got fsync RPC request with fd: %d\n", in.fd);
-
+#endif
   /* fallocate file */
   res = fsync(in.fd);
   if (res < 0) {
@@ -703,14 +719,9 @@ static hg_return_t fsync_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -723,12 +734,12 @@ static hg_return_t rangesync_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf(
       "Got rangesync RPC request with fd: %d, offset: %lu, count: %lu, "
       "flags: %d\n",
       in.fd, in.offset, in.count, in.flags);
-
+#endif
   /* fallocate file */
   res = sync_file_range(in.fd, in.offset, in.count, in.flags);
   if (res < 0) {
@@ -736,14 +747,9 @@ static hg_return_t rangesync_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -756,10 +762,10 @@ static hg_return_t rename_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got rename RPC request with old_name: %s, new_name: %s\n",
          in.old_name, in.new_name);
-
+#endif
   /* fallocate file */
   res = rename(in.old_name, in.new_name);
   if (res < 0) {
@@ -767,14 +773,9 @@ static hg_return_t rename_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -787,24 +788,20 @@ static hg_return_t access_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got access RPC request with name: %s, type: %d\n", in.name, in.type);
-
+#endif
   /* fallocate file */
   res = access(in.name, in.type);
   if (res < 0) {
     printf("fail to access file! %s\n", strerror(errno));
   }
   out.ret = res;
+  out.errn = errno;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -817,9 +814,9 @@ static hg_return_t unlink_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got unlink RPC request with name: %s\n", in.name);
-
+#endif
   /* fallocate file */
   res = unlink(in.name);
   if (res < 0) {
@@ -827,14 +824,9 @@ static hg_return_t unlink_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -847,24 +839,20 @@ static hg_return_t mkdir_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got mkdir RPC request with name: %s, mode: %d\n", in.name, in.mode);
-
+#endif
   /* fallocate file */
   res = mkdir(in.name, in.mode);
   if (res < 0) {
-    printf("fail to mkdir file! %s\n", strerror(errno));
+    printf("While mkdir! dir: %s, error: %s\n", in.name, strerror(errno));
   }
   out.ret = res;
+  out.errn = errno;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -877,9 +865,9 @@ static hg_return_t rmdir_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got rmdir RPC request with name: %s\n", in.name);
-
+#endif
   /* fallocate file */
   res = rmdir(in.name);
   if (res < 0) {
@@ -887,14 +875,9 @@ static hg_return_t rmdir_rpc_handler(hg_handle_t handle) {
   }
   out.ret = res;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -908,9 +891,9 @@ static hg_return_t stat_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got stat RPC request with name: %s\n", in.name);
-
+#endif
   /* fallocate file */
   res = stat(in.name, &buf);
   if (res < 0) {
@@ -925,14 +908,9 @@ static hg_return_t stat_rpc_handler(hg_handle_t handle) {
   out.st_mode = buf.st_mode;
   out.st_mtime_ = buf.st_mtime;
 
-  /* send ack to client */
-  /* NOTE: don't bother specifying a callback here for completion of sending
-   * response.  This is just a best effort response.
-   */
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
-
   return ret;
 }
 
@@ -940,6 +918,8 @@ static hg_return_t ls_rpc_handler(hg_handle_t handle) {
   hg_return_t ret;
   ls_rpc_in_t in;
   ls_rpc_out_t out;
+  out.list = nullptr;
+  out.ret = 0;
   name_list_t cur, neww;
   struct dirent *entry;
   int pre_close_errno;
@@ -949,9 +929,9 @@ static hg_return_t ls_rpc_handler(hg_handle_t handle) {
   /* decode input */
   ret = HG_Get_input(handle, &in);
   assert(ret == HG_SUCCESS);
-
+#ifdef NAS_DEBUG
   printf("Got ls RPC request with name: %s\n", in.name);
-
+#endif
   DIR *d = opendir(in.name);
   if (d == nullptr) {
     switch (errno) {
@@ -1013,11 +993,38 @@ static hg_return_t ls_rpc_handler(hg_handle_t handle) {
     goto res;
   }
 
-/* send ack to client */
-/* NOTE: don't bother specifying a callback here for completion of sending
- * response.  This is just a best effort response.
- */
 res:
+  ret = HG_Respond(handle, NULL, NULL, &out);
+  assert(ret == HG_SUCCESS);
+  (void)ret;
+  return ret;
+}
+
+static hg_return_t lock_rpc_handler(hg_handle_t handle) {
+  hg_return_t ret;
+  lock_rpc_in_t in;
+  lock_rpc_out_t out;
+  int res;
+
+  /* decode input */
+  ret = HG_Get_input(handle, &in);
+  assert(ret == HG_SUCCESS);
+#ifdef NAS_DEBUG
+  printf("Got lock RPC request with fd: %d\n", in.fd);
+#endif
+  /* fallocate file */
+  struct flock f;
+  memset(&f, 0, sizeof(f));
+  f.l_type = (in.lock ? F_WRLCK : F_UNLCK);
+  f.l_whence = SEEK_SET;
+  f.l_start = 0;
+  f.l_len = 0;  // Lock/unlock entire file
+  res = fcntl(in.fd, F_SETLK, &f);
+  if (res < 0) {
+    printf("fail to lock file! %s\n", strerror(errno));
+  }
+  out.ret = res;
+
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;

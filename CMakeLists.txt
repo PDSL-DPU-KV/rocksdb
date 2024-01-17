@@ -1156,6 +1156,7 @@ option(WITH_JNI "build with JNI" OFF)
 # Tests are excluded from Release builds
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
   "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
+option(WITH_NAS_SERVER "build with nas server" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1532,6 +1533,13 @@ if(WITH_TESTS)
     add_test(NAME c_test COMMAND c_test${ARTIFACT_SUFFIX})
     add_dependencies(check c_test)
   endif()
+endif()
+
+if (WITH_NAS_SERVER)
+  add_executable(nas_server${ARTIFACT_SUFFIX}
+    env/nas_server.cc)
+  target_link_libraries(nas_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 endif()
 
 if(WITH_BENCHMARK_TOOLS)

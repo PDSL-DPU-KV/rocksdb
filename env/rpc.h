@@ -1,7 +1,11 @@
 #ifndef RPC_H
 #define RPC_H
 
+#include <mercury_core_types.h>
+
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "mercury_proc.h"
 #define HG_HAS_BOOST
@@ -26,9 +30,9 @@ MERCURY_GEN_PROC(close_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(close_rpc_in_t, ((int32_t)(fd)))
 MERCURY_GEN_PROC(fseek_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(fseek_rpc_in_t, ((int32_t)(fd))((uint64_t)(n)))
-MERCURY_GEN_PROC(read_rpc_out_t, ((int64_t)(size))((hg_string_t)(buffer)))
-MERCURY_GEN_PROC(read_rpc_in_t,
-                 ((int32_t)(fd))((uint64_t)(n))((int64_t)(offset)))
+MERCURY_GEN_PROC(read_rpc_out_t, ((int64_t)(size)))
+MERCURY_GEN_PROC(read_rpc_in_t, ((int32_t)(fd))((uint64_t)(n))((
+                                    int64_t)(offset))((hg_bulk_t)(bulk_handle)))
 MERCURY_GEN_PROC(write_rpc_out_t, ((hg_bool_t)(ret)))
 MERCURY_GEN_PROC(
     write_rpc_in_t,
@@ -50,15 +54,18 @@ MERCURY_GEN_PROC(fsync_rpc_in_t, ((int32_t)(fd)))
 MERCURY_GEN_PROC(rangesync_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(rangesync_rpc_in_t, ((int32_t)(fd))((uint64_t)(offset))(
                                          (uint64_t)(count))((int32_t)(flags)))
+MERCURY_GEN_PROC(lock_rpc_out_t, ((int32_t)(ret)))
+MERCURY_GEN_PROC(lock_rpc_in_t, ((int32_t)(fd))((hg_bool_t)(lock)))
+
 /*file system rpcs*/
 MERCURY_GEN_PROC(rename_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(rename_rpc_in_t,
                  ((hg_const_string_t)(old_name))((hg_const_string_t)(new_name)))
-MERCURY_GEN_PROC(access_rpc_out_t, ((int32_t)(ret)))
+MERCURY_GEN_PROC(access_rpc_out_t, ((int32_t)(ret))((int32_t)(errn)))
 MERCURY_GEN_PROC(access_rpc_in_t, ((hg_const_string_t)(name))((int32_t)(type)))
 MERCURY_GEN_PROC(unlink_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(unlink_rpc_in_t, ((hg_const_string_t)(name)))
-MERCURY_GEN_PROC(mkdir_rpc_out_t, ((int32_t)(ret)))
+MERCURY_GEN_PROC(mkdir_rpc_out_t, ((int32_t)(ret))((int32_t)(errn)))
 MERCURY_GEN_PROC(mkdir_rpc_in_t, ((hg_const_string_t)(name))((uint32_t)(mode)))
 MERCURY_GEN_PROC(rmdir_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(rmdir_rpc_in_t, ((hg_const_string_t)(name)))
@@ -80,7 +87,7 @@ typedef struct {
 } ls_rpc_out_t;
 
 static inline hg_return_t hg_proc_ls_rpc_out_t(hg_proc_t proc, void *data) {
-  hg_return_t ret;
+  hg_return_t ret = HG_SUCCESS;
   ls_rpc_out_t *out = (ls_rpc_out_t *)data;
 
   hg_size_t length = 0;
@@ -156,6 +163,16 @@ struct stat_ret {
   struct stat *stat_buf;
 };
 
+struct ret_with_errno {
+  int ret;
+  int errn;
+};
+
+struct ret_with_name_list {
+  int ret;
+  std::vector<std::string> *name_list;
+};
+
 hg_id_t open_rpc_register(void);
 hg_id_t fopen_rpc_register(void);
 hg_id_t close_rpc_register(void);
@@ -175,6 +192,7 @@ hg_id_t mkdir_rpc_register(void);
 hg_id_t rmdir_rpc_register(void);
 hg_id_t stat_rpc_register(void);
 hg_id_t ls_rpc_register(void);
+hg_id_t lock_rpc_register(void);
 
 inline bool IsSectorAligned(const size_t off, size_t sector_size) {
   assert((sector_size & (sector_size - 1)) == 0);

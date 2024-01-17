@@ -8,8 +8,11 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
+#include <fcntl.h>
+
 #include <atomic>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -129,7 +132,22 @@ class RemoteFileSystem : public FileSystem {
   }
 
  private:
-  RPCEngine* rpc_engine;
+  // Returns true iff the named directory exists and is a directory.
+  bool DirExists(const std::string& dname) {
+    struct stat statbuf;
+    if (rpc_engine->Stat(dname.c_str(), &statbuf) == 0) {
+      return S_ISDIR(statbuf.st_mode);
+    }
+    return false;  // stat() failed return false
+  }
+
+  int LockOrUnlock(int fd, bool lock) {
+    int value = rpc_engine->SetLock(fd, lock);
+    return value;
+  }
+
+ private:
+  std::shared_ptr<RPCEngine> rpc_engine;
   // If true, allow non owner read access for db files. Otherwise, non-owner
   //  has no access to db files.
   bool allow_non_owner_access_;

@@ -62,7 +62,7 @@ static void *hg_progress_fn(void *foo) {
       ret = HG_Trigger(hg_context, 0, 1, &actual_count);
     } while ((ret == HG_SUCCESS) && actual_count && !hg_progress_shutdown_flag);
 
-    if (!hg_progress_shutdown_flag) HG_Progress(hg_context, 100);
+    if (!hg_progress_shutdown_flag) HG_Progress(hg_context, 1000);
   }
 
   return (NULL);
