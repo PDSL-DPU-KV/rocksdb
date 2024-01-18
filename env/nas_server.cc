@@ -10,7 +10,7 @@
  */
 
 int main(void) {
-  hg_engine_init(HG_TRUE, "tcp://:12345");
+  hg_engine_init(HG_TRUE, "ofi+verbs://192.168.200.10:12345");
 
   hg_engine_print_self_addr();
 

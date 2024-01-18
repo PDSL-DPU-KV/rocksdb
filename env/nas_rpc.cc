@@ -925,7 +925,7 @@ static hg_return_t lock_rpc_cb(const struct hg_cb_info *info) {
 }
 
 RPCEngine::RPCEngine(const std::string &svr_addr_string) {
-  hg_engine_init(HG_FALSE, "tcp");
+  hg_engine_init(HG_FALSE, "verbs");
   hg_engine_addr_lookup(svr_addr_string.c_str(), &svr_addr);
   // register file system rpcs
   open_rpc_id = open_rpc_register();
@@ -1085,7 +1085,6 @@ ssize_t RPCEngine::Pread(int fd, uint64_t offset, size_t n, char *buffer) {
   };
   read_rpc(svr_addr, &in, &fr);
   fr.wait();
-
   memcpy(buffer, fr.recv_buf, in.n);
   free(fr.recv_buf);
   return ret;

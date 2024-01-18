@@ -1,6 +1,8 @@
 #include "rpc_engine.h"
 
 #include <assert.h>
+#include <mercury.h>
+#include <mercury_core_types.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -23,7 +25,10 @@ void hg_engine_init(hg_bool_t listen, const char *local_addr) {
   HG_Set_log_level("warning");
 
   /* boilerplate HG initialization steps */
-  hg_class = HG_Init(local_addr, listen);
+  struct hg_init_info init_info = HG_INIT_INFO_INITIALIZER;
+  init_info.request_post_init = 40960;
+  init_info.request_post_incr = 1024;
+  hg_class = HG_Init_opt(local_addr, listen, &init_info);
   assert(hg_class);
 
   hg_context = HG_Context_create(hg_class);

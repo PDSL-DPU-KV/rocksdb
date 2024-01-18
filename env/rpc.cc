@@ -270,6 +270,8 @@ static hg_return_t open_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -306,6 +308,8 @@ res:
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -333,6 +337,8 @@ static hg_return_t close_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -366,6 +372,8 @@ static hg_return_t fseek_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -391,6 +399,7 @@ static hg_return_t read_rpc_handler(hg_handle_t handle) {
   printf("Got read RPC request with fd: %d, n: %lu, offset: %lu\n", in.fd, in.n,
          in.offset);
 #endif
+  // TODO: remove malloc from critical path
   if (in.offset < 0) {
     state->local_buffer = (char *)calloc(1, in.n);
   } else {
@@ -464,6 +473,7 @@ static hg_return_t read_rpc_handler(hg_handle_t handle) {
   hgi = HG_Get_info(handle);
   assert(hgi);
 
+  // TODO: remove bulk create from critical path
   ret = HG_Bulk_create(hgi->hg_class, 1, (void **)&state->local_buffer, &in.n,
                        HG_BULK_READ_ONLY, &local_buffer_handle);
   assert(ret == HG_SUCCESS);
@@ -488,7 +498,7 @@ static hg_return_t read_rpc_handler_bulk_cb(const struct hg_cb_info *info) {
   HG_Bulk_free(state->local_bulk_handle);
   free(state->local_buffer);
   free(state);
-
+  HG_Destroy(state->handle);
   return ret;
 }
 
@@ -583,6 +593,7 @@ res:
   free(state->src);
   free(state);
 
+  HG_Destroy(state->handle);
   return ret;
 }
 
@@ -619,6 +630,8 @@ static hg_return_t fstat_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -644,6 +657,8 @@ static hg_return_t ftruncate_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -672,6 +687,8 @@ static hg_return_t fallocate_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -697,6 +714,8 @@ static hg_return_t fdatasync_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -722,6 +741,8 @@ static hg_return_t fsync_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -750,6 +771,8 @@ static hg_return_t rangesync_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -776,6 +799,8 @@ static hg_return_t rename_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -802,6 +827,8 @@ static hg_return_t access_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -827,6 +854,8 @@ static hg_return_t unlink_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -853,6 +882,8 @@ static hg_return_t mkdir_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -878,6 +909,8 @@ static hg_return_t rmdir_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -911,6 +944,8 @@ static hg_return_t stat_rpc_handler(hg_handle_t handle) {
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -997,6 +1032,8 @@ res:
   ret = HG_Respond(handle, NULL, NULL, &out);
   assert(ret == HG_SUCCESS);
   (void)ret;
+
+  HG_Destroy(handle);
   return ret;
 }
 
@@ -1029,5 +1066,6 @@ static hg_return_t lock_rpc_handler(hg_handle_t handle) {
   assert(ret == HG_SUCCESS);
   (void)ret;
 
+  HG_Destroy(handle);
   return ret;
 }
