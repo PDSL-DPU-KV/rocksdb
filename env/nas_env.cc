@@ -13,13 +13,13 @@
 
 #include "env/emulated_clock.h"
 #include "env/io_posix.h"
-#include "env/rpc.h"
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/io_status.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "util/cast_util.h"
+
 namespace ROCKSDB_NAMESPACE {
 
 // list of pathnames that are locked
@@ -66,7 +66,7 @@ class NasSequentailFile : public FSSequentialFile {
     assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
-    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch, use_direct_io());
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("pread failed!", fname_);
@@ -77,7 +77,7 @@ class NasSequentailFile : public FSSequentialFile {
   IOStatus Read(size_t n, const IOOptions& options, Slice* result,
                 char* scratch, IODebugContext* dbg) override {
     assert(result != nullptr && !use_direct_io());
-    ssize_t res = rpc_engine_->Fread(fd_, n, scratch);
+    ssize_t res = rpc_engine_->Fread(fd_, n, scratch, use_direct_io());
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("fread failed!", fname_);
@@ -124,7 +124,7 @@ class NasRandomAccessFile : public FSRandomAccessFile {
       assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
       assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
     }
-    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch, use_direct_io());
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("pread failed!", fname_);
@@ -176,7 +176,7 @@ class NasWritableFile : public FSWritableFile {
     }
     const char* src = data.data();
     size_t nbytes = data.size();
-    ssize_t res = rpc_engine_->Write(fd_, src, nbytes);
+    ssize_t res = rpc_engine_->Write(fd_, src, nbytes, use_direct_io());
     if (!res) {
       return IOStatus::IOError("Append failed!", fname_);
     }
@@ -195,7 +195,7 @@ class NasWritableFile : public FSWritableFile {
     assert(offset <= static_cast<uint64_t>(std::numeric_limits<off_t>::max()));
     const char* src = data.data();
     size_t nbytes = data.size();
-    if (!rpc_engine_->PWrite(fd_, src, nbytes, offset)) {
+    if (!rpc_engine_->PWrite(fd_, src, nbytes, offset, use_direct_io())) {
       return IOStatus::IOError("positioned append failed!", fname_);
     }
     filesize_ += offset + nbytes;
@@ -344,7 +344,7 @@ class NasRandomRWFile : public FSRandomRWFile {
                  IODebugContext* /*dbg*/) override {
     const char* src = data.data();
     size_t nbytes = data.size();
-    if (!rpc_engine_->PWrite(fd_, src, nbytes, offset)) {
+    if (!rpc_engine_->PWrite(fd_, src, nbytes, offset, use_direct_io())) {
       return IOStatus::IOError("While write random read/write file at offset " +
                                    std::to_string(offset),
                                fname_);
@@ -354,7 +354,7 @@ class NasRandomRWFile : public FSRandomRWFile {
   IOStatus Read(uint64_t offset, size_t n, const IOOptions& /*opts*/,
                 Slice* result, char* scratch,
                 IODebugContext* /*dbg*/) const override {
-    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch);
+    ssize_t res = rpc_engine_->Pread(fd_, offset, n, scratch, use_direct_io());
     if (res < 0) {
       *result = Slice(scratch, 0);
       return IOStatus::IOError("While reading random read/write file offset " +

@@ -42,6 +42,7 @@
 #include <thread>
 #include <unordered_map>
 
+// #include "db/compaction/dpu_compaction_service.h"
 #include "db/db_impl/db_impl.h"
 #include "db/malloc_stats.h"
 #include "db/version_set.h"
@@ -1360,8 +1361,13 @@ static ROCKSDB_NAMESPACE::Env* FLAGS_env = ROCKSDB_NAMESPACE::Env::Default();
 
 DEFINE_bool(use_nas, false, "Use remote filesystem.");
 
-DEFINE_string(svr_addr_string, "ofi+tcp://192.168.1.10:12345",
+DEFINE_string(fs_svr_addr, "ofi+tcp://192.168.1.10:12345",
               "NAS server address.");
+
+DEFINE_bool(use_dpu_compaction, false, "Use remote filesystem.");
+
+DEFINE_string(compaction_svr_addr, "ofi+tcp://192.168.1.10:12345",
+              "Compaction server address.");
 
 DEFINE_int64(stats_interval, 0,
              "Stats are reported every N operations when this is greater than "
@@ -4093,6 +4099,11 @@ class Benchmark {
     config_options.ignore_unsupported_options = false;
 
     assert(db_.db == nullptr);
+
+    // if (FLAGS_use_dpu_compaction) {
+    //   options.compaction_service =
+    //       NewDPUCompactionService(FLAGS_db, FLAGS_compaction_svr_addr);
+    // }
 
     options.env = FLAGS_env;
     options.wal_dir = FLAGS_wal_dir;
@@ -8562,7 +8573,7 @@ int db_bench_tool(int argc, char** argv) {
   }
 
   if (FLAGS_use_nas) {
-    RPCEngine* rpc_engine = new RPCEngine(FLAGS_svr_addr_string);
+    RPCEngine* rpc_engine = new RPCEngine(FLAGS_fs_svr_addr);
     static std::shared_ptr<ROCKSDB_NAMESPACE::Env> composite_env =
         NewCompositeEnv(NewRemoteFileSystem(rpc_engine));
     FLAGS_env = composite_env.get();

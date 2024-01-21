@@ -25,6 +25,7 @@
 #include "rocksdb/io_status.h"
 #include "rocksdb/status.h"
 #include "rocksdb/system_clock.h"
+#include "util/mercury_wrapper.hh"
 
 namespace ROCKSDB_NAMESPACE {
 

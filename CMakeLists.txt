@@ -332,7 +332,7 @@ if (NOT WITH_PERF_CONTEXT)
   add_definitions(-DNPERF_CONTEXT)
 endif()
 
-option(FAIL_ON_WARNINGS "Treat compile warnings as errors" ON)
+option(FAIL_ON_WARNINGS "Treat compile warnings as errors" OFF)
 if(FAIL_ON_WARNINGS)
   if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
@@ -408,6 +408,7 @@ endif()
 # RTTI is by default AUTO which enables it in debug and disables it in release.
 set(USE_RTTI AUTO CACHE STRING "Enable RTTI in builds")
 set_property(CACHE USE_RTTI PROPERTY STRINGS AUTO ON OFF)
+set(USE_RTTI ON)
 if(USE_RTTI STREQUAL "AUTO")
   message(STATUS "Enabling RTTI in Debug builds only (default)")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DROCKSDB_USE_RTTI")
@@ -675,6 +676,8 @@ set(SOURCES
         db/compaction/compaction_outputs.cc
         db/compaction/sst_partitioner.cc
         db/compaction/subcompaction_state.cc
+        # db/compaction/dpu_compaction_rpc.cc
+        # db/compaction/dpu_compaction_service.cc
         db/convenience.cc
         db/db_filesnapshot.cc
         db/db_impl/compacted_db_impl.cc
@@ -743,8 +746,6 @@ set(SOURCES
         env/unique_id_gen.cc
         env/nas_env.cc
         env/nas_rpc.cc
-        env/rpc_engine.cc
-        env/rpc.cc
         file/delete_scheduler.cc
         file/file_prefetch_buffer.cc
         file/file_util.cc
@@ -1157,6 +1158,7 @@ option(WITH_JNI "build with JNI" OFF)
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
   "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_NAS_SERVER "build with nas server" ON)
+# option(WITH_COMPACTION_SERVER "build with compaction server" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1541,6 +1543,13 @@ if (WITH_NAS_SERVER)
   target_link_libraries(nas_server${ARTIFACT_SUFFIX} 
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 endif()
+
+# if (WITH_COMPACTION_SERVER)
+#   add_executable(compaction_server${ARTIFACT_SUFFIX}
+#     db/compaction/dpu_compaction_server.cc)
+#   target_link_libraries(compaction_server${ARTIFACT_SUFFIX} 
+#     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+# endif()
 
 if(WITH_BENCHMARK_TOOLS)
   add_executable(db_bench${ARTIFACT_SUFFIX}
