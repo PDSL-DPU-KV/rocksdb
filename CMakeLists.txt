@@ -676,8 +676,7 @@ set(SOURCES
         db/compaction/compaction_outputs.cc
         db/compaction/sst_partitioner.cc
         db/compaction/subcompaction_state.cc
-        # db/compaction/dpu_compaction_rpc.cc
-        # db/compaction/dpu_compaction_service.cc
+        db/compaction/dpu_compaction_service.cc
         db/convenience.cc
         db/db_filesnapshot.cc
         db/db_impl/compacted_db_impl.cc
@@ -1158,7 +1157,7 @@ option(WITH_JNI "build with JNI" OFF)
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
   "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_NAS_SERVER "build with nas server" ON)
-# option(WITH_COMPACTION_SERVER "build with compaction server" ON)
+option(WITH_COMPACTION_SERVER "build with compaction server" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1544,12 +1543,12 @@ if (WITH_NAS_SERVER)
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 endif()
 
-# if (WITH_COMPACTION_SERVER)
-#   add_executable(compaction_server${ARTIFACT_SUFFIX}
-#     db/compaction/dpu_compaction_server.cc)
-#   target_link_libraries(compaction_server${ARTIFACT_SUFFIX} 
-#     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
-# endif()
+if (WITH_COMPACTION_SERVER)
+  add_executable(compaction_server${ARTIFACT_SUFFIX}
+    db/compaction/dpu_compaction_server.cc)
+  target_link_libraries(compaction_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+endif()
 
 if(WITH_BENCHMARK_TOOLS)
   add_executable(db_bench${ARTIFACT_SUFFIX}

@@ -42,7 +42,7 @@
 #include <thread>
 #include <unordered_map>
 
-// #include "db/compaction/dpu_compaction_service.h"
+#include "db/compaction/dpu_compaction_service.h"
 #include "db/db_impl/db_impl.h"
 #include "db/malloc_stats.h"
 #include "db/version_set.h"
@@ -4100,10 +4100,10 @@ class Benchmark {
 
     assert(db_.db == nullptr);
 
-    // if (FLAGS_use_dpu_compaction) {
-    //   options.compaction_service =
-    //       NewDPUCompactionService(FLAGS_db, FLAGS_compaction_svr_addr);
-    // }
+    if (FLAGS_use_dpu_compaction) {
+      options.compaction_service =
+          NewDPUCompactionService(FLAGS_compaction_svr_addr);
+    }
 
     options.env = FLAGS_env;
     options.wal_dir = FLAGS_wal_dir;
