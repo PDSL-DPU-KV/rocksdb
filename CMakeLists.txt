@@ -626,7 +626,7 @@ if(WITH_MERCURY)
   else()
     message(FATAL_ERROR "pkg-config not found")
   endif()
-  set(ENV{PKG_CONFIG_PATH} "/home/dc/rpc/libs/deps/lib/pkgconfig")
+  set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig")
   pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
 
 endif()
