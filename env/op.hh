@@ -138,6 +138,7 @@ struct ret_with_errno {
 
 struct stat_ret {
   int ret;
+  int errn;
   int32_t st_ino;
   int32_t st_dev;
   int32_t st_size;
@@ -147,7 +148,8 @@ struct stat_ret {
   uint64_t st_mtime_;
   template <typename A>
   void serialize(A &ar) {
-    ar(ret, st_ino, st_dev, st_size, st_blksize, st_blocks, st_mode, st_mtime_);
+    ar(ret, errn, st_ino, st_dev, st_size, st_blksize, st_blocks, st_mode,
+       st_mtime_);
   }
 };
 

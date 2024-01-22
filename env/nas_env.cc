@@ -564,6 +564,7 @@ IOStatus RemoteFileSystem::NewDirectory(const std::string& name,
   int flags = 0;
   int fd = rpc_engine->Open(name.c_str(), flags, 0);
   if (fd < 0) {
+    // todo: upper caller may need errno
     return IOStatus::IOError("While open directory", name);
   } else {
     result->reset(new NasDirectory(fd, name, rpc_engine));
@@ -601,6 +602,7 @@ IOStatus RemoteFileSystem::GetChildren(const std::string& dir,
   result->clear();
   int res = rpc_engine->GetChildren(dir.c_str(), result);
   if (res < 0) {
+    // todo: upper caller may need errno
     return IOStatus::IOError("While get children", dir);
   }
   return IOStatus::OK();
@@ -610,6 +612,7 @@ IOStatus RemoteFileSystem::DeleteFile(const std::string& fname,
                                       const IOOptions& /*opts*/,
                                       IODebugContext* /*dbg*/) {
   if (rpc_engine->Unlink(fname.c_str()) != 0) {
+    // todo: upper caller may need errno
     return IOStatus::IOError("while unlink() file", fname);
   }
   return IOStatus::OK();
@@ -620,7 +623,7 @@ IOStatus RemoteFileSystem::CreateDir(const std::string& name,
                                      IODebugContext* /*dbg*/) {
   struct ret_with_errno ret = rpc_engine->Mkdir(name.c_str(), 0755);
   if (ret.ret != 0) {
-    return IOStatus::IOError("While mkdir", name);
+    return IOError("While mkdir", name, ret.errn);
   }
   return IOStatus::OK();
 }
@@ -645,6 +648,7 @@ IOStatus RemoteFileSystem::DeleteDir(const std::string& name,
                                      const IOOptions& /*opts*/,
                                      IODebugContext* /*dbg*/) {
   if (rpc_engine->Rmdir(name.c_str()) != 0) {
+    // todo: upper caller may need errno
     return IOStatus::IOError("file rmdir", name);
   }
   return IOStatus::OK();
@@ -655,9 +659,10 @@ IOStatus RemoteFileSystem::GetFileSize(const std::string& fname,
                                        uint64_t* size,
                                        IODebugContext* /*dbg*/) {
   struct stat sbuf;
-  if (rpc_engine->Stat(fname.c_str(), &sbuf) != 0) {
+  struct stat_ret ret = rpc_engine->Stat(fname.c_str(), &sbuf);
+  if (ret.ret != 0) {
     *size = 0;
-    return IOStatus::IOError("while stat a file for size", fname);
+    return IOError("while stat a file for size", fname, ret.errn);
   } else {
     *size = sbuf.st_size;
   }
@@ -669,8 +674,9 @@ IOStatus RemoteFileSystem::GetFileModificationTime(const std::string& fname,
                                                    uint64_t* file_mtime,
                                                    IODebugContext* /*dbg*/) {
   struct stat s;
-  if (rpc_engine->Stat(fname.c_str(), &s) != 0) {
-    return IOStatus::IOError("while stat a file for modification time", fname);
+  struct stat_ret ret = rpc_engine->Stat(fname.c_str(), &s);
+  if (ret.ret != 0) {
+    return IOError("while stat a file for modification time", fname, ret.errn);
   }
   *file_mtime = static_cast<uint64_t>(s.st_mtime);
   return IOStatus::OK();
@@ -681,6 +687,7 @@ IOStatus RemoteFileSystem::RenameFile(const std::string& src,
                                       const IOOptions& /*opts*/,
                                       IODebugContext* /*dbg*/) {
   if (rpc_engine->Rename(src.c_str(), target.c_str()) != 0) {
+    // todo: upper caller may need errno
     return IOStatus::IOError("While renaming a file to " + target, src);
   }
   return IOStatus::OK();

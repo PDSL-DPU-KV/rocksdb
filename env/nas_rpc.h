@@ -42,9 +42,9 @@ class RPCEngine {
                         int type);  // access
   int Unlink(const char *name);     // unlink
   ret_with_errno Mkdir(const char *name,
-                       uint mode);                    // mkdir
-  int Rmdir(const char *name);                        // rmdir
-  int Stat(const char *name, struct stat *stat_buf);  // stat
+                       uint mode);                         // mkdir
+  int Rmdir(const char *name);                             // rmdir
+  stat_ret Stat(const char *name, struct stat *stat_buf);  // stat
   int GetChildren(const char *dir_name,
                   std::vector<std::string> *result);  // ls
   int SetLock(int fd, bool lock);                     // fcntl(F_SETLK)

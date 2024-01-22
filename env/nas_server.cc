@@ -404,7 +404,7 @@ ret_with_errno mkdir_rpc_handler(mkdir_args &args) {
   /* fallocate file */
   res = mkdir(args.name.c_str(), args.mode);
   if (res < 0) {
-    printf("fail to mkdir file! %s\n", strerror(errno));
+    printf("fail to mkdir %s! %s\n", args.name.c_str(), strerror(errno));
   }
   ret.ret = res;
   ret.errn = errno;
@@ -420,11 +420,9 @@ stat_ret stat_rpc_handler(std::string name) {
 #endif
   /* fallocate file */
   res = stat(name.c_str(), &stat_buf);
-  if (res < 0) {
-    printf("fail to stat file! %s\n", strerror(errno));
-    stat_ret.ret = -1;
+  if (res != 0) {
+    printf("fail to stat %s! %s\n", name.c_str(), strerror(errno));
   } else {
-    stat_ret.ret = 0;
     stat_ret.st_blksize = stat_buf.st_blksize;
     stat_ret.st_blocks = stat_buf.st_blocks;
     stat_ret.st_size = stat_buf.st_size;
@@ -433,6 +431,8 @@ stat_ret stat_rpc_handler(std::string name) {
     stat_ret.st_mode = stat_buf.st_mode;
     stat_ret.st_mtime_ = stat_buf.st_mtime;
   }
+  stat_ret.ret = res;
+  stat_ret.errn = errno;
   return stat_ret;
 }
 

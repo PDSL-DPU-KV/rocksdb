@@ -136,7 +136,8 @@ class RemoteFileSystem : public FileSystem {
   // Returns true iff the named directory exists and is a directory.
   bool DirExists(const std::string& dname) {
     struct stat statbuf;
-    if (rpc_engine->Stat(dname.c_str(), &statbuf) == 0) {
+    struct stat_ret ret = rpc_engine->Stat(dname.c_str(), &statbuf);
+    if (ret.ret == 0) {
       return S_ISDIR(statbuf.st_mode);
     }
     return false;  // stat() failed return false

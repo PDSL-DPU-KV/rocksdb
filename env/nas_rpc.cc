@@ -326,7 +326,7 @@ int RPCEngine::Rmdir(const char *name) {
   return *ret;
 }
 
-int RPCEngine::Stat(const char *name, struct stat *stat_buf) {
+stat_ret RPCEngine::Stat(const char *name, struct stat *stat_buf) {
   RpcRequest req;
   req.type = STAT;
   req.args = std::string(name);
@@ -343,7 +343,7 @@ int RPCEngine::Stat(const char *name, struct stat *stat_buf) {
   stat_buf->st_ino = ret->st_ino;
   stat_buf->st_mode = ret->st_mode;
   stat_buf->st_mtime = ret->st_mtime_;
-  return ret->ret;
+  return *ret;
 }
 
 int RPCEngine::GetChildren(const char *dir_name,
