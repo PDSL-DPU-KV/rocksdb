@@ -605,9 +605,16 @@ auto rpc_handler(RpcRequest &req) -> RpcResponse {
   return resp;
 }
 
-int main(void) {
-  MercuryEngine engine("ofi+verbs://192.168.200.10:12345", true);
-  printf("server address, ofi+verbs://192.168.200.10:12345\n");
+int main(int argc, char *argv[]) {
+  const char *svr_addr_string;
+  if (argc < 2) {
+    printf("Usage is: %s <svr address string>\n", argv[0]);
+    return (0);
+  }
+  svr_addr_string = argv[1];
+
+  MercuryEngine engine(svr_addr_string, true);
+  printf("nas server address, %s\n", svr_addr_string);
   engine.define("op", [&](const Handle &h) -> void {
     auto req = h.get_payload().as<RpcRequest>();
     auto resp = rpc_handler(req);

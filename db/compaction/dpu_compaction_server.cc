@@ -30,11 +30,23 @@ std::string compaction_rpc_handler(compaction_args &args) {
   return output;
 }
 
-int main(void) {
-  MercuryEngine engine("ofi+verbs://192.168.200.10:23456", true);
-  printf("compaction server address, ofi+verbs://192.168.200.10:23456\n");
+int main(int argc, char *argv[]) {
+  const char *comp_svr_addr_string;
+  const char *fs_svr_addr_string;
+  if (argc < 3) {
+    printf(
+        "Usage is: %s <compaction svr address string> <fs svr address "
+        "string>\n",
+        argv[0]);
+    return (0);
+  }
+  comp_svr_addr_string = argv[1];
+  fs_svr_addr_string = argv[2];
+
+  MercuryEngine engine(comp_svr_addr_string, true);
+  printf("compaction server address, %s\n", comp_svr_addr_string);
   // new nas env for compaction server
-  RPCEngine *rpc_engine = new RPCEngine("ofi+verbs://192.168.200.10:12345");
+  RPCEngine *rpc_engine = new RPCEngine(fs_svr_addr_string);
   env = NewCompositeEnv(rocksdb::NewRemoteFileSystem(rpc_engine));
   // define compaction handler
   engine.define("compaction", [&](const Handle &h) -> void {
