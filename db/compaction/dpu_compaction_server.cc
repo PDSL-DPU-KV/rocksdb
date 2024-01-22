@@ -25,6 +25,7 @@ std::string compaction_rpc_handler(compaction_args &args) {
       options, args.db_name, args.db_name + "/" + std::to_string(args.job_id),
       args.input, &output, options_override);
   if (!s.ok()) {
+    printf("code: %d, message: %s\n", s.code(), s.getState());
     output = "failed";
   }
   return output;

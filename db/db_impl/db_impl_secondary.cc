@@ -926,6 +926,8 @@ Status DB::OpenAndCompact(
   compaction_input.column_family.options.table_properties_collector_factories =
       override_options.table_properties_collector_factories;
   compaction_input.db_options.listeners = override_options.listeners;
+  compaction_input.db_options.use_direct_io_for_flush_and_compaction = true;
+  compaction_input.db_options.use_direct_reads = true;
 
   std::vector<ColumnFamilyDescriptor> column_families;
   column_families.push_back(compaction_input.column_family);
@@ -971,6 +973,5 @@ Status DB::OpenAndCompact(
   return OpenAndCompact(OpenAndCompactOptions(), name, output_directory, input,
                         output, override_options);
 }
-
 
 }  // namespace ROCKSDB_NAMESPACE

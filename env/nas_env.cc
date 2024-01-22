@@ -441,9 +441,13 @@ IOStatus RemoteFileSystem::NewSequentialFile(
     const std::string& fname, const FileOptions& file_opts,
     std::unique_ptr<FSSequentialFile>* result, IODebugContext* /*dbg*/) {
   result->reset();
-  int flags = O_RDONLY;  // flags |= O_CLOEXEC ???
+  // int flags = O_RDONLY;  // flags |= O_CLOEXEC ???
+  // if (file_opts.use_direct_reads) {
+  //   flags |= O_DIRECT;
+  // }
+  int flags = 0;  // flags |= O_CLOEXEC ???
   if (file_opts.use_direct_reads) {
-    flags |= O_DIRECT;
+    flags += 16384;
   }
   int fd = rpc_engine->Open(fname.c_str(), flags,
                             GetDBFileMode(allow_non_owner_access_));
@@ -466,9 +470,13 @@ IOStatus RemoteFileSystem::NewRandomAccessFile(
     const std::string& fname, const FileOptions& file_opts,
     std::unique_ptr<FSRandomAccessFile>* result, IODebugContext* /*dbg*/) {
   result->reset();
-  int flags = O_RDONLY;
+  // int flags = O_RDONLY;
+  // if (file_opts.use_direct_reads) {
+  //   flags |= O_DIRECT;
+  // }
+  int flags = 0;
   if (file_opts.use_direct_reads) {
-    flags |= O_DIRECT;
+    flags += 16384;
   }
   int fd = rpc_engine->Open(fname.c_str(), flags,
                             GetDBFileMode(allow_non_owner_access_));
@@ -484,7 +492,8 @@ IOStatus RemoteFileSystem::NewRandomRWFile(
     const std::string& fname, const FileOptions& file_opts,
     std::unique_ptr<FSRandomRWFile>* result, IODebugContext* /*dbg*/) {
   result->reset();
-  int flags = O_RDWR;
+  // int flags = O_RDWR;
+  int flags = 2;
   int fd = rpc_engine->Open(fname.c_str(), flags,
                             GetDBFileMode(allow_non_owner_access_));
   if (fd < 0) {
@@ -500,10 +509,14 @@ IOStatus RemoteFileSystem::OpenWritableFile(
   result->reset();
   IOStatus s;
   int fd = -1;
-  int flags = (reopen) ? (O_CREAT | O_APPEND | O_WRONLY)
-                       : (O_CREAT | O_TRUNC | O_WRONLY);
+  // int flags = (reopen) ? (O_CREAT | O_APPEND | O_WRONLY)
+  //                      : (O_CREAT | O_TRUNC | O_WRONLY);
+  // if (options.use_direct_writes) {
+  //   flags |= O_DIRECT;
+  // }
+  int flags = (reopen) ? 1089 : 577;
   if (options.use_direct_writes) {
-    flags |= O_DIRECT;
+    flags += 16384;
   }
 
   fd = rpc_engine->Open(fname.c_str(), flags,
@@ -534,9 +547,13 @@ IOStatus RemoteFileSystem::ReuseWritableFile(
     IODebugContext* dbg) {
   result->reset();
   int fd = -1;
-  int flags = O_WRONLY;
+  // int flags = O_WRONLY;
+  // if (file_opts.use_direct_writes) {
+  //   flags |= O_DIRECT;
+  // }
+  int flags = 1;
   if (file_opts.use_direct_writes) {
-    flags |= O_DIRECT;
+    flags += 16384;
   }
 
   fd = rpc_engine->Open(old_fname.c_str(), flags,
@@ -731,8 +748,8 @@ IOStatus RemoteFileSystem::LockFile(const std::string& fname,
 
   IOStatus result = IOStatus::OK();
   int fd;
-  int flags = O_RDWR | O_CREAT;
-
+  // int flags = O_RDWR | O_CREAT;
+  int flags = 66;
   fd = rpc_engine->Open(fname.c_str(), flags, 0644);
   if (fd < 0) {
     result = IOStatus::IOError("while open a file for lock", fname);
@@ -799,7 +816,8 @@ IOStatus RemoteFileSystem::IsDirectory(const std::string& path,
                                        const IOOptions& /*opts*/, bool* is_dir,
                                        IODebugContext* /*dbg*/) {
   int fd = -1;
-  int flags = O_RDONLY;
+  // int flags = O_RDONLY;
+  int flags = 0;
   fd = rpc_engine->Open(path.c_str(), flags, 0);
   if (fd < 0) {
     return IOStatus::IOError("While open for IsDirectory()", path);
