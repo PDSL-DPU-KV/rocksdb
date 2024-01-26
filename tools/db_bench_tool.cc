@@ -1366,7 +1366,7 @@ DEFINE_string(fs_svr_addr, "ofi+tcp://192.168.1.10:12345",
 
 DEFINE_bool(use_dpu_compaction, false, "Use remote filesystem.");
 
-DEFINE_string(compaction_svr_addr, "ofi+tcp://192.168.1.10:12345",
+DEFINE_string(compaction_svr_addr, "192.168.1.10:12345",
               "Compaction server address.");
 
 DEFINE_int64(stats_interval, 0,
@@ -8572,8 +8572,9 @@ int db_bench_tool(int argc, char** argv) {
     FLAGS_env = composite_env.get();
   }
 
+  RPCEngine* rpc_engine;
   if (FLAGS_use_nas) {
-    RPCEngine* rpc_engine = new RPCEngine(FLAGS_fs_svr_addr);
+    rpc_engine = new RPCEngine(FLAGS_fs_svr_addr);
     static std::shared_ptr<ROCKSDB_NAMESPACE::Env> composite_env =
         NewCompositeEnv(NewRemoteFileSystem(rpc_engine));
     FLAGS_env = composite_env.get();
@@ -8665,6 +8666,10 @@ int db_bench_tool(int argc, char** argv) {
     std::string stats_string;
     ROCKSDB_NAMESPACE::DumpMallocStats(&stats_string);
     fprintf(stdout, "Malloc stats:\n%s\n", stats_string.c_str());
+  }
+
+  if (FLAGS_use_nas) {
+    delete rpc_engine;
   }
 
   return 0;

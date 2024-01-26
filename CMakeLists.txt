@@ -1,4 +1,4 @@
-# Prerequisites for Windows:
+# rPrerequisites for Windows:
 #     This cmake build is for Windows 64-bit only.
 #
 # Prerequisites:
@@ -618,6 +618,7 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
+set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/")
 option(WITH_MERCURY "Build with mercury" ON)
 if(WITH_MERCURY)
   find_package(PkgConfig REQUIRED)
@@ -626,8 +627,19 @@ if(WITH_MERCURY)
   else()
     message(FATAL_ERROR "pkg-config not found")
   endif()
-  set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig")
   pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
+
+endif()
+
+option(WITH_SCTP "Build with sctp" ON)
+if(WITH_SCTP)
+  find_package(PkgConfig REQUIRED)
+  if (PKGCONFIG_FOUND)
+    message(STATUS "pkg-config found")
+  else()
+    message(FATAL_ERROR "pkg-config not found")
+  endif()
+  pkg_check_modules(sctp REQUIRED IMPORTED_TARGET libsctp)
 
 endif()
 
@@ -1121,12 +1133,12 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury PkgConfig::sctp)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury PkgConfig::sctp)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1547,7 +1559,7 @@ if (WITH_COMPACTION_SERVER)
   add_executable(compaction_server${ARTIFACT_SUFFIX}
     db/compaction/dpu_compaction_server.cc)
   target_link_libraries(compaction_server${ARTIFACT_SUFFIX} 
-    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury PkgConfig::sctp)
 endif()
 
 if(WITH_BENCHMARK_TOOLS)

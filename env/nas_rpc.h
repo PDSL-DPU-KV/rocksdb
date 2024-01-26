@@ -15,10 +15,10 @@ class RPCEngine {
   ~RPCEngine();
 
  public:
-  int Open(const char *fname, int flags, uint mode);  // open
-  bool Fopen(int fd, const char *mode);               // fdopen
-  int Close(int fd);                                  // close
-  int Fseek(int fd, uint64_t n);                      // fseek
+  ret_with_errno Open(const char *fname, int flags, uint mode);  // open
+  bool Fopen(int fd, const char *mode);                          // fdopen
+  int Close(int fd);                                             // close
+  int Fseek(int fd, uint64_t n);                                 // fseek
   ssize_t Read(int fd, uint64_t offset, uint64_t n, char *buffer,
                bool use_direct_io);                                     // read
   ssize_t Fread(int fd, uint64_t n, char *buffer, bool use_direct_io);  // fread
@@ -36,8 +36,8 @@ class RPCEngine {
   int Fdatasync(int fd);                                           // fdatasync
   int Fsync(int fd);                                               // fsync
   int RangeSync(int fd, uint64_t offset, uint64_t count,
-                int flags);                                // sync_file_range
-  int Rename(const char *old_name, const char *new_name);  // rename
+                int flags);  // sync_file_range
+  ret_with_errno Rename(const char *old_name, const char *new_name);  // rename
   ret_with_errno Access(const char *name,
                         int type);  // access
   int Unlink(const char *name);     // unlink

@@ -25,17 +25,19 @@ inline bool IsSectorAligned(const size_t off, size_t sector_size) {
   return (off & (sector_size - 1)) == 0;
 }
 
-int open_rpc_handler(open_args &args) {
+ret_with_errno open_rpc_handler(open_args &args) {
 #ifdef NAS_DEBUG
   printf("Got open RPC request with fname: %s, flags: %d, mode: %d\n",
          args.name.c_str(), args.flags, args.mode);
 #endif
+  struct ret_with_errno ret;
   int fd = open(args.name.c_str(), args.flags, args.mode);
   if (fd < 0) {
     printf("fail to open file! %s\n", strerror(errno));
-    return -1;
   }
-  return fd;
+  ret.ret = fd;
+  ret.errn = errno;
+  return ret;
 }
 
 int close_rpc_handler(int fd) {
@@ -337,18 +339,21 @@ int rangesync_rpc_handler(rangesync_args &args) {
   return res;
 }
 
-int rename_rpc_handler(rename_args &args) {
+ret_with_errno rename_rpc_handler(rename_args &args) {
   int res;
 #ifdef NAS_DEBUG
   printf("Got rename RPC request with old_name: %s, new_name: %s\n",
          args.old_name.c_str(), args.new_name.c_str());
 #endif
   /* rename file */
+  struct ret_with_errno ret;
   res = rename(args.old_name.c_str(), args.new_name.c_str());
   if (res < 0) {
     printf("fail to rename file! %s\n", strerror(errno));
   }
-  return res;
+  ret.ret = res;
+  ret.errn = errno;
+  return ret;
 }
 
 ret_with_errno access_rpc_handler(access_args &args) {

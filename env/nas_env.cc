@@ -449,10 +449,12 @@ IOStatus RemoteFileSystem::NewSequentialFile(
   if (file_opts.use_direct_reads) {
     flags += 16384;
   }
-  int fd = rpc_engine->Open(fname.c_str(), flags,
-                            GetDBFileMode(allow_non_owner_access_));
+  int fd = -1;
+  struct ret_with_errno ret = rpc_engine->Open(
+      fname.c_str(), flags, GetDBFileMode(allow_non_owner_access_));
+  fd = ret.ret;
   if (fd < 0) {
-    return IOStatus::IOError("Open failed!\n", fname);
+    return IOError("Open failed!\n", fname, ret.errn);
   }
   if (!file_opts.use_direct_reads) {
     bool ret = rpc_engine->Fopen(fd, "r");
@@ -478,10 +480,12 @@ IOStatus RemoteFileSystem::NewRandomAccessFile(
   if (file_opts.use_direct_reads) {
     flags += 16384;
   }
-  int fd = rpc_engine->Open(fname.c_str(), flags,
-                            GetDBFileMode(allow_non_owner_access_));
+  int fd = -1;
+  struct ret_with_errno ret = rpc_engine->Open(
+      fname.c_str(), flags, GetDBFileMode(allow_non_owner_access_));
+  fd = ret.ret;
   if (fd < 0) {
-    return IOStatus::IOError("Open failed!\n", fname);
+    return IOError("Open failed!\n", fname, ret.errn);
   }
   result->reset(new NasRandomAccessFile(fd, fname, rpc_engine, kDefaultPageSize,
                                         file_opts));
@@ -494,10 +498,12 @@ IOStatus RemoteFileSystem::NewRandomRWFile(
   result->reset();
   // int flags = O_RDWR;
   int flags = 2;
-  int fd = rpc_engine->Open(fname.c_str(), flags,
-                            GetDBFileMode(allow_non_owner_access_));
+  int fd = -1;
+  struct ret_with_errno ret = rpc_engine->Open(
+      fname.c_str(), flags, GetDBFileMode(allow_non_owner_access_));
+  fd = ret.ret;
   if (fd < 0) {
-    return IOStatus::IOError("while open file for random read/write", fname);
+    return IOError("while open file for random read/write", fname, ret.errn);
   }
   result->reset(new NasRandomRWFile(fd, fname, rpc_engine, file_opts));
   return IOStatus::OK();
@@ -519,10 +525,15 @@ IOStatus RemoteFileSystem::OpenWritableFile(
     flags += 16384;
   }
 
-  fd = rpc_engine->Open(fname.c_str(), flags,
-                        GetDBFileMode(allow_non_owner_access_));
+  struct ret_with_errno ret;
+  do {
+    ret = rpc_engine->Open(fname.c_str(), flags,
+                           GetDBFileMode(allow_non_owner_access_));
+    fd = ret.ret;
+  } while (fd < 0 && ret.errn == EINTR);
+
   if (fd < 0) {
-    return IOStatus::IOError("Open failed!", fname);
+    return IOError("Open failed!", fname, ret.errn);
   }
   result->reset(
       new NasWritableFile(fd, fname, kDefaultPageSize, rpc_engine, options));
@@ -556,16 +567,21 @@ IOStatus RemoteFileSystem::ReuseWritableFile(
     flags += 16384;
   }
 
-  fd = rpc_engine->Open(old_fname.c_str(), flags,
-                        GetDBFileMode(allow_non_owner_access_));
+  struct ret_with_errno ret;
+  do {
+    ret = rpc_engine->Open(old_fname.c_str(), flags,
+                           GetDBFileMode(allow_non_owner_access_));
+    fd = ret.ret;
+  } while (fd < 0 && ret.errn == EINTR);
+
   if (fd < 0) {
-    return IOStatus::IOError("reopen file for write", old_fname);
+    return IOError("reopen file for write", old_fname, ret.errn);
   }
 
-  int res = rpc_engine->Rename(old_fname.c_str(), fname.c_str());
-  if (res != 0) {
+  ret = rpc_engine->Rename(old_fname.c_str(), fname.c_str());
+  if (ret.ret != 0) {
     rpc_engine->Close(fd);
-    return IOStatus::IOError("rename file to " + fname, old_fname);
+    return IOError("rename file to " + fname, old_fname, ret.errn);
   }
 
   result->reset(
@@ -579,10 +595,12 @@ IOStatus RemoteFileSystem::NewDirectory(const std::string& name,
                                         IODebugContext* /*dbg*/) {
   result->reset();
   int flags = 0;
-  int fd = rpc_engine->Open(name.c_str(), flags, 0);
+  int fd = -1;
+  struct ret_with_errno ret = rpc_engine->Open(name.c_str(), flags, 0);
+  fd = ret.ret;
   if (fd < 0) {
     // todo: upper caller may need errno
-    return IOStatus::IOError("While open directory", name);
+    return IOError("While open directory", name, ret.errn);
   } else {
     result->reset(new NasDirectory(fd, name, rpc_engine));
   }
@@ -703,9 +721,10 @@ IOStatus RemoteFileSystem::RenameFile(const std::string& src,
                                       const std::string& target,
                                       const IOOptions& /*opts*/,
                                       IODebugContext* /*dbg*/) {
-  if (rpc_engine->Rename(src.c_str(), target.c_str()) != 0) {
+  struct ret_with_errno ret = rpc_engine->Rename(src.c_str(), target.c_str());
+  if (ret.ret != 0) {
     // todo: upper caller may need errno
-    return IOStatus::IOError("While renaming a file to " + target, src);
+    return IOError("While renaming a file to " + target, src, ret.errn);
   }
   return IOStatus::OK();
 }
@@ -750,9 +769,10 @@ IOStatus RemoteFileSystem::LockFile(const std::string& fname,
   int fd;
   // int flags = O_RDWR | O_CREAT;
   int flags = 66;
-  fd = rpc_engine->Open(fname.c_str(), flags, 0644);
+  struct ret_with_errno ret = rpc_engine->Open(fname.c_str(), flags, 0644);
+  fd = ret.ret;
   if (fd < 0) {
-    result = IOStatus::IOError("while open a file for lock", fname);
+    result = IOError("while open a file for lock", fname, ret.errn);
   } else if (LockOrUnlock(fd, true) == -1) {
     result = IOStatus::IOError("While lock file", fname);
     rpc_engine->Close(fd);
@@ -818,9 +838,10 @@ IOStatus RemoteFileSystem::IsDirectory(const std::string& path,
   int fd = -1;
   // int flags = O_RDONLY;
   int flags = 0;
-  fd = rpc_engine->Open(path.c_str(), flags, 0);
+  struct ret_with_errno ret = rpc_engine->Open(path.c_str(), flags, 0);
+  fd = ret.ret;
   if (fd < 0) {
-    return IOStatus::IOError("While open for IsDirectory()", path);
+    return IOError("While open for IsDirectory()", path, ret.errn);
   }
   IOStatus io_s;
   struct stat sbuf;

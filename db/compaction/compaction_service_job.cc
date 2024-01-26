@@ -8,6 +8,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <cstdio>
+
 #include "db/compaction/compaction_job.h"
 #include "db/compaction/compaction_state.h"
 #include "logging/logging.h"
@@ -18,6 +20,8 @@
 
 namespace ROCKSDB_NAMESPACE {
 class SubcompactionState;
+
+std::atomic_int compaction_num;
 
 CompactionServiceJobStatus
 CompactionJob::ProcessKeyValueCompactionWithCompactionService(
@@ -72,6 +76,8 @@ CompactionJob::ProcessKeyValueCompactionWithCompactionService(
       "[%s] [JOB %d] Starting remote compaction (output level: %d): %s",
       compaction_input.column_family.name.c_str(), job_id_,
       compaction_input.output_level, input_files_oss.str().c_str());
+  compaction_num.fetch_add(1);
+  printf("New compaction job, current num: %d\n", compaction_num.load());
   CompactionServiceJobInfo info(dbname_, db_id_, db_session_id_,
                                 GetCompactionId(sub_compact), thread_pri_);
   CompactionServiceJobStatus compaction_status =
@@ -111,6 +117,9 @@ CompactionJob::ProcessKeyValueCompactionWithCompactionService(
                    compaction_input.column_family.name.c_str(), job_id_);
     return compaction_status;
   }
+
+  compaction_num.fetch_sub(1);
+  printf("Compaction job finished, current num: %d\n", compaction_num.load());
 
   CompactionServiceResult compaction_result;
   s = CompactionServiceResult::Read(compaction_result_binary,
@@ -830,4 +839,3 @@ bool CompactionServiceInput::TEST_Equals(CompactionServiceInput* other,
 }
 #endif  // NDEBUG
 }  // namespace ROCKSDB_NAMESPACE
-

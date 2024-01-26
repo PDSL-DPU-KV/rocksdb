@@ -16,7 +16,7 @@ RPCEngine::~RPCEngine() {
   bg_worker.join();
 }
 
-int RPCEngine::Open(const char *fname, int flags, uint mode) {
+ret_with_errno RPCEngine::Open(const char *fname, int flags, uint mode) {
   open_args args;
   args.name = fname;
   args.flags = flags;
@@ -29,7 +29,7 @@ int RPCEngine::Open(const char *fname, int flags, uint mode) {
   future_resp->wait();
   auto resp = future_resp->as<RpcResponse>();
   delete future_resp;
-  auto ret = std::get_if<int>(&resp.result);
+  auto ret = std::get_if<ret_with_errno>(&resp.result);
   return *ret;
 }
 
@@ -252,7 +252,7 @@ int RPCEngine::RangeSync(int fd, uint64_t offset, uint64_t count, int flags) {
   return *ret;
 }
 
-int RPCEngine::Rename(const char *old_name, const char *new_name) {
+ret_with_errno RPCEngine::Rename(const char *old_name, const char *new_name) {
   rename_args args;
   args.old_name = old_name;
   args.new_name = new_name;
@@ -264,7 +264,7 @@ int RPCEngine::Rename(const char *old_name, const char *new_name) {
   future_resp->wait();
   auto resp = future_resp->as<RpcResponse>();
   delete future_resp;
-  auto ret = std::get_if<int>(&resp.result);
+  auto ret = std::get_if<ret_with_errno>(&resp.result);
   return *ret;
 }
 
