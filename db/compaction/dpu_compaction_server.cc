@@ -6,19 +6,30 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 #include "dpu_compaction_common.h"
+#include "env/nas_env.h"
 #include "rocksdb/db.h"
-#include "table/block_based/block_based_table_factory.h"
+#include "rocksdb/env.h"
+#include "rocksdb/rocksdb_namespace.h"
+#include "rocksdb/table.h"
 #include "util/thread_pool.h"
 
 class CompactionServer {
  public:
-  CompactionServer(const char *ip, int port, int thread_pool_size)
+  CompactionServer(const char *ip, int port, int thread_pool_size,
+                   const char *fs_addr)
       : pool(thread_pool_size) {
     serv_addr.sin_family = AF_INET;      // AF_INET address
     serv_addr.sin_port = htons(port);    // setup port(host -> networks)
     inet_aton(ip, &serv_addr.sin_addr);  // ip address
+    if (!strcmp(fs_addr, "none")) {
+      env = std::shared_ptr<rocksdb::Env>(rocksdb::Env::Default());
+    } else {
+      rpc_engine = new RPCEngine(std::string(fs_addr));
+      env = NewCompositeEnv(rocksdb::NewRemoteFileSystem(rpc_engine));
+    }
   };
   ~CompactionServer() {
     rdma_destroy_id(cm_server_id);
@@ -107,8 +118,10 @@ class CompactionServer {
     // open and compact
     rocksdb::OpenAndCompactOptions options;
     rocksdb::CompactionServiceOptionsOverride options_override;
+    rocksdb::BlockBasedTableOptions block_based_table_options;
     options_override.table_factory = std::shared_ptr<rocksdb::TableFactory>(
-        new rocksdb::BlockBasedTableFactory());
+        NewBlockBasedTableFactory(block_based_table_options));
+    options_override.env = env.get();
     rocksdb::Status s = rocksdb::DB::OpenAndCompact(
         options, db_name, db_name + "/" + std::to_string(job_id), input,
         &output, options_override);
@@ -247,15 +260,17 @@ class CompactionServer {
   struct rdma_event_channel *cm_event_channel{nullptr};
   struct rdma_cm_id *cm_server_id{nullptr};
   ThreadPool pool;
+  RPCEngine *rpc_engine;
+  std::shared_ptr<ROCKSDB_NAMESPACE::Env> env;
   std::atomic_int compaction_num{0};
 };
 
 int main(int argc, char *argv[]) {
-  if (argc < 3) {
-    printf("Usage: ./server <ip> <port>\n");
+  if (argc < 4) {
+    printf("Usage: ./server <ip> <port> <fs_addr>\n");
     exit(0);
   }
-  CompactionServer server(argv[1], strtol(argv[2], NULL, 10), 16);
+  CompactionServer server(argv[1], strtol(argv[2], NULL, 10), 16, argv[3]);
   server.Listen();
   server.Progress();
 }
