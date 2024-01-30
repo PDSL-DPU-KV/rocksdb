@@ -618,7 +618,7 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
-set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/")
+set(ENV{PKG_CONFIG_PATH} "/home/dc/tmp/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/")
 option(WITH_MERCURY "Build with mercury" ON)
 if(WITH_MERCURY)
   find_package(PkgConfig REQUIRED)
@@ -631,16 +631,22 @@ if(WITH_MERCURY)
 
 endif()
 
-option(WITH_SCTP "Build with sctp" ON)
-if(WITH_SCTP)
-  find_package(PkgConfig REQUIRED)
-  if (PKGCONFIG_FOUND)
-    message(STATUS "pkg-config found")
+option(WITH_RDMA "Build with RDMA" ON)
+if(WITH_RDMA)
+  find_library(IBVERBS_LIBRARY ibverbs)
+  find_library(RDMACM_LIBRARY rdmacm)
+  if (IBVERBS_LIBRARY)
+    message(STATUS "IBVERBS_LIBRARY library found ${IBVERBS_LIBRARY}")
   else()
-    message(FATAL_ERROR "pkg-config not found")
+    message(FATAL_ERROR "IBVERBS_LIBRARY library not found")
   endif()
-  pkg_check_modules(sctp REQUIRED IMPORTED_TARGET libsctp)
-
+  if (RDMACM_LIBRARY)
+    message(STATUS "RDMACM_LIBRARY library found ${RDMACM_LIBRARY}")
+  else()
+    message(FATAL_ERROR "RDMACM_LIBRARY library not found")
+  endif()
+  link_libraries(pthread ${IBVERBS_LIBRARY} ${RDMACM_LIBRARY})
+  include_directories("/usr/include/")
 endif()
 
 # Main library source code
@@ -689,6 +695,7 @@ set(SOURCES
         db/compaction/sst_partitioner.cc
         db/compaction/subcompaction_state.cc
         db/compaction/dpu_compaction_service.cc
+        db/compaction/dpu_compaction_common.cc
         db/convenience.cc
         db/db_filesnapshot.cc
         db/db_impl/compacted_db_impl.cc
@@ -1133,12 +1140,12 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury PkgConfig::sctp)
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury PkgConfig::sctp)
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1559,7 +1566,7 @@ if (WITH_COMPACTION_SERVER)
   add_executable(compaction_server${ARTIFACT_SUFFIX}
     db/compaction/dpu_compaction_server.cc)
   target_link_libraries(compaction_server${ARTIFACT_SUFFIX} 
-    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury PkgConfig::sctp)
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 endif()
 
 if(WITH_BENCHMARK_TOOLS)
