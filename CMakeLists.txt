@@ -1594,3 +1594,8 @@ option(WITH_BENCHMARK "build benchmark tests" OFF)
 if(WITH_BENCHMARK)
   add_subdirectory(${PROJECT_SOURCE_DIR}/microbench/)
 endif()
+
+option(WITH_RDMA "build with rdma" ON)
+if(WITH_RDMA)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/cache)
+endif()

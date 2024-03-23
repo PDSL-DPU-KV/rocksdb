@@ -1,7 +1,5 @@
 // Author: Ding Chen
-
-#ifndef _CACHE_RDMA_H_
-#define _CACHE_RDMA_H_
+#pragma once
 
 #include <cstdint>
 
@@ -29,5 +27,3 @@ void cache_rdma_disconnect(connection_handle h);
 
 void cache_rdma_init(cache_rdma_handle *h, uint32_t thread_num);
 void cache_rdma_fini(cache_rdma_handle h);
-
-#endif

@@ -707,6 +707,7 @@ std::shared_ptr<Cache> LRUCacheOptions::MakeSharedCache() const {
   }
   std::shared_ptr<Cache> cache = std::make_shared<LRUCache>(opts);
   if (secondary_cache) {
+    printf("ok! cache with secondary adapter\n");
     cache = std::make_shared<CacheWithSecondaryAdapter>(cache, secondary_cache);
   }
   return cache;

@@ -3097,6 +3097,7 @@ class Benchmark {
         }
         opts.secondary_cache = secondary_cache;
       } else if (FLAGS_use_compressed_secondary_cache && !use_tiered_cache) {
+        printf("ok! opts.secondary_cache\n");
         opts.secondary_cache =
             NewCompressedSecondaryCache(secondary_cache_opts);
       } else if (FLAGS_use_remote_secondary_cache) {

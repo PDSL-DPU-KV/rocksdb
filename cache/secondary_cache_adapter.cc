@@ -28,7 +28,7 @@ Cache::ObjectPtr const kDummyObj = const_cast<Dummy*>(&kDummy);
 // proportionally across the primary/secondary caches.
 //
 // The primary block cache is initially sized to the sum of the primary cache
-// budget + teh secondary cache budget, as follows -
+// budget + the secondary cache budget, as follows -
 //   |---------    Primary Cache Configured Capacity  -----------|
 //   |---Secondary Cache Budget----|----Primary Cache Budget-----|
 //
@@ -87,7 +87,7 @@ CacheWithSecondaryAdapter::CacheWithSecondaryAdapter(
             target_));
     Status s = secondary_cache_->GetCapacity(sec_capacity);
     assert(s.ok());
-    // Initially, the primary cache is sized to uncompressed cache budget plsu
+    // Initially, the primary cache is sized to uncompressed cache budget plus
     // compressed secondary cache budget. The secondary cache budget is then
     // taken away from the primary cache through cache reservations. Later,
     // when a placeholder entry is inserted by the caller, its inserted
@@ -241,9 +241,11 @@ Cache::Handle* CacheWithSecondaryAdapter::Lookup(const Slice& key,
   Handle* result =
       target_->Lookup(key, helper, create_context, priority, stats);
   bool secondary_compatible = helper && helper->IsSecondaryCacheCompatible();
+  printf("ck? help %p compatible %s\n", helper, secondary_compatible ? "true" : "false");
   bool found_dummy_entry =
       ProcessDummyResult(&result, /*erase=*/secondary_compatible);
   if (!result && secondary_compatible) {
+    printf("ok! secondary cache lookup in adapter\n");
     // Try our secondary cache
     bool kept_in_sec_cache = false;
     std::unique_ptr<SecondaryCacheResultHandle> secondary_handle =

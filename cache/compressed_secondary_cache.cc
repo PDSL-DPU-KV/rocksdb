@@ -32,6 +32,7 @@ std::unique_ptr<SecondaryCacheResultHandle> CompressedSecondaryCache::Lookup(
     const Slice& key, const Cache::CacheItemHelper* helper,
     Cache::CreateContext* create_context, bool /*wait*/, bool advise_erase,
     bool& kept_in_sec_cache) {
+  printf("ok! compressed lookup!\n");
   assert(helper);
   std::unique_ptr<SecondaryCacheResultHandle> handle;
   kept_in_sec_cache = false;
@@ -110,6 +111,7 @@ std::unique_ptr<SecondaryCacheResultHandle> CompressedSecondaryCache::Lookup(
 Status CompressedSecondaryCache::Insert(const Slice& key,
                                         Cache::ObjectPtr value,
                                         const Cache::CacheItemHelper* helper) {
+  printf("ok! compressed insert!\n");
   if (value == nullptr) {
     return Status::InvalidArgument();
   }
