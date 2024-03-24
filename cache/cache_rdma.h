@@ -16,9 +16,10 @@ cache_rdma_mr cache_rdma_alloc_buf(cache_rdma_handle h, uint64_t size);
 char *cache_rdma_get_buf_addr(cache_rdma_mr mr);
 void cache_rdma_free_mr(cache_rdma_mr _mr);
 
-void cache_rdma_listen(cache_rdma_handle h, char *addr_str, char *port_str);
-connection_handle cache_rdma_connect(cache_rdma_handle h, char *addr_str,
-                                     char *port_str,
+void cache_rdma_listen(cache_rdma_handle h, const char *addr_str,
+                       const char *port_str);
+connection_handle cache_rdma_connect(cache_rdma_handle h, const char *addr_str,
+                                     const char *port_str,
                                      cache_rdma_connect_cb connect_cb,
                                      void *connect_arg);
 void cache_rdma_op(connection_handle c, op_code op, cache_rdma_mr src_mr,

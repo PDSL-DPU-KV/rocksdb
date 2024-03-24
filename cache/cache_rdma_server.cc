@@ -1,7 +1,11 @@
 #include <csignal>
-#include <cstdio>
+#include <gflags/gflags.h>
+#include <spdlog/spdlog.h>
 
 #include "cache_rdma.h"
+
+DEFINE_string(addr, "192.168.200.53", "server address");
+DEFINE_string(port, "10086", "server port");
 
 cache_rdma_handle h;
 
@@ -16,10 +20,13 @@ int main(int argc, char** argv) {
   sigset_t sigset;
   set_signal(&sigset);
 
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  spdlog::info("addr: {}, port: {}", FLAGS_addr, FLAGS_port);
+  
   cache_rdma_init(&h, 1);
-  cache_rdma_listen(h, argv[1], argv[2]);
+  cache_rdma_listen(h, FLAGS_addr.c_str(), FLAGS_port.c_str());
   sigwait(&sigset, &signum);
-  printf("Got signal: %d\n", signum);
+  spdlog::info("Got signal: {}\n", signum);
   cache_rdma_fini(h);
 
   return 0;

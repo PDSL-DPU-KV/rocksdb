@@ -3,6 +3,8 @@ find_package(ibverbs REQUIRED)
 target_link_libraries(rdmalib ibverbs::ibverbs)
 find_package(rdmacm REQUIRED)
 target_link_libraries(rdmalib rdmacm)
+find_package(gflags REQUIRED)
+target_link_libraries(rdmalib gflags)
 target_include_directories(rdmalib INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(server cache_rdma_server.cc)
