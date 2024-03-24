@@ -241,7 +241,8 @@ Cache::Handle* CacheWithSecondaryAdapter::Lookup(const Slice& key,
   Handle* result =
       target_->Lookup(key, helper, create_context, priority, stats);
   bool secondary_compatible = helper && helper->IsSecondaryCacheCompatible();
-  printf("ck? help %p compatible %s\n", helper, secondary_compatible ? "true" : "false");
+  printf("ck? help %p compatible %s\n", helper,
+         secondary_compatible ? "true" : "false");
   bool found_dummy_entry =
       ProcessDummyResult(&result, /*erase=*/secondary_compatible);
   if (!result && secondary_compatible) {

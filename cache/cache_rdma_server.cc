@@ -1,6 +1,7 @@
-#include <csignal>
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
+
+#include <csignal>
 
 #include "cache_rdma.h"
 
@@ -22,7 +23,7 @@ int main(int argc, char** argv) {
 
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   spdlog::info("addr: {}, port: {}", FLAGS_addr, FLAGS_port);
-  
+
   cache_rdma_init(&h, 1);
   cache_rdma_listen(h, FLAGS_addr.c_str(), FLAGS_port.c_str());
   sigwait(&sigset, &signum);

@@ -11,10 +11,11 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #include "spdlog/spdlog.h"
 
-#define CACHE_SIZE (1 << 20U)
+#define CACHE_SIZE (1 << 30U)
 #define TIMEOUT_IN_MS (500U)
 #define MAX_Q_NUM (4096U)
 
@@ -65,14 +66,15 @@ struct cq_poller_ctx {
 };
 
 struct cache_rdma {
-  struct ibv_context *ctx;
-  struct ibv_pd *pd;
-  struct ibv_cq *cq;
-  struct rdma_event_channel *ec;
-  pthread_t cm_poller;
-  bool has_server;
-  uint32_t thread_num;
-  struct cq_poller_ctx *cq_pollers;
+  struct ibv_context *ctx{nullptr};
+  struct ibv_pd *pd{nullptr};
+  struct ibv_cq *cq{nullptr};
+  struct rdma_event_channel *ec{nullptr};
+  std::mutex ec_mutex{};
+  pthread_t cm_poller{0};
+  bool has_server{false};
+  uint32_t thread_num{0};
+  struct cq_poller_ctx *cq_pollers{nullptr};
 };
 
 struct client_req_ctx {
@@ -265,8 +267,8 @@ static void *rdma_cm_poller(void *_self) {
   struct rdma_cm_event *event = NULL;
   int ecc = 0;
   while (self->ec) {
-    spdlog::info("in loop");
-    if (rdma_get_cm_event(self->ec, &event) == 0) {
+    std::scoped_lock lock(self->ec_mutex);
+    if (self->ec && rdma_get_cm_event(self->ec, &event) == 0) {
       struct rdma_cm_id *cm_id = event->id;
       enum rdma_cm_event_type event_type = event->event;
       spdlog::info("event type = {}", event_type);
@@ -350,7 +352,6 @@ void cache_rdma_op(connection_handle c, op_code op, cache_rdma_mr _src_mr,
   wr.wr.rdma.remote_addr = conn->u.c.remote_cache_attr->address + dst_off;
   wr.wr.rdma.rkey = conn->u.c.remote_cache_attr->stag.remote_stag;
 
-  spdlog::info("before send");
   TEST_NZ(ibv_post_send(conn->qp, &wr, &bad_wr));
 }
 
@@ -416,9 +417,7 @@ static void *rdma_cq_poller(void *arg) {
 
 // --- init & fini ---
 void cache_rdma_init(cache_rdma_handle *h, uint32_t thread_num) {
-  struct cache_rdma *self =
-      (struct cache_rdma *)malloc(sizeof(struct cache_rdma));
-  memset(self, 0, sizeof(struct cache_rdma));
+  struct cache_rdma *self = new cache_rdma;
   self->ec = rdma_create_event_channel();
   if (!self->ec) {
     spdlog::error("fail to create event channel.\n");
@@ -433,9 +432,13 @@ void cache_rdma_init(cache_rdma_handle *h, uint32_t thread_num) {
 
 void cache_rdma_fini(cache_rdma_handle h) {
   struct cache_rdma *self = (struct cache_rdma *)h;
-  rdma_destroy_event_channel(self->ec);
-  self->ec = NULL;
+  auto ec{self->ec};
+  {
+    std::scoped_lock lock(self->ec_mutex);
+    self->ec = nullptr;
+  }
   TEST_NZ(pthread_join(self->cm_poller, NULL));
+  rdma_destroy_event_channel(ec);
   if (self->ctx) {
     for (size_t i = 0; i < self->thread_num; i++) {
       self->cq_pollers[i].cq = NULL;
