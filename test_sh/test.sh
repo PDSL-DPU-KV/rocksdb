@@ -4,7 +4,7 @@
 key_array=(16)
 value_array=(1024)
 block_array=(4096)
-op_array=("none" "lz4" "zlib")
+op_array=("none" "snappy")
 
 ### Benchmark parameters
 db="/mnt/ssd/test"
@@ -28,7 +28,7 @@ max_background_flushes="1"
 max_background_compactions="16"
 subcompactions="4"
 #level_compaction_dynamic_level_bytes="true"
-disable_auto_compactions="false"
+disable_auto_compactions="true"
 use_direct_io_for_flush_and_compaction="true"
 use_direct_reads="true"
 disable_wal="true"
@@ -309,7 +309,7 @@ RUN_ALL_TEST() {
 	compression_type="$op"
 	# run benchmark
 	FILLRANDOM 20000000 false $op
-        READRANDOM 2000000 true $op
+        # READRANDOM 2000000 true $op
 	sleep 5
     done
 }
