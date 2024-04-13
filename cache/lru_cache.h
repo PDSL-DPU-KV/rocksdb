@@ -18,6 +18,7 @@
 #include "port/port.h"
 #include "util/autovector.h"
 #include "util/distributed_mutex.h"
+#include "util/spdlogger.h"
 
 namespace ROCKSDB_NAMESPACE {
 namespace lru_cache {
@@ -215,6 +216,24 @@ class LRUHandleTable {
   LRUHandle* Lookup(const Slice& key, uint32_t hash);
   LRUHandle* Insert(LRUHandle* h);
   LRUHandle* Remove(const Slice& key, uint32_t hash);
+
+  void Show() {
+    DEBUG("---------------show begin----------------\n");
+    for (int i = 0; i < (1 << length_bits_); i++) {
+      if (list_[i] == nullptr) continue;
+      DEBUG("i = {}, next_hash = {}, ", i, (void*)list_[i]->next_hash);
+      LRUHandle* cur = list_[i];
+      do {
+        DEBUG("cur = {}, next = {}, key = ", (void*)cur, (void*)cur->next);
+        for (size_t j = 0; j < cur->key_length; j++) {
+          DEBUG("{}", cur->key_data[j]);
+        }
+        DEBUG("\n");
+        cur = cur->next;
+      } while (cur != list_[i]);
+    }
+    DEBUG("---------------show end----------------\n");
+  }
 
   template <typename T>
   void ApplyToEntriesRange(T func, size_t index_begin, size_t index_end) {

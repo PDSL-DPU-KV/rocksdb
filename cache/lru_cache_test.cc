@@ -5,12 +5,16 @@
 
 #include "cache/lru_cache.h"
 
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
+
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "cache/cache_key.h"
 #include "cache/clock_cache.h"
+#include "cache/remote_secondary_cache.h"
 #include "cache_helpers.h"
 #include "db/db_test_util.h"
 #include "file/sst_file_manager_impl.h"
@@ -525,7 +529,7 @@ TEST_F(ClockCacheTest, Limits) {
     // verify usage tracking on detached entries.)
     {
       size_t n = shard_->GetTableAddressCount() + 1;
-      std::unique_ptr<HandleImpl* []> ha { new HandleImpl* [n] {} };
+      std::unique_ptr<HandleImpl*[]> ha{new HandleImpl* [n] {}};
       Status s;
       for (size_t i = 0; i < n && s.ok(); ++i) {
         hkey[1] = i;
@@ -1096,19 +1100,23 @@ TEST_P(BasicSecondaryCacheTest, BasicTest) {
 
   Random rnd(301);
   // Start with warming k3
+  DEBUG("-------Start with warming k3--------\n");
   std::string str3 = rnd.RandomString(1021);
   ASSERT_OK(secondary_cache->InsertSaved(k3.AsSlice(), str3));
 
   std::string str1 = rnd.RandomString(1021);
   TestItem* item1 = new TestItem(str1.data(), str1.length());
+  DEBUG("--------Insert k1----------\n");
   ASSERT_OK(cache->Insert(k1.AsSlice(), item1, GetHelper(), str1.length()));
   std::string str2 = rnd.RandomString(1021);
   TestItem* item2 = new TestItem(str2.data(), str2.length());
   // k1 should be demoted to NVM
+  DEBUG("------------Insert k2-------------(k1 should be demoted)\n");
   ASSERT_OK(cache->Insert(k2.AsSlice(), item2, GetHelper(), str2.length()));
 
   get_perf_context()->Reset();
   Cache::Handle* handle;
+  DEBUG("-------------lookup k2------------\n");
   handle = cache->Lookup(k2.AsSlice(), GetHelper(),
                          /*context*/ this, Cache::Priority::LOW, stats.get());
   ASSERT_NE(handle, nullptr);
@@ -1116,6 +1124,7 @@ TEST_P(BasicSecondaryCacheTest, BasicTest) {
   cache->Release(handle);
 
   // This lookup should promote k1 and demote k2
+  DEBUG("------------lookup k1--------------(k2 demoted, k1 promoted)\n");
   handle = cache->Lookup(k1.AsSlice(), GetHelper(),
                          /*context*/ this, Cache::Priority::LOW, stats.get());
   ASSERT_NE(handle, nullptr);
@@ -1123,14 +1132,29 @@ TEST_P(BasicSecondaryCacheTest, BasicTest) {
   cache->Release(handle);
 
   // This lookup should promote k3 and demote k1
+  DEBUG("------------lookup k3-------------(k3 promoted, k1 demoted)\n");
   handle = cache->Lookup(k3.AsSlice(), GetHelper(),
                          /*context*/ this, Cache::Priority::LOW, stats.get());
   ASSERT_NE(handle, nullptr);
   ASSERT_EQ(static_cast<TestItem*>(cache->Value(handle))->Size(), str3.size());
   cache->Release(handle);
 
-  ASSERT_EQ(secondary_cache->num_inserts(), 3u);
-  ASSERT_EQ(secondary_cache->num_lookups(), 2u);
+  CacheKey k4 = CacheKey::CreateUniqueForCacheLifetime(cache.get());
+  std::string str4 = rnd.RandomString(1022);
+  TestItem* item4 = new TestItem(str4.data(), str4.length());
+  DEBUG("-------------Insert k4-------------(k3 demoted)\n");
+  ASSERT_OK(cache->Insert(k4.AsSlice(), item4, GetHelper(), str4.length()));
+
+  // This lookup should promote k1 and demote k4
+  DEBUG("------------lookup k1-------------(k1 promoted, k4 demoted)\n");
+  handle = cache->Lookup(k1.AsSlice(), GetHelper(), this, Cache::Priority::LOW,
+                         stats.get());
+  ASSERT_NE(handle, nullptr);
+  ASSERT_EQ(static_cast<TestItem*>(cache->Value(handle))->Size(), str1.size());
+  cache->Release(handle);
+
+  ASSERT_EQ(secondary_cache->num_inserts(), 4u);
+  ASSERT_EQ(secondary_cache->num_lookups(), 3u);
   ASSERT_EQ(stats->getTickerCount(SECONDARY_CACHE_HITS),
             secondary_cache->num_lookups());
   PerfContext perf_ctx = *get_perf_context();
@@ -1397,6 +1421,7 @@ TEST_P(BasicSecondaryCacheTest, FullCapacityTest) {
 // add support for demotion in Release, but that currently causes too much
 // unit test churn.
 TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
+  spdlog::set_level(spdlog::level::debug);
   if (GetParam() == kHyperClock) {
     // See CORRECTION above
     ROCKSDB_GTEST_BYPASS("Test depends on LRUCache-specific behaviors");
@@ -1427,6 +1452,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
     ASSERT_OK(Put(Key(i), p_v));
   }
 
+  DEBUG("-----------flush----------------\n");
   ASSERT_OK(Flush());
   // After Flush is successful, RocksDB will do the paranoid check for the new
   // SST file. Meta blocks are always cached in the block cache and they
@@ -1437,6 +1463,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 0u);
   ASSERT_EQ(secondary_cache->num_lookups(), 2u);
 
+  DEBUG("-----------compact----------------\n");
   Compact("a", "z");
   // Compaction will create the iterator to scan the whole file. So all the
   // blocks are needed. Meta blocks are always cached. When block_1 is read
@@ -1445,6 +1472,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 1u);
   ASSERT_EQ(secondary_cache->num_lookups(), 3u);
 
+  DEBUG("--------------get key 0-----------------\n");
   std::string v = Get(Key(0));
   ASSERT_EQ(1007, v.size());
   // The first data block is not in the cache, similarly, trigger the block
@@ -1454,6 +1482,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 1u);
   ASSERT_EQ(secondary_cache->num_lookups(), 4u);
 
+  DEBUG("-------------get key 5------------------\n");
   v = Get(Key(5));
   ASSERT_EQ(1007, v.size());
   // The second data block is not in the cache, similarly, trigger the block
@@ -1462,6 +1491,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 1u);
   ASSERT_EQ(secondary_cache->num_lookups(), 5u);
 
+  DEBUG("-------------get key 5------------------\n");
   v = Get(Key(5));
   ASSERT_EQ(1007, v.size());
   // block_2 is in the block cache. There is a block cache hit. No need to
@@ -1469,6 +1499,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 1u);
   ASSERT_EQ(secondary_cache->num_lookups(), 5u);
 
+  DEBUG("-------------get key 0------------------\n");
   v = Get(Key(0));
   ASSERT_EQ(1007, v.size());
   // Lookup the first data block, not in the block cache, so lookup the
@@ -1477,6 +1508,7 @@ TEST_P(DBSecondaryCacheTest, TestSecondaryCacheCorrectness1) {
   ASSERT_EQ(secondary_cache->num_inserts(), 1u);
   ASSERT_EQ(secondary_cache->num_lookups(), 6u);
 
+  DEBUG("-------------get key 0------------------\n");
   v = Get(Key(0));
   ASSERT_EQ(1007, v.size());
   // Lookup the first data block, not in the block cache, so lookup the

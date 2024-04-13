@@ -8,24 +8,26 @@
 #include <rdma/rdma_cma.h>
 
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
 
-#include "spdlog/spdlog.h"
+#include "util/spdlogger.h"
 
 #define CACHE_SIZE (1 << 30U)
 #define TIMEOUT_IN_MS (500U)
 #define MAX_Q_NUM (4096U)
 
-#define TEST_NZ(x)                                               \
-  do {                                                           \
-    int rc;                                                      \
-    if ((rc = (x))) {                                            \
-      spdlog::error("error: " #x " failed with rc = {}.\n", rc); \
-      exit(-1);                                                  \
-    }                                                            \
+#define TEST_NZ(x)                                                       \
+  do {                                                                   \
+    int rc;                                                              \
+    if ((rc = (x))) {                                                    \
+      spdlog::error("error: " #x " failed with rc = {} errno {}.\n", rc, \
+                    std::strerror(errno));                               \
+      exit(-1);                                                          \
+    }                                                                    \
   } while (0)
 #define TEST_Z(x) TEST_NZ(!(x))
 
@@ -104,11 +106,11 @@ void cache_rdma_free_mr(cache_rdma_mr _mr) {
 // --- cm poller ---
 static void *rdma_cq_poller(void *arg);
 static void show_buffer_attr(struct rdma_buffer_attr *attr) {
-  spdlog::info("---------------------------------------------------------\n");
-  spdlog::info("cache attr, addr: {} , len: {} , stag : {} \n",
+  INFO("---------------------------------------------------------\n");
+  INFO("cache attr, addr: {} , len: {} , stag : {} \n",
                (void *)attr->address, (unsigned int)attr->length,
                attr->stag.remote_stag);
-  spdlog::info("---------------------------------------------------------\n");
+  INFO("---------------------------------------------------------\n");
 }
 
 static void register_memory(struct cache_rdma *self,
@@ -118,7 +120,7 @@ static void register_memory(struct cache_rdma *self,
         (struct rdma_buffer_attr *)malloc(sizeof(struct rdma_buffer_attr));
   } else {
     conn->u.s.local_buf = (char *)malloc(CACHE_SIZE);
-    spdlog::info("malloc finished!\n");
+    INFO("malloc finished!\n");
     TEST_Z(conn->u.s.local_mr =
                ibv_reg_mr(self->pd, conn->u.s.local_buf, CACHE_SIZE,
                           IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
@@ -172,7 +174,7 @@ static int create_connetion(struct cache_rdma *self, struct rdma_cm_id *cm_id) {
 
 static inline int on_addr_resolved(struct cache_rdma *self,
                                    struct rdma_cm_id *cm_id) {
-  spdlog::info("addr resolved!\n");
+  INFO("addr resolved!\n");
   TEST_NZ(create_connetion(self, cm_id));
   TEST_NZ(rdma_resolve_route(cm_id, TIMEOUT_IN_MS));
   return 0;
@@ -180,7 +182,7 @@ static inline int on_addr_resolved(struct cache_rdma *self,
 
 static inline int on_route_resolved(
     __attribute__((unused)) struct cache_rdma *self, struct rdma_cm_id *cm_id) {
-  spdlog::info("route resolved!\n");
+  INFO("route resolved!\n");
   struct rdma_conn_param cm_params;
   memset(&cm_params, 0, sizeof(cm_params));
   cm_params.responder_resources = 16;
@@ -193,7 +195,7 @@ static inline int on_route_resolved(
 
 static inline int on_connect_request(struct cache_rdma *self,
                                      struct rdma_cm_id *cm_id) {
-  spdlog::info("new connection!\n");
+  INFO("new connection!\n");
   struct rdma_connection *conn = (struct rdma_connection *)malloc(
                              sizeof(struct rdma_connection)),
                          *lconn = (struct rdma_connection *)cm_id->context;
@@ -214,7 +216,7 @@ static inline int on_connect_request(struct cache_rdma *self,
 
 static inline int on_connect_error(
     __attribute__((unused)) struct cache_rdma *self, struct rdma_cm_id *cm_id) {
-  spdlog::info("connect error!\n");
+  INFO("connect error!\n");
   struct rdma_connection *conn = (struct rdma_connection *)cm_id->context;
   if (!conn->is_server) {
     free(conn);
@@ -228,7 +230,7 @@ static inline int on_established(
   struct rdma_connection *conn = (struct rdma_connection *)cm_id->context;
   if (conn->is_server) {
     struct sockaddr_in *addr = (struct sockaddr_in *)rdma_get_peer_addr(cm_id);
-    spdlog::info("server: connection established from peer {}:{}.\n",
+    INFO("server: connection established from peer {}:{}.\n",
                  inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
   } else {
     conn->u.c.remote_cache_attr->address =
@@ -247,7 +249,7 @@ static inline int on_disconnect(struct rdma_cm_id *cm_id) {
   struct rdma_connection *conn = (struct rdma_connection *)cm_id->context;
   if (conn->is_server) {
     struct sockaddr_in *addr = (struct sockaddr_in *)rdma_get_peer_addr(cm_id);
-    spdlog::info("server: peer {}:{} disconnected.\n",
+    INFO("server: peer {}:{} disconnected.\n",
                  inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
     ibv_dereg_mr(conn->u.s.local_mr);
     free(conn->u.s.cache_attr);
@@ -262,7 +264,7 @@ static inline int on_disconnect(struct rdma_cm_id *cm_id) {
 }
 
 static void *rdma_cm_poller(void *_self) {
-  spdlog::info("start cm poller!\n");
+  INFO("start cm poller!\n");
   struct cache_rdma *self = (struct cache_rdma *)_self;
   struct rdma_cm_event *event = NULL;
   int ecc = 0;
@@ -271,7 +273,7 @@ static void *rdma_cm_poller(void *_self) {
     if (self->ec && rdma_get_cm_event(self->ec, &event) == 0) {
       struct rdma_cm_id *cm_id = event->id;
       enum rdma_cm_event_type event_type = event->event;
-      spdlog::info("event type = {}", event_type);
+      INFO("event type = {}", event_type);
       if (event_type != RDMA_CM_EVENT_ESTABLISHED) rdma_ack_cm_event(event);
       switch (event_type) {
         case RDMA_CM_EVENT_ADDR_RESOLVED:
@@ -299,7 +301,7 @@ static void *rdma_cm_poller(void *_self) {
       }
     }
   }
-  spdlog::info("cm poller exit!\n");
+  INFO("cm poller exit!\n");
   return NULL;
 }
 
@@ -308,7 +310,7 @@ connection_handle cache_rdma_connect(cache_rdma_handle h, const char *addr_str,
                                      const char *port_str,
                                      cache_rdma_connect_cb connect_cb,
                                      void *connect_arg) {
-  spdlog::info("connect to server!\n");
+  INFO("connect to server!\n");
   struct cache_rdma *self = (struct cache_rdma *)h;
   struct rdma_connection *conn =
       (struct rdma_connection *)malloc(sizeof(struct rdma_connection));
@@ -374,7 +376,7 @@ void cache_rdma_listen(cache_rdma_handle h, const char *addr_str,
   TEST_NZ(rdma_listen(conn->cm_id, 10));
   conn->cm_id->context = conn;
   freeaddrinfo(addr);
-  spdlog::info("cache rdma listening on {} {}.\n", addr_str, port_str);
+  INFO("cache rdma listening on {} {}.\n", addr_str, port_str);
 }
 
 // --- cq poller ---
@@ -390,7 +392,7 @@ static inline void on_client_op(struct ibv_wc *wc) {
 
 #define MAX_ENTRIES_PER_POLL 128
 static void *rdma_cq_poller(void *arg) {
-  spdlog::info("start cq poller!\n");
+  INFO("start cq poller!\n");
   struct cq_poller_ctx *ctx = (struct cq_poller_ctx *)arg;
   struct ibv_wc wc[MAX_ENTRIES_PER_POLL];
   while (ctx->cq) {
@@ -411,7 +413,7 @@ static void *rdma_cq_poller(void *arg) {
       }
     }
   }
-  spdlog::info("cq poller exit!\n");
+  INFO("cq poller exit!\n");
   return NULL;
 }
 

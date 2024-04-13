@@ -7,6 +7,7 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "util/cast_util.h"
+#include "util/spdlogger.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -116,6 +117,8 @@ CacheWithSecondaryAdapter::~CacheWithSecondaryAdapter() {
 bool CacheWithSecondaryAdapter::EvictionHandler(const Slice& key,
                                                 Handle* handle) {
   auto helper = GetCacheItemHelper(handle);
+  DEBUG("evict to secondary, key {}, compatible {}", key.ToASCII(),
+        helper->IsSecondaryCacheCompatible());
   if (helper->IsSecondaryCacheCompatible()) {
     auto obj = target_->Value(handle);
     // Ignore dummy entry
@@ -171,6 +174,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     default:
       break;
   }
+  DEBUG("promote {}", key.ToASCII());
   PERF_COUNTER_ADD(secondary_cache_hit_count, 1);
   RecordTick(stats, SECONDARY_CACHE_HITS);
 
@@ -179,6 +183,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
   Handle* result = nullptr;
   // Insert into primary cache, possibly as a standalone+dummy entries.
   if (secondary_cache_->SupportForceErase() && !found_dummy_entry) {
+    DEBUG("promote a dummy entry");
     // Create standalone and insert dummy
     // Allow standalone to be created even if cache is full, to avoid
     // reading the entry from storage.
@@ -197,6 +202,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
   } else {
     // Insert regular entry into primary cache.
     // Don't allow it to spill into secondary cache again if it was kept there.
+    DEBUG("promote a regular entry");
     Status s = Insert(
         key, obj, kept_in_sec_cache ? helper->without_secondary_compat : helper,
         charge, &result, priority);
@@ -206,6 +212,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     } else {
       // Create standalone result instead, even if cache is full, to avoid
       // reading the entry from storage.
+      DEBUG("but we still have to create standalone");
       result =
           CreateStandalone(key, obj, helper, charge, /*allow_uncharged*/ true);
       assert(result);
@@ -241,18 +248,19 @@ Cache::Handle* CacheWithSecondaryAdapter::Lookup(const Slice& key,
   Handle* result =
       target_->Lookup(key, helper, create_context, priority, stats);
   bool secondary_compatible = helper && helper->IsSecondaryCacheCompatible();
-  printf("ck? help %p compatible %s\n", helper,
-         secondary_compatible ? "true" : "false");
+  DEBUG("found {} compatible {}", result != nullptr, secondary_compatible);
+  // If found dummy entry, result becomes false.
   bool found_dummy_entry =
       ProcessDummyResult(&result, /*erase=*/secondary_compatible);
   if (!result && secondary_compatible) {
-    printf("ok! secondary cache lookup in adapter\n");
     // Try our secondary cache
     bool kept_in_sec_cache = false;
     std::unique_ptr<SecondaryCacheResultHandle> secondary_handle =
         secondary_cache_->Lookup(key, helper, create_context, /*wait*/ true,
                                  found_dummy_entry, /*out*/ kept_in_sec_cache);
     if (secondary_handle) {
+      DEBUG("ok! key {} found in secondary cache", key.ToASCII());
+      DEBUG("kept in sec cache {}", kept_in_sec_cache);
       result = Promote(std::move(secondary_handle), key, helper, priority,
                        stats, found_dummy_entry, kept_in_sec_cache);
     }
@@ -396,7 +404,7 @@ void CacheWithSecondaryAdapter::WaitAll(AsyncLookupHandle* async_handles,
 
 std::string CacheWithSecondaryAdapter::GetPrintableOptions() const {
   std::string str = target_->GetPrintableOptions();
-  str.append("  secondary_cache:\n");
+  str.append("  secondary_cache:");
   str.append(secondary_cache_->GetPrintableOptions());
   return str;
 }

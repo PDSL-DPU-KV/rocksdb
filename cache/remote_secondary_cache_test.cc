@@ -3,11 +3,16 @@
 #include "cache/remote_secondary_cache.h"
 
 #include <gtest/gtest.h>
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
+
+#include <memory>
 
 #include "port/stack_trace.h"
 #include "test_util/secondary_cache_test_util.h"
 #include "test_util/testharness.h"
 #include "util/random.h"
+#include "util/spdlogger.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -167,6 +172,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
   }
 
   void BasicIntegrationTest() {
+    spdlog::set_level(spdlog::level::debug);
     RemoteSecondaryCacheOptions remote_cache_opts;
 
     remote_cache_opts.capacity = 6000;
@@ -177,79 +183,106 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
         /*_capacity =*/1300, /*_num_shard_bits =*/0,
         /*_strict_capacity_limit =*/true, secondary_cache);
     std::shared_ptr<Statistics> stats = CreateDBStatistics();
+    Cache::Handle* handle;
+    auto sec = std::dynamic_pointer_cast<RemoteSecondaryCache>(secondary_cache);
 
     Random rnd(301);
     std::string str1 = rnd.RandomString(1001);
     auto item1_1 = new TestItem(str1.data(), str1.length());
+    DEBUG("---------------------insert key1, 1_1-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_1, GetHelper(), str1.length()));
 
     std::string str2 = rnd.RandomString(1012);
     auto item2_1 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's dummy item.
+    DEBUG("---------------------insert key2, 2_1-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_1, GetHelper(), str2.length()));
 
     std::string str3 = rnd.RandomString(1024);
     auto item3_1 = new TestItem(str3.data(), str3.length());
     // After this Insert, primary cache contains k3 and secondary cache contains
     // k1's dummy item and k2's dummy item.
+    DEBUG("---------------------insert key3, 3_1-----------------------------");
     ASSERT_OK(cache->Insert(key3, item3_1, GetHelper(), str3.length()));
 
     // After this Insert, primary cache contains k1 and secondary cache contains
     // k1's dummy item, k2's dummy item, and k3's dummy item.
     auto item1_2 = new TestItem(str1.data(), str1.length());
+    DEBUG("---------------------insert key1, 1_2-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_2, GetHelper(), str1.length()));
 
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's item, k2's dummy item, and k3's dummy item.
+    DEBUG("---------------------insert key2, 2_2-----------------------------");
     auto item2_2 = new TestItem(str2.data(), str2.length());
     ASSERT_OK(cache->Insert(key2, item2_2, GetHelper(), str2.length()));
 
     // After this Insert, primary cache contains k3 and secondary cache contains
     // k1's item and k2's item.
+    DEBUG("---------------------insert key3, 3_2-----------------------------");
     auto item3_2 = new TestItem(str3.data(), str3.length());
     ASSERT_OK(cache->Insert(key3, item3_2, GetHelper(), str3.length()));
 
-    Cache::Handle* handle;
+    DEBUG("---------------------lookup key3,    -----------------------------");
     handle = cache->Lookup(key3, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
     auto val3 = static_cast<TestItem*>(cache->Value(handle));
     ASSERT_NE(val3, nullptr);
     ASSERT_EQ(memcmp(val3->Buf(), item3_2->Buf(), item3_2->Size()), 0);
+    ASSERT_EQ(0, sec->num_lookups());
+    ASSERT_EQ(2, sec->num_inserts());
     cache->Release(handle);
 
     // Lookup an non-existent key.
+    DEBUG("---------------------lookup key0,    -----------------------------");
     handle = cache->Lookup(key0, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_EQ(handle, nullptr);
+    ASSERT_EQ(1, sec->num_lookups());
+    ASSERT_EQ(2, sec->num_inserts());
 
     // This Lookup should just insert a dummy handle in the primary cache
     // and the k1 is still in the secondary cache.
+    // With k1 standalone entry, k3 is demoted to secondary cache.
+    DEBUG("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
     auto val1_1 = static_cast<TestItem*>(cache->Value(handle));
     ASSERT_NE(val1_1, nullptr);
     ASSERT_EQ(memcmp(val1_1->Buf(), str1.data(), str1.size()), 0);
+    ASSERT_EQ(2, sec->num_lookups());
+    ASSERT_EQ(3, sec->num_inserts());
     cache->Release(handle);
 
     // This Lookup should erase k1 from the secondary cache and insert
     // it into primary cache; then k3 is demoted.
     // k2 and k3 are in secondary cache.
+    // First remove the k1 dummy entry from primary,
+    DEBUG("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
     cache->Release(handle);
+    ASSERT_EQ(3, sec->num_lookups());
+    ASSERT_EQ(3, sec->num_inserts());
 
     // k2 is still in secondary cache.
+    // But k1 must be demoted
+    DEBUG("---------------------lookup key2,    -----------------------------");
     handle = cache->Lookup(key2, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
     cache->Release(handle);
+    ASSERT_EQ(4, sec->num_lookups());
+    ASSERT_EQ(4, sec->num_inserts());
 
     // Testing SetCapacity().
     ASSERT_OK(secondary_cache->SetCapacity(0));
+    DEBUG(
+        "---------------------lookup key3, c 0 -----------------------------");
     handle = cache->Lookup(key3, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_EQ(handle, nullptr);
@@ -260,24 +293,29 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     ASSERT_EQ(capacity, 7000);
     auto item1_3 = new TestItem(str1.data(), str1.length());
     // After this Insert, primary cache contains k1.
+    DEBUG("---------------------insert key1, 1_3-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_3, GetHelper(), str2.length()));
 
     auto item2_3 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's dummy item.
+    DEBUG("---------------------insert key2, 2_3-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_3, GetHelper(), str1.length()));
 
     auto item1_4 = new TestItem(str1.data(), str1.length());
     // After this Insert, primary cache contains k1 and secondary cache contains
     // k1's dummy item and k2's dummy item.
+    DEBUG("---------------------insert key1, 1_4-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_4, GetHelper(), str2.length()));
 
     auto item2_4 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's real item and k2's dummy item.
+    DEBUG("---------------------insert key2, 2_4-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_4, GetHelper(), str2.length()));
     // This Lookup should just insert a dummy handle in the primary cache
     // and the k1 is still in the secondary cache.
+    DEBUG("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
 
@@ -472,6 +510,14 @@ INSTANTIATE_TEST_CASE_P(RemoteSecondaryCacheTest, RemoteSecondaryCacheTest,
 TEST_P(RemoteSecondaryCacheTest, BasicTes) { BasicTest(); }
 
 TEST_P(RemoteSecondaryCacheTest, FailsTest) { FailsTest(); }
+
+TEST_P(RemoteSecondaryCacheTest, BasicIntegrationTest) {
+  if (GetParam() == kHyperClock) {
+    ROCKSDB_GTEST_BYPASS("Test depends on LRUCache-specific behaviors");
+    return;
+  }
+  BasicIntegrationTest();
+}
 
 TEST_P(RemoteSecondaryCacheTest, BasicIntegrationFailTest) {
   BasicIntegrationFailTest();

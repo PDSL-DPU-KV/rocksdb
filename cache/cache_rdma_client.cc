@@ -1,5 +1,4 @@
 #include <gflags/gflags.h>
-#include <spdlog/spdlog.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -10,6 +9,7 @@
 
 #include "cache_rdma.h"
 #include "cache_rdma_util.h"
+#include "util/spdlogger.h"
 
 DEFINE_string(addr, "192.168.200.53", "server address");
 DEFINE_string(port, "10086", "server port");
@@ -26,7 +26,7 @@ void init_allocator(connection_handle c, void *arg) {
 
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  spdlog::info("addr: {}, port: {}", FLAGS_addr, FLAGS_port);
+  INFO("addr: {}, port: {}", FLAGS_addr, FLAGS_port);
 
   cache_rdma_handle h;
   cache_rdma_init(&h, 1);
@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
   };
   // read after write
   cache_rdma_mr send_mr = cache_rdma_alloc_buf(h, 4096);
-  spdlog::info("alloc ok!");
+  INFO("alloc ok!");
   memcpy(cache_rdma_get_buf_addr(send_mr), "hello", 5);
   uint64_t start_time = NowMicros();
   for (int i = 0; i < 1000; i++) {
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   cache_rdma_op(c, RDMA_READ, recv_mr, 0, sw_cb, &sw);
   sw.wait();
   sw.reset();
-  spdlog::info("{}", cache_rdma_get_buf_addr(recv_mr));
+  INFO("{}", cache_rdma_get_buf_addr(recv_mr));
   // write with offset
   memcpy(cache_rdma_get_buf_addr(send_mr), "world", 5);
   cache_rdma_op(c, RDMA_WRITE, send_mr, 4096, sw_cb, &sw);
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   cache_rdma_op(c, RDMA_READ, recv_mr, 4096, sw_cb, &sw);
   sw.wait();
   sw.reset();
-  spdlog::info("{}", cache_rdma_get_buf_addr(recv_mr));
+  INFO("{}", cache_rdma_get_buf_addr(recv_mr));
   cache_rdma_free_mr(send_mr);
   cache_rdma_free_mr(recv_mr);
 

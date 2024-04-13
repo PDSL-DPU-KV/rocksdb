@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <regex>
 #include <string>
 #include <string_view>  // RocksDB now requires C++17 support
 
@@ -85,6 +86,15 @@ class Slice {
   void remove_suffix(size_t n) {
     assert(n <= size());
     size_ -= n;
+  }
+
+  std::string ToASCII() const {
+    std::string res{"{"};
+    for (size_t i = 0; i < size_; i++) {
+      res += std::to_string((int)data_[i]) + ",";
+    }
+    res += "}";
+    return res;
   }
 
   // Return a string that contains the copy of the referenced data.

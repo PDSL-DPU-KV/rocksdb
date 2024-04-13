@@ -10,8 +10,8 @@
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/cache.h"
 #include "util/compression.h"
+#include "util/spdlogger.h"
 #include "util/string_util.h"
-
 namespace ROCKSDB_NAMESPACE {
 
 RemoteSecondaryCache::RemoteSecondaryCache(
@@ -31,9 +31,11 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
     Cache::CreateContext* create_context, bool /*wait*/, bool advise_erase,
     bool& kept_in_sec_cache) {
   assert(helper);
+  DEBUG("secondary lookup!");
   std::unique_ptr<SecondaryCacheResultHandle> handle;
   kept_in_sec_cache = false;
   Cache::Handle* lru_handle = cache_->Lookup(key);
+  num_lookups_++;
   if (lru_handle == nullptr) {
     return nullptr;
   }
@@ -83,14 +85,18 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   }
 
   Cache::Handle* lru_handle = cache_->Lookup(key);
+  DEBUG("secondary insert key {}", key.ToASCII());
+
   auto internal_helper = GetHelper();
   if (lru_handle == nullptr) {
     // PERF_COUNTER_ADD(Remote_sec_cache_insert_dummy_count, 1);
     // Insert a dummy handle if the handle is evicted for the first time.
+    DEBUG("secondary insert a dummy entry");
     return cache_->Insert(key, /*obj=*/nullptr, internal_helper,
                           /*charge=*/0);
   } else {
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/false);
+    // Maybe we should free the handle when insert with same key.
+    cache_->Release(lru_handle, /*erase_if_last_ref=*/true);
   }
 
   size_t size = (*helper->size_cb)(value);
@@ -104,6 +110,8 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
 
   // PERF_COUNTER_ADD(Remote_sec_cache_insert_real_count, 1);
   CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
+  num_inserts_++;
+  DEBUG("secondary real insert");
   return cache_->Insert(key, buf, internal_helper, size);
 }
 

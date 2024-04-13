@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 
 #include "cache/cache_reservation_manager.h"
@@ -99,6 +100,10 @@ class RemoteSecondaryCache : public SecondaryCache {
 
   size_t TEST_GetUsage() { return cache_->GetUsage(); }
 
+  uint32_t num_inserts() { return num_inserts_; }
+
+  uint32_t num_lookups() {return num_lookups_; }
+
  private:
   friend class RemoteSecondaryCacheTestBase;
 
@@ -108,6 +113,9 @@ class RemoteSecondaryCache : public SecondaryCache {
   RemoteSecondaryCacheOptions cache_options_;
   mutable port::Mutex capacity_mutex_;
   std::shared_ptr<ConcurrentCacheReservationManager> cache_res_mgr_;
+
+  uint32_t num_inserts_{0};
+  uint32_t num_lookups_{0};
 };
 
 }  // namespace ROCKSDB_NAMESPACE

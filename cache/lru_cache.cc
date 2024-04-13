@@ -43,6 +43,7 @@ LRUHandleTable::~LRUHandleTable() {
 }
 
 LRUHandle* LRUHandleTable::Lookup(const Slice& key, uint32_t hash) {
+  // Show();
   return *FindPointer(key, hash);
 }
 
@@ -93,9 +94,8 @@ void LRUHandleTable::Resize() {
 
   uint32_t old_length = uint32_t{1} << length_bits_;
   int new_length_bits = length_bits_ + 1;
-  std::unique_ptr<LRUHandle* []> new_list {
-    new LRUHandle* [size_t{1} << new_length_bits] {}
-  };
+  std::unique_ptr<LRUHandle*[]> new_list{
+      new LRUHandle* [size_t{1} << new_length_bits] {}};
   [[maybe_unused]] uint32_t count = 0;
   for (uint32_t i = 0; i < old_length; i++) {
     LRUHandle* h = list_[i];
@@ -369,6 +369,7 @@ void LRUCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
 }
 
 Status LRUCacheShard::InsertItem(LRUHandle* e, LRUHandle** handle) {
+  DEBUG("insert {}, charge {}", e->key().ToASCII(), e->total_charge);
   Status s = Status::OK();
   autovector<LRUHandle*> last_reference_list;
 
@@ -416,6 +417,7 @@ Status LRUCacheShard::InsertItem(LRUHandle* e, LRUHandle** handle) {
         if (!e->HasRefs()) {
           e->Ref();
         }
+        // Insert in hash table but not in lru list when referenced externally.
         *handle = e;
       }
     }
@@ -433,11 +435,13 @@ LRUHandle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash,
                                  Statistics* /*stats*/) {
   DMutexLock l(mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
+  DEBUG("lookup {} {}", key.ToASCII(), e != nullptr);
   if (e != nullptr) {
     assert(e->InCache());
     if (!e->HasRefs()) {
       // The entry is in LRU since it's in hash and has no external
       // references.
+      DEBUG("lru remove");
       LRU_Remove(e);
     }
     e->Ref();
@@ -479,15 +483,18 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
     DMutexLock l(mutex_);
     must_free = e->Unref();
     was_in_cache = e->InCache();
+    DEBUG("release {}, must_free {}", e->key().ToASCII(), must_free);
     if (must_free && was_in_cache) {
       // The item is still in cache, and nobody else holds a reference to it.
       if (usage_ > capacity_ || erase_if_last_ref) {
+        DEBUG("remove from hash");
         // The LRU list must be empty since the cache is full.
         assert(lru_.next == &lru_ || erase_if_last_ref);
         // Take this opportunity and remove the item.
         table_.Remove(e->key(), e->hash);
         e->SetInCache(false);
       } else {
+        DEBUG("put back to lru");
         // Put the item back on the LRU list, and don't free it.
         LRU_Insert(e);
         must_free = false;
@@ -498,6 +505,7 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
       assert(usage_ >= e->total_charge);
       usage_ -= e->total_charge;
     }
+    DEBUG("usage {}", usage_);
   }
 
   // Free the entry here outside of mutex for performance reasons.
@@ -707,7 +715,6 @@ std::shared_ptr<Cache> LRUCacheOptions::MakeSharedCache() const {
   }
   std::shared_ptr<Cache> cache = std::make_shared<LRUCache>(opts);
   if (secondary_cache) {
-    printf("ok! cache with secondary adapter\n");
     cache = std::make_shared<CacheWithSecondaryAdapter>(cache, secondary_cache);
   }
   return cache;
