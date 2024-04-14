@@ -3,16 +3,30 @@
 #include "cache/remote_secondary_cache.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <memory>
+#include <thread>
 
+#include "memory/allocator.h"
 #include "memory/memory_allocator_impl.h"
 #include "monitoring/perf_context_imp.h"
+#include "rocksdb/advanced_cache.h"
 #include "rocksdb/cache.h"
+#include "rocksdb/slice.h"
 #include "util/compression.h"
 #include "util/spdlogger.h"
 #include "util/string_util.h"
 namespace ROCKSDB_NAMESPACE {
+
+namespace {
+// A distinct pointer value for marking "puppet" cache entries
+struct Puppet {
+  char val[8] = "kPuppet";
+};
+const Puppet kPuppet{};
+Cache::ObjectPtr const kPuppetObj = const_cast<Puppet*>(&kPuppet);
+}  // namespace
 
 RemoteSecondaryCache::RemoteSecondaryCache(
     const RemoteSecondaryCacheOptions& opts)
@@ -21,15 +35,26 @@ RemoteSecondaryCache::RemoteSecondaryCache(
       cache_res_mgr_(std::make_shared<ConcurrentCacheReservationManager>(
           std::make_shared<CacheReservationManagerImpl<CacheEntryRole::kMisc>>(
               cache_))) {
+  assert(opts.addr != "" and opts.port != "" and opts.max_value_size != 0 and
+         opts.threads != 0);
   DEBUG("opts.addr {} port {} mvs {} threads {}", opts.addr, opts.port,
-        opts.max_value_size, opts.concurrency_hint);
+        opts.max_value_size, opts.threads);
   auto s = d_cache_.Initialize(opts.addr.c_str(), opts.port.c_str(),
-                               opts.max_value_size, opts.concurrency_hint);
+                               opts.max_value_size, opts.threads);
   assert(s);
 }
 
 RemoteSecondaryCache::~RemoteSecondaryCache() {
   assert(cache_res_mgr_->GetTotalReservedCacheSize() == 0);
+}
+
+bool RemoteSecondaryCache::Release(const Slice& key, Cache::Handle* handle,
+                                   bool erase_if_last_ref) {
+  auto erase = cache_->Release(handle, erase_if_last_ref);
+  if (erase) {
+    d_cache_.Delete(key.ToString());
+  }
+  return erase;
 }
 
 std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
@@ -48,37 +73,37 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
 
   void* handle_value = cache_->Value(lru_handle);
   if (handle_value == nullptr) {
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/false);
+    Release(key, lru_handle, /*erase_if_last_ref=*/false);
     return nullptr;
   }
 
-  CacheAllocationPtr* ptr{nullptr};
   size_t handle_value_charge{0};
-  ptr = reinterpret_cast<CacheAllocationPtr*>(handle_value);
   handle_value_charge = cache_->GetCharge(lru_handle);
-
-  MemoryAllocator* allocator = cache_options_.memory_allocator.get();
 
   Status s;
   Cache::ObjectPtr value{nullptr};
   size_t charge{0};
-  s = helper->create_cb(Slice(ptr->get(), handle_value_charge), create_context,
-                        allocator, &value, &charge);
+  MemoryAllocator* allocator = cache_options_.memory_allocator.get();
+
+  auto d_handle = d_cache_.Get(key.ToString());
+  assert(d_handle.has_value());
+  auto hd = std::move(d_handle.value());
+  assert(hd->Size() == handle_value_charge);
+  s = helper->create_cb(
+      Slice((const char*)hd->Value(), handle_value_charge), create_context,
+      allocator, &value, &charge);
   if (!s.ok()) {
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/true);
+    Release(key, lru_handle, /*erase_if_last_ref=*/true);
     return nullptr;
   }
 
   if (advise_erase) {
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/true);
+    Release(key, lru_handle, /*erase_if_last_ref=*/true);
     // Insert a dummy handle.
-    cache_
-        ->Insert(key, /*obj=*/nullptr, GetHelper(),
-                 /*charge=*/0)
-        .PermitUncheckedError();
+    cache_->Insert(key, nullptr, GetHelper(), 0).PermitUncheckedError();
   } else {
     kept_in_sec_cache = true;
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/false);
+    Release(key, lru_handle, /*erase_if_last_ref=*/false);
   }
   handle.reset(new RemoteSecondaryCacheResultHandle(value, charge));
   return handle;
@@ -90,7 +115,7 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
     return Status::InvalidArgument();
   }
 
-  Cache::Handle* lru_handle = cache_->Lookup(key);  // TODO
+  Cache::Handle* lru_handle = cache_->Lookup(key);
   DEBUG("secondary insert key {}", key.ToASCII());
 
   auto internal_helper = GetHelper();
@@ -102,27 +127,24 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
                           /*charge=*/0);
   } else {
     // Maybe we should free the handle when insert with same key.
-    cache_->Release(lru_handle, /*erase_if_last_ref=*/true);
+    Release(key, lru_handle, /*erase_if_last_ref=*/true);
   }
 
   size_t size = (*helper->size_cb)(value);
 
-  CacheAllocationPtr ptr =
-      AllocateBlock(size, cache_options_.memory_allocator.get());
-
-  Status s = (*helper->saveto_cb)(value, 0, size, ptr.get());
-  if (!s.ok()) {
-    return s;
-  }
+  DEBUG("secondary real insert");
+  d_cache_.Set(key.ToString(), ((char*)value + 32), size);
 
   // PERF_COUNTER_ADD(Remote_sec_cache_insert_real_count, 1);
-  CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
+  // CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
   num_inserts_++;
-  DEBUG("secondary real insert");
-  return cache_->Insert(key, buf, internal_helper, size);
+  return cache_->Insert(key, kPuppetObj, &kNoopCacheItemHelper, size);
 }
 
-void RemoteSecondaryCache::Erase(const Slice& key) { cache_->Erase(key); }
+void RemoteSecondaryCache::Erase(const Slice& key) {
+  d_cache_.Delete(key.ToString());
+  cache_->Erase(key);
+}
 
 Status RemoteSecondaryCache::SetCapacity(size_t capacity) {
   MutexLock l(&capacity_mutex_);

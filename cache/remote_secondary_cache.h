@@ -85,6 +85,8 @@ class RemoteSecondaryCache : public SecondaryCache {
       Cache::CreateContext* create_context, bool /*wait*/, bool advise_erase,
       bool& kept_in_sec_cache) override;
 
+  bool Release(const Slice& key, Cache::Handle* handle, bool erase_if_last_ref);
+
   bool SupportForceErase() const override { return true; }
 
   void Erase(const Slice& key) override;

@@ -175,6 +175,10 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     spdlog::set_level(spdlog::level::debug);
     RemoteSecondaryCacheOptions remote_cache_opts;
 
+    remote_cache_opts.max_value_size = 1500;
+    remote_cache_opts.threads = 1;
+    remote_cache_opts.addr = "192.168.200.53";
+    remote_cache_opts.port = "10086";
     remote_cache_opts.capacity = 6000;
     remote_cache_opts.num_shard_bits = 0;
     std::shared_ptr<SecondaryCache> secondary_cache =
@@ -188,43 +192,44 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
 
     Random rnd(301);
     std::string str1 = rnd.RandomString(1001);
+    DEBUG("str1 {}", Slice(str1).ToASCII());
     auto item1_1 = new TestItem(str1.data(), str1.length());
-    DEBUG("---------------------insert key1, 1_1-----------------------------");
+    INFO("---------------------insert key1, 1_1-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_1, GetHelper(), str1.length()));
 
     std::string str2 = rnd.RandomString(1012);
     auto item2_1 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's dummy item.
-    DEBUG("---------------------insert key2, 2_1-----------------------------");
+    INFO("---------------------insert key2, 2_1-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_1, GetHelper(), str2.length()));
 
     std::string str3 = rnd.RandomString(1024);
     auto item3_1 = new TestItem(str3.data(), str3.length());
     // After this Insert, primary cache contains k3 and secondary cache contains
     // k1's dummy item and k2's dummy item.
-    DEBUG("---------------------insert key3, 3_1-----------------------------");
+    INFO("---------------------insert key3, 3_1-----------------------------");
     ASSERT_OK(cache->Insert(key3, item3_1, GetHelper(), str3.length()));
 
     // After this Insert, primary cache contains k1 and secondary cache contains
     // k1's dummy item, k2's dummy item, and k3's dummy item.
     auto item1_2 = new TestItem(str1.data(), str1.length());
-    DEBUG("---------------------insert key1, 1_2-----------------------------");
+    INFO("---------------------insert key1, 1_2-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_2, GetHelper(), str1.length()));
 
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's item, k2's dummy item, and k3's dummy item.
-    DEBUG("---------------------insert key2, 2_2-----------------------------");
+    INFO("---------------------insert key2, 2_2-----------------------------");
     auto item2_2 = new TestItem(str2.data(), str2.length());
     ASSERT_OK(cache->Insert(key2, item2_2, GetHelper(), str2.length()));
 
     // After this Insert, primary cache contains k3 and secondary cache contains
     // k1's item and k2's item.
-    DEBUG("---------------------insert key3, 3_2-----------------------------");
+    INFO("---------------------insert key3, 3_2-----------------------------");
     auto item3_2 = new TestItem(str3.data(), str3.length());
     ASSERT_OK(cache->Insert(key3, item3_2, GetHelper(), str3.length()));
 
-    DEBUG("---------------------lookup key3,    -----------------------------");
+    INFO("---------------------lookup key3,    -----------------------------");
     handle = cache->Lookup(key3, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
@@ -236,7 +241,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     cache->Release(handle);
 
     // Lookup an non-existent key.
-    DEBUG("---------------------lookup key0,    -----------------------------");
+    INFO("---------------------lookup key0,    -----------------------------");
     handle = cache->Lookup(key0, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_EQ(handle, nullptr);
@@ -246,12 +251,18 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     // This Lookup should just insert a dummy handle in the primary cache
     // and the k1 is still in the secondary cache.
     // With k1 standalone entry, k3 is demoted to secondary cache.
-    DEBUG("---------------------lookup key1,    -----------------------------");
+    INFO("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
     auto val1_1 = static_cast<TestItem*>(cache->Value(handle));
     ASSERT_NE(val1_1, nullptr);
+    DEBUG("val1_1 {}", val1_1->Size());
+    DEBUG("str1 {}", str1.length());
+    // for (size_t i = 0; i < str1.size(); i++) {
+    //   DEBUG("i: {} {} {}", i, val1_1->Buf()[i], str1[i]);
+    //   // ASSERT_EQ(val1_1->Buf()[i], str1[i]);
+    // }
     ASSERT_EQ(memcmp(val1_1->Buf(), str1.data(), str1.size()), 0);
     ASSERT_EQ(2, sec->num_lookups());
     ASSERT_EQ(3, sec->num_inserts());
@@ -261,7 +272,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     // it into primary cache; then k3 is demoted.
     // k2 and k3 are in secondary cache.
     // First remove the k1 dummy entry from primary,
-    DEBUG("---------------------lookup key1,    -----------------------------");
+    INFO("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
@@ -271,7 +282,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
 
     // k2 is still in secondary cache.
     // But k1 must be demoted
-    DEBUG("---------------------lookup key2,    -----------------------------");
+    INFO("---------------------lookup key2,    -----------------------------");
     handle = cache->Lookup(key2, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
@@ -281,8 +292,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
 
     // Testing SetCapacity().
     ASSERT_OK(secondary_cache->SetCapacity(0));
-    DEBUG(
-        "---------------------lookup key3, c 0 -----------------------------");
+    INFO("---------------------lookup key3, c 0 -----------------------------");
     handle = cache->Lookup(key3, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_EQ(handle, nullptr);
@@ -293,29 +303,29 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     ASSERT_EQ(capacity, 7000);
     auto item1_3 = new TestItem(str1.data(), str1.length());
     // After this Insert, primary cache contains k1.
-    DEBUG("---------------------insert key1, 1_3-----------------------------");
+    INFO("---------------------insert key1, 1_3-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_3, GetHelper(), str2.length()));
 
     auto item2_3 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's dummy item.
-    DEBUG("---------------------insert key2, 2_3-----------------------------");
+    INFO("---------------------insert key2, 2_3-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_3, GetHelper(), str1.length()));
 
     auto item1_4 = new TestItem(str1.data(), str1.length());
     // After this Insert, primary cache contains k1 and secondary cache contains
     // k1's dummy item and k2's dummy item.
-    DEBUG("---------------------insert key1, 1_4-----------------------------");
+    INFO("---------------------insert key1, 1_4-----------------------------");
     ASSERT_OK(cache->Insert(key1, item1_4, GetHelper(), str2.length()));
 
     auto item2_4 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's real item and k2's dummy item.
-    DEBUG("---------------------insert key2, 2_4-----------------------------");
+    INFO("---------------------insert key2, 2_4-----------------------------");
     ASSERT_OK(cache->Insert(key2, item2_4, GetHelper(), str2.length()));
     // This Lookup should just insert a dummy handle in the primary cache
     // and the k1 is still in the secondary cache.
-    DEBUG("---------------------lookup key1,    -----------------------------");
+    INFO("---------------------lookup key1,    -----------------------------");
     handle = cache->Lookup(key1, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
 

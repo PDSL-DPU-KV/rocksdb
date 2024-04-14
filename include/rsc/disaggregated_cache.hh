@@ -4,12 +4,14 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 
 #include "allocator.hh"
 #include "rdma/connection.hh"
 #include "rdma/fixed_buffer_pool.hh"
 #include "rdma/resources.hh"
+#include "rocksdb/slice.h"
 #include "sharded_map.hh"
 #include "utilities/memory.hh"
 #include "utilities/misc.hh"
@@ -46,7 +48,8 @@ concept HostMetaIndex = requires(T i, std::string key, HostMeta value) {
 static_assert(RemoteMemoryAllocator<Allocator<FirstFitPolicy>>, "?");
 static_assert(HostMetaIndex<ShardedMap<std::string, HostMeta>>, "?");
 
-template <RemoteMemoryAllocator Allocator, HostMetaIndex Index = ShardedMap<std::string, HostMeta>>
+template <RemoteMemoryAllocator Allocator,
+          HostMetaIndex Index = ShardedMap<std::string, HostMeta>>
 class DisaggregatedCache {
   inline static constexpr uint8_t default_n_shards = 31;
   inline static constexpr uint32_t default_n_wr = 64;
@@ -101,12 +104,14 @@ class DisaggregatedCache {
       ERROR("fail to connect with remote daemon");
       return false;
     }
-    TRACE("addr: {} length: {} rkey: {}", RemoteMR()->Address(), RemoteMR()->Length(),
-          RemoteMR()->RKey());
+    TRACE("addr: {} length: {} rkey: {}", RemoteMR()->Address(),
+          RemoteMR()->Length(), RemoteMR()->RKey());
     allocator_ = new Allocator(RemoteMR()->Address(), RemoteMR()->Length());
     index_ = new Index(default_n_shards);
-    buffer_pool_ = new rdma::FixedBufferPool(default_n_wr, max_value_size, concurrency_hint * 2);
-    if (not buffer_pool_->RegisterBuffer(ctx_->GetPD(), rdma::FixedBufferPool::local_access)) {
+    buffer_pool_ = new rdma::FixedBufferPool(default_n_wr, max_value_size,
+                                             concurrency_hint * 2);
+    if (not buffer_pool_->RegisterBuffer(ctx_->GetPD(),
+                                         rdma::FixedBufferPool::local_access)) {
       return false;
     }
     running_ = true;
@@ -132,6 +137,10 @@ class DisaggregatedCache {
     if (not h->InitiateRemoteOp(IBV_WR_RDMA_READ)) {
       return std::nullopt;
     }
+    h->Wait();
+    INFO("GET");
+    DEBUG("FROM REMOTE key {}, value {}", key,
+          rocksdb::Slice((char*)h->Value(), h->Size()).ToASCII());
     return std::optional{std::move(h)};
   }
 
@@ -139,22 +148,25 @@ class DisaggregatedCache {
   /// 1. Allocate remote memory
   /// 2. Write remote value
   /// 3. Insert host meta index
-  auto Set(const std::string& key, const std::string& value) -> bool {
+  auto Set(const std::string& key, void* value, uint32_t length) -> bool {
+    INFO("SET");
+    DEBUG("TO REMOTE key {}, value {}", key,
+          rocksdb::Slice((char*)value, length).ToASCII());
     util::TraceTimer t;
     t.Tick();  // 1
-    auto addr = allocator_->Allocate(value.length());
+    auto addr = allocator_->Allocate(length);
     t.Tick();  // 2
     if (not addr.has_value()) {
       return false;
     }
     HostMeta meta{
         .remote_addr = addr.value(),
-        .value_length = (uint32_t)value.length(),
+        .value_length = length,
         .reserved = 0,
     };
     Handle h(this, std::move(meta));
     t.Tick();  // 3
-    if (not h.AcquireBuffer(value.data())) {
+    if (not h.AcquireBuffer(value)) {
       allocator_->Deallocate(meta.remote_addr, meta.value_length);
       return false;
     }
@@ -177,6 +189,7 @@ class DisaggregatedCache {
   /// 2. Deallocate the remote memory region
   //! BUG the concurrent problem here?
   auto Delete(const std::string& key) -> void {
+    DEBUG("DELETE REMOTE key {}", key);
     auto o = index_->Delete(key);
     if (o.has_value()) {
       allocator_->Deallocate(o.value().remote_addr, o.value().value_length);
@@ -231,9 +244,9 @@ class DisaggregatedCache<Allocator, Index>::Handle {
  public:
   // NOTICE: only the DisaggregatedCache can construct the handle.
   Handle(DisaggregatedCache* cache, const HostMeta& meta)
-      : cache_(cache), meta_(meta), buffer_(util::Alloc(meta_.value_length)) {}
+      : cache_(cache), meta_(meta) {}
   Handle(DisaggregatedCache* cache, HostMeta&& meta)
-      : cache_(cache), meta_(std::move(meta)), buffer_(util::Alloc(meta_.value_length)) {}
+      : cache_(cache), meta_(std::move(meta)) {}
   ~Handle() {
     if (buffer_ != nullptr) {
       cache_->buffer_pool_->Deallocate(buffer_);
@@ -283,7 +296,7 @@ class DisaggregatedCache<Allocator, Index>::Handle {
   std::atomic_flag done_ = ATOMIC_FLAG_INIT;
   DisaggregatedCache* cache_;
   HostMeta meta_;
-  void* buffer_;
+  void* buffer_{nullptr};
 
  private:
   friend class DisaggregatedCache<Allocator, Index>;
@@ -334,7 +347,8 @@ class RemoteDaemon {
         return false;
       }
       auto data = mr_->ToRemoteMR();
-      TRACE("addr: {} length: {} rkey: {}", data.Address(), data.Length(), data.RKey());
+      TRACE("addr: {} length: {} rkey: {}", data.Address(), data.Length(),
+            data.RKey());
       h->SetDataToSend(&data, sizeof(rdma::RemoteMR));
       return true;
     };

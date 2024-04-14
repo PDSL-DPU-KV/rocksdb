@@ -388,7 +388,7 @@ struct RemoteSecondaryCacheOptions : LRUCacheOptions {
   std::shared_ptr<Cache> MakeSharedCache() const = delete;
 
   uint32_t max_value_size{4096};
-  uint32_t concurrency_hint{1};
+  uint32_t threads{1};
   std::string addr;
   std::string port;
 };
