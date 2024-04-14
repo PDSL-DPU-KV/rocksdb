@@ -76,6 +76,22 @@ static std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct RemoteSecondaryCacheOptions, capacity),
           OptionType::kSizeT, OptionVerificationType::kNormal,
           OptionTypeFlags::kMutable}},
+        {"max_value_size",
+         {offsetof(struct RemoteSecondaryCacheOptions, max_value_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal,
+          OptionTypeFlags::kMutable}},
+        {"concurrency_hint",
+         {offsetof(struct RemoteSecondaryCacheOptions, max_value_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal,
+          OptionTypeFlags::kMutable}},
+        {"addr",
+         {offsetof(struct RemoteSecondaryCacheOptions, addr),
+          OptionType::kString, OptionVerificationType::kNormal,
+          OptionTypeFlags::kMutable}},
+        {"port",
+         {offsetof(struct RemoteSecondaryCacheOptions, port),
+          OptionType::kString, OptionVerificationType::kNormal,
+          OptionTypeFlags::kMutable}},
 };
 
 Status SecondaryCache::CreateFromString(
@@ -107,8 +123,8 @@ Status SecondaryCache::CreateFromString(
 
     RemoteSecondaryCacheOptions sec_cache_opts;
     status = OptionTypeInfo::ParseStruct(config_options, "",
-                                         &remote_sec_cache_options_type_info, "",
-                                         args, &sec_cache_opts);
+                                         &remote_sec_cache_options_type_info,
+                                         "", args, &sec_cache_opts);
     if (status.ok()) {
       sec_cache = NewRemoteSecondaryCache(sec_cache_opts);
     }

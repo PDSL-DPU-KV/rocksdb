@@ -20,7 +20,13 @@ RemoteSecondaryCache::RemoteSecondaryCache(
       cache_options_(opts),
       cache_res_mgr_(std::make_shared<ConcurrentCacheReservationManager>(
           std::make_shared<CacheReservationManagerImpl<CacheEntryRole::kMisc>>(
-              cache_))) {}
+              cache_))) {
+  DEBUG("opts.addr {} port {} mvs {} threads {}", opts.addr, opts.port,
+        opts.max_value_size, opts.concurrency_hint);
+  auto s = d_cache_.Initialize(opts.addr.c_str(), opts.port.c_str(),
+                               opts.max_value_size, opts.concurrency_hint);
+  assert(s);
+}
 
 RemoteSecondaryCache::~RemoteSecondaryCache() {
   assert(cache_res_mgr_->GetTotalReservedCacheSize() == 0);
@@ -84,7 +90,7 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
     return Status::InvalidArgument();
   }
 
-  Cache::Handle* lru_handle = cache_->Lookup(key);
+  Cache::Handle* lru_handle = cache_->Lookup(key);  // TODO
   DEBUG("secondary insert key {}", key.ToASCII());
 
   auto internal_helper = GetHelper();
@@ -100,6 +106,7 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   }
 
   size_t size = (*helper->size_cb)(value);
+
   CacheAllocationPtr ptr =
       AllocateBlock(size, cache_options_.memory_allocator.get());
 

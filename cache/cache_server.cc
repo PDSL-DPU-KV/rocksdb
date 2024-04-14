@@ -7,7 +7,7 @@
 using namespace sc;
 
 DEFINE_int32(size, 1_GB, "remote memory region size");
-DEFINE_string(addr, "127.0.0.1", "server address");
+DEFINE_string(addr, "192.168.200.53", "server address");
 DEFINE_string(port, "10086", "server port");
 
 auto main(int argc, char* argv[]) -> int {

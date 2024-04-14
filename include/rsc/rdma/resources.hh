@@ -35,8 +35,10 @@ class LocalMR {
       return;
     }
     if (auto rc = ibv_dereg_mr(mr_); rc != 0) {
-      ERROR("fail to deregiser memory region with (addr: {}, length: {}) because \"{}\"", mr_->addr,
-            mr_->length, util::ErrnoString());
+      ERROR(
+          "fail to deregiser memory region with (addr: {}, length: {}) because "
+          "\"{}\"",
+          mr_->addr, mr_->length, util::ErrnoString());
     }
   }
 
@@ -47,7 +49,9 @@ class LocalMR {
     return *this;
   };
 
-  auto ToRemoteMR() -> RemoteMR { return RemoteMR(mr_->addr, mr_->length, mr_->rkey); }
+  auto ToRemoteMR() -> RemoteMR {
+    return RemoteMR(mr_->addr, mr_->length, mr_->rkey);
+  }
 
  private:  //! WARN: can only be created by PD
   LocalMR(ibv_mr* mr = nullptr) : mr_(mr) {}
@@ -102,7 +106,8 @@ class PD {
     auto mr = ibv_reg_mr(pd_, buffer, length, access);
 
     if (mr == nullptr) {
-      ERROR("fail to register memory region because \"{}\"", util::ErrnoString());
+      ERROR("fail to register memory region because \"{}\"",
+            util::ErrnoString());
       return nullptr;
     }
     return new LocalMR(mr);
@@ -158,8 +163,9 @@ class CQ {
 
 class QP {
  public:
-  QP(rdma_cm_id* id, PD* pd, CQ* rcq, CQ* scq, /*reserved for srq*/ const ibv_qp_cap& cap,
-     ibv_qp_type type, bool sig_all) {
+  QP(rdma_cm_id* id, PD* pd, CQ* rcq, CQ* scq,
+     /*reserved for srq*/ const ibv_qp_cap& cap, ibv_qp_type type,
+     bool sig_all) {
     auto attr = ibv_qp_init_attr{
         .qp_context = id,
         .send_cq = scq->cq_,
@@ -265,7 +271,8 @@ class ConnContext {
  public:
   //! This is a builder for rdmacm, quite simple.
   //! The caller shall take the responsibility to release the context.
-  static auto Builder(rdma_cm_id* id, const ConnCtxInitAttr& attr) -> ConnContext* {
+  static auto Builder(rdma_cm_id* id, const ConnCtxInitAttr& attr)
+      -> ConnContext* {
     try {
       auto ctx = new ConnContext(id, attr);
       return ctx;
@@ -289,6 +296,7 @@ class ConnContext {
 
  private:
   ConnContext(rdma_cm_id* id, const ConnCtxInitAttr& attr) {
+    assert(id->verbs);
     pd_ = new PD(id->verbs);
     if (attr.use_same_cq) {
       scq_ = rcq_ = new CQ(id->verbs, attr.max_cqe);

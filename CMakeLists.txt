@@ -75,6 +75,7 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 option(ROCKSDB_BUILD_SHARED "Build shared versions of the RocksDB libraries" ON)
+option(WITH_RSC "build with remote secondary cache" OFF)
 
 if ($ENV{CIRCLECI})
   message(STATUS "Build for CircieCI env, a few tests may be disabled")
@@ -82,7 +83,7 @@ if ($ENV{CIRCLECI})
 endif()
 
 if( NOT DEFINED CMAKE_CXX_STANDARD )
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 
 include(CMakeDependentOption)
@@ -174,6 +175,14 @@ else()
     include_directories(${ZSTD_INCLUDE_DIR})
     list(APPEND THIRDPARTY_LIBS zstd::zstd)
   endif()
+
+  if(WITH_RSC)
+    find_package(ibverbs REQUIRED)
+    find_package(rdmacm REQUIRED)
+    find_package(fmt REQUIRED)
+    list(APPEND THIRDPARTY_LIBS ibverbs::ibverbs rdmacm fmt)
+  endif()
+
 endif()
 
 option(WITH_MD_LIBRARY "build with MD" ON)
@@ -1262,7 +1271,6 @@ if(WITH_TESTS)
         cache/cache_reservation_manager_test.cc
         cache/cache_test.cc
         cache/compressed_secondary_cache_test.cc
-        cache/remote_secondary_cache_test.cc
         cache/lru_cache_test.cc
         db/blob/blob_counting_iterator_test.cc
         db/blob/blob_file_addition_test.cc
@@ -1459,6 +1467,11 @@ if(WITH_TESTS)
         utilities/write_batch_with_index/write_batch_with_index_test.cc
 	${PLUGIN_TESTS}
     )
+    if(WITH_RSC)
+      list(APPEND TESTS
+          cache/remote_secondary_cache_test.cc
+      )
+    endif()
   endif()
 
   set(TESTUTIL_SOURCE
@@ -1595,24 +1608,11 @@ if(WITH_BENCHMARK)
   add_subdirectory(${PROJECT_SOURCE_DIR}/microbench/)
 endif()
 
-option(WITH_RSC "build with remote secondary cache" OFF)
 if(WITH_RSC)
-  add_library(rsclib 
-  include/rsc/disaggregated_cache.hh)
-  set_target_properties(rsclib PROPERTIES LINKER_LANGUAGE CXX)
-
-  find_package(ibverbs REQUIRED)
-  find_package(rdmacm REQUIRED)
-  find_package(fmt REQUIRED)
-  target_link_libraries(rsclib ibverbs::ibverbs rdmacm ${GFLAGS_LIB} fmt)
-  target_include_directories(rsclib INTERFACE ${CMAKE_SOURCE_DIR})
-
   add_executable(server cache/cache_server.cc)
-  target_link_libraries(server rsclib)
-  set_property(TARGET server PROPERTY CXX_STANDARD 20)
+  target_link_libraries(server ${THIRDPARTY_LIBS})
 
   add_executable(client cache/cache_client.cc)
-  target_link_libraries(client rsclib)
-  set_property(TARGET client PROPERTY CXX_STANDARD 20)
+  target_link_libraries(client ${THIRDPARTY_LIBS})
 
 endif()
