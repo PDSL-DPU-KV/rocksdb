@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "cache_key.h"
+#include "util/spdlogger.h"
 #ifdef GFLAGS
 #include <cinttypes>
 #include <cstddef>
@@ -546,6 +547,7 @@ class CacheBench {
           handle = nullptr;
         }
         // do lookup
+        INFO("do lookup");
         handle = cache_->Lookup(key, &helper2, /*context*/ nullptr,
                                 Cache::Priority::LOW);
         if (handle) {
@@ -566,6 +568,7 @@ class CacheBench {
           handle = nullptr;
         }
         // do insert
+        INFO("do insert");
         Status s = cache_->Insert(key, createValue(thread->rnd), &helper3,
                                   FLAGS_value_bytes, &handle);
         assert(s.ok());

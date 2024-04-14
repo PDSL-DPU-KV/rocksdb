@@ -9,6 +9,10 @@
 
 #include "rocksdb/cache.h"
 
+#include <cstddef>
+#include <string>
+#include <unordered_map>
+
 #include "cache/lru_cache.h"
 #include "rocksdb/secondary_cache.h"
 #include "rocksdb/utilities/customizable_util.h"
@@ -66,6 +70,14 @@ static std::unordered_map<std::string, OptionTypeInfo>
           OptionTypeFlags::kMutable}},
 };
 
+static std::unordered_map<std::string, OptionTypeInfo>
+    remote_sec_cache_options_type_info = {
+        {"capacity",
+         {offsetof(struct RemoteSecondaryCacheOptions, capacity),
+          OptionType::kSizeT, OptionVerificationType::kNormal,
+          OptionTypeFlags::kMutable}},
+};
+
 Status SecondaryCache::CreateFromString(
     const ConfigOptions& config_options, const std::string& value,
     std::shared_ptr<SecondaryCache>* result) {
@@ -83,6 +95,23 @@ Status SecondaryCache::CreateFromString(
       sec_cache = NewCompressedSecondaryCache(sec_cache_opts);
     }
 
+    if (status.ok()) {
+      result->swap(sec_cache);
+    }
+    return status;
+  } else if (value.find("remote_secondary_cache://") == 0) {
+    std::string args = value;
+    args.erase(0, std::strlen("remote_secondary_cache://"));
+    Status status;
+    std::shared_ptr<SecondaryCache> sec_cache;
+
+    RemoteSecondaryCacheOptions sec_cache_opts;
+    status = OptionTypeInfo::ParseStruct(config_options, "",
+                                         &remote_sec_cache_options_type_info, "",
+                                         args, &sec_cache_opts);
+    if (status.ok()) {
+      sec_cache = NewRemoteSecondaryCache(sec_cache_opts);
+    }
 
     if (status.ok()) {
       result->swap(sec_cache);

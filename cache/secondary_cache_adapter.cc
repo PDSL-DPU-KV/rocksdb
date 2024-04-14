@@ -154,6 +154,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     const Slice& key, const CacheItemHelper* helper, Priority priority,
     Statistics* stats, bool found_dummy_entry, bool kept_in_sec_cache) {
   assert(secondary_handle->IsReady());
+  INFO("promote from secondary");
 
   ObjectPtr obj = secondary_handle->Value();
   if (!obj) {

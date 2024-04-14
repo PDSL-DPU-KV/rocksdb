@@ -1595,7 +1595,24 @@ if(WITH_BENCHMARK)
   add_subdirectory(${PROJECT_SOURCE_DIR}/microbench/)
 endif()
 
-option(WITH_RDMA "build with rdma" ON)
-if(WITH_RDMA)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/cache)
+option(WITH_RSC "build with remote secondary cache" OFF)
+if(WITH_RSC)
+  add_library(rsclib 
+  include/rsc/disaggregated_cache.hh)
+  set_target_properties(rsclib PROPERTIES LINKER_LANGUAGE CXX)
+
+  find_package(ibverbs REQUIRED)
+  find_package(rdmacm REQUIRED)
+  find_package(fmt REQUIRED)
+  target_link_libraries(rsclib ibverbs::ibverbs rdmacm ${GFLAGS_LIB} fmt)
+  target_include_directories(rsclib INTERFACE ${CMAKE_SOURCE_DIR})
+
+  add_executable(server cache/cache_server.cc)
+  target_link_libraries(server rsclib)
+  set_property(TARGET server PROPERTY CXX_STANDARD 20)
+
+  add_executable(client cache/cache_client.cc)
+  target_link_libraries(client rsclib)
+  set_property(TARGET client PROPERTY CXX_STANDARD 20)
+
 endif()

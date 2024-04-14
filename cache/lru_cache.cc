@@ -369,7 +369,7 @@ void LRUCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
 }
 
 Status LRUCacheShard::InsertItem(LRUHandle* e, LRUHandle** handle) {
-  DEBUG("insert {}, charge {}", e->key().ToASCII(), e->total_charge);
+  DEBUG("insert {}, charge {}, usage_ {}, capacity {}", e->key().ToASCII(), e->total_charge, usage_, capacity_);
   Status s = Status::OK();
   autovector<LRUHandle*> last_reference_list;
 
@@ -435,7 +435,6 @@ LRUHandle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash,
                                  Statistics* /*stats*/) {
   DMutexLock l(mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
-  DEBUG("lookup {} {}", key.ToASCII(), e != nullptr);
   if (e != nullptr) {
     assert(e->InCache());
     if (!e->HasRefs()) {
@@ -483,7 +482,7 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
     DMutexLock l(mutex_);
     must_free = e->Unref();
     was_in_cache = e->InCache();
-    DEBUG("release {}, must_free {}", e->key().ToASCII(), must_free);
+    DEBUG("release begin: key {}, must_free {}, usage {}, capacity {}", e->key().ToASCII(), must_free, usage_, capacity_);
     if (must_free && was_in_cache) {
       // The item is still in cache, and nobody else holds a reference to it.
       if (usage_ > capacity_ || erase_if_last_ref) {
@@ -505,7 +504,7 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
       assert(usage_ >= e->total_charge);
       usage_ -= e->total_charge;
     }
-    DEBUG("usage {}", usage_);
+    DEBUG("release end: usage {}", usage_);
   }
 
   // Free the entry here outside of mutex for performance reasons.

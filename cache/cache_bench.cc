@@ -14,7 +14,9 @@ int main() {
 }
 #else
 #include "rocksdb/cache_bench_tool.h"
+#include "util/spdlogger.h"
 int main(int argc, char** argv) {
+  spdlog::set_level(spdlog::level::debug);
   return ROCKSDB_NAMESPACE::cache_bench_tool(argc, argv);
 }
 #endif  // GFLAGS
