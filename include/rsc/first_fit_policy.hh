@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include <list>
+#include <string>
 
 #include "policy.hh"
 #include "util/spdlogger.h"
@@ -12,7 +13,7 @@ namespace sc {
 class FirstFitPolicy {
  public:
   FirstFitPolicy(AddrType addr, SizeType size) : addr_(addr), size_(size) {
-    TRACE("initialize with address {} size {}", addr, size);
+    DEBUG("initialize with address {} size {}", addr, size);
     free_list_.push_back({addr, addr + size});
   }
   ~FirstFitPolicy() {}
@@ -26,6 +27,7 @@ class FirstFitPolicy {
           free_list_.erase(iter);
         }
         used_ += n;
+        DEBUG("{}", gen_debug());
         return {addr};
       }
     }
@@ -37,10 +39,13 @@ class FirstFitPolicy {
     auto less = [](const RMemRange &lhs, const RMemRange &rhs) -> bool {
       return lhs.lower < rhs.lower;
     };
-    auto iter = std::lower_bound(free_list_.begin(), free_list_.end(), cur, less);
+    auto iter =
+        std::lower_bound(free_list_.begin(), free_list_.end(), cur, less);
     auto prev_iter = std::make_reverse_iterator(iter);
-    bool connect_with_next = iter != free_list_.end() and cur.upper == iter->lower;
-    bool connect_with_prev = prev_iter != free_list_.rend() and prev_iter->upper == cur.lower;
+    bool connect_with_next =
+        iter != free_list_.end() and cur.upper == iter->lower;
+    bool connect_with_prev =
+        prev_iter != free_list_.rend() and prev_iter->upper == cur.lower;
     if (connect_with_next and connect_with_prev) {
       prev_iter->upper = iter->upper;
       free_list_.erase(iter);
@@ -52,9 +57,20 @@ class FirstFitPolicy {
       free_list_.insert(iter, std::move(cur));
     }
     used_ -= n;
+
+    DEBUG("{}", gen_debug());
   }
 
  private:
+  std::string gen_debug() {
+    std::string debug = "free_list: total " + std::to_string(size_) + ", ";
+    for (auto &t : free_list_) {
+      debug += "(" + std::to_string(t.lower - addr_) + ", " +
+               std::to_string(t.upper - addr_) + "), ";
+    }
+    return debug;
+  };
+
   FirstFitPolicy(const FirstFitPolicy &) = delete;
   auto operator=(FirstFitPolicy &) -> FirstFitPolicy & = delete;
   FirstFitPolicy(FirstFitPolicy &&) = delete;

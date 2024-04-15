@@ -529,7 +529,7 @@ TEST_F(ClockCacheTest, Limits) {
     // verify usage tracking on detached entries.)
     {
       size_t n = shard_->GetTableAddressCount() + 1;
-      std::unique_ptr<HandleImpl*[]> ha{new HandleImpl* [n] {}};
+      std::unique_ptr<HandleImpl* []> ha { new HandleImpl* [n] {} };
       Status s;
       for (size_t i = 0; i < n && s.ok(); ++i) {
         hkey[1] = i;

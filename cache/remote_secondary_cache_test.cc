@@ -198,6 +198,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     ASSERT_OK(cache->Insert(key1, item1_1, GetHelper(), str1.length()));
 
     std::string str2 = rnd.RandomString(1012);
+    DEBUG("str2 {}", Slice(str2).ToASCII());
     auto item2_1 = new TestItem(str2.data(), str2.length());
     // After this Insert, primary cache contains k2 and secondary cache contains
     // k1's dummy item.
@@ -205,6 +206,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     ASSERT_OK(cache->Insert(key2, item2_1, GetHelper(), str2.length()));
 
     std::string str3 = rnd.RandomString(1024);
+    DEBUG("str3 {}", Slice(str3).ToASCII());
     auto item3_1 = new TestItem(str3.data(), str3.length());
     // After this Insert, primary cache contains k3 and secondary cache contains
     // k1's dummy item and k2's dummy item.
@@ -259,10 +261,6 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     ASSERT_NE(val1_1, nullptr);
     DEBUG("val1_1 {}", val1_1->Size());
     DEBUG("str1 {}", str1.length());
-    // for (size_t i = 0; i < str1.size(); i++) {
-    //   DEBUG("i: {} {} {}", i, val1_1->Buf()[i], str1[i]);
-    //   // ASSERT_EQ(val1_1->Buf()[i], str1[i]);
-    // }
     ASSERT_EQ(memcmp(val1_1->Buf(), str1.data(), str1.size()), 0);
     ASSERT_EQ(2, sec->num_lookups());
     ASSERT_EQ(3, sec->num_inserts());
@@ -286,6 +284,9 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
     handle = cache->Lookup(key2, GetHelper(), this, Cache::Priority::LOW,
                            stats.get());
     ASSERT_NE(handle, nullptr);
+    auto val2 = static_cast<TestItem*>(cache->Value(handle));
+    ASSERT_NE(val2, nullptr);
+    ASSERT_EQ(memcmp(val2->Buf(), str2.data(), str2.length()), 0);
     cache->Release(handle);
     ASSERT_EQ(4, sec->num_lookups());
     ASSERT_EQ(4, sec->num_inserts());

@@ -2,6 +2,7 @@
 
 #include <infiniband/verbs.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -139,7 +140,7 @@ class DisaggregatedCache {
     }
     h->Wait();
     INFO("GET");
-    DEBUG("FROM REMOTE key {}, value {}", key,
+    DEBUG("FROM REMOTE key {},value length {} {}", key, h->Size(),
           rocksdb::Slice((char*)h->Value(), h->Size()).ToASCII());
     return std::optional{std::move(h)};
   }
@@ -150,7 +151,7 @@ class DisaggregatedCache {
   /// 3. Insert host meta index
   auto Set(const std::string& key, void* value, uint32_t length) -> bool {
     INFO("SET");
-    DEBUG("TO REMOTE key {}, value {}", key,
+    DEBUG("TO REMOTE key {}, value length {} {}", key, length,
           rocksdb::Slice((char*)value, length).ToASCII());
     util::TraceTimer t;
     t.Tick();  // 1
@@ -271,7 +272,8 @@ class DisaggregatedCache<Allocator, Index>::Handle {
 
   auto InitiateRemoteOp(ibv_wr_opcode opcode) -> bool {
     auto mr = cache_->buffer_pool_->GetLocalMR();
-    ibv_sge sge{mr->Address(), mr->Length(), mr->LKey()};
+    ibv_sge sge{(uint64_t)buffer_, cache_->buffer_pool_->Buffer_size(),
+                mr->LKey()};
     ibv_send_wr wr;
     memset(&wr, 0, sizeof(ibv_send_wr));
     wr.send_flags = IBV_SEND_SIGNALED;

@@ -70,10 +70,10 @@ class ConnHandle {
   }
   ~ConnHandle() {
     if (for_server_.private_data != nullptr) {
-      delete[] (char*)for_server_.private_data;
+      delete[](char*) for_server_.private_data;
     }
     if (for_client_.private_data != nullptr) {
-      delete[] (char*)for_client_.private_data;
+      delete[](char*) for_client_.private_data;
     }
     if (id_ != nullptr) {
       if (auto rc = rdma_destroy_id(id_); rc != 0) {

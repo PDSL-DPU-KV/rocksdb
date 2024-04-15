@@ -38,7 +38,7 @@ inline auto Dealloc(void *p, uint32_t len) -> void {
   }
 #else
 inline auto Dealloc(void *p, [[maybe_unused]] uint32_t len) -> void {
-  delete[] (char *)p;
+  delete[](char *) p;
 #endif
 }
 

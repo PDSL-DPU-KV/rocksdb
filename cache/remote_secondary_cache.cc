@@ -14,6 +14,7 @@
 #include "rocksdb/advanced_cache.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/status.h"
 #include "util/compression.h"
 #include "util/spdlogger.h"
 #include "util/string_util.h"
@@ -89,9 +90,8 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
   assert(d_handle.has_value());
   auto hd = std::move(d_handle.value());
   assert(hd->Size() == handle_value_charge);
-  s = helper->create_cb(
-      Slice((const char*)hd->Value(), handle_value_charge), create_context,
-      allocator, &value, &charge);
+  s = helper->create_cb(Slice((const char*)hd->Value(), handle_value_charge),
+                        create_context, allocator, &value, &charge);
   if (!s.ok()) {
     Release(key, lru_handle, /*erase_if_last_ref=*/true);
     return nullptr;
@@ -133,7 +133,11 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   size_t size = (*helper->size_cb)(value);
 
   DEBUG("secondary real insert");
-  d_cache_.Set(key.ToString(), ((char*)value + 32), size);
+  char* buf = new char[size];
+  auto s = (*helper->saveto_cb)(value, 0, size, buf);
+  assert(s == Status::OK());
+  d_cache_.Set(key.ToString(), buf, size);  // TODO avoid this extra memcpy
+  delete[] buf;
 
   // PERF_COUNTER_ADD(Remote_sec_cache_insert_real_count, 1);
   // CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));

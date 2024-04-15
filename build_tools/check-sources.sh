@@ -31,7 +31,10 @@ fi
 
 git grep -n 'using namespace' -- ':!build_tools' ':!docs' \
     ':!third-party/folly/folly/lang/Align.h' \
-    ':!third-party/gtest-1.8.1/fused-src/gtest/gtest.h'
+    ':!third-party/gtest-1.8.1/fused-src/gtest/gtest.h' \
+    ':!cache/cache_server.cc' \
+    ':!cache/cache_client.cc' \
+    ':!include/rsc' 
 if [ "$?" != "1" ]; then
   echo '^^^^ Do not use "using namespace"'
   BAD=1

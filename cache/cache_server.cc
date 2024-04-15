@@ -14,7 +14,7 @@ auto main(int argc, char* argv[]) -> int {
   spdlog::cfg::load_env_levels();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  auto daemon = RemoteDaemon();
+  auto daemon = sc::RemoteDaemon();
   if (not daemon.Initialize(FLAGS_addr.c_str(), FLAGS_port.c_str(),
                             FLAGS_size)) {
     return -1;

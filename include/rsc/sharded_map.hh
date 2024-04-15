@@ -14,24 +14,25 @@
 
 //! Well, this is a quite simple sharded set.
 //! This is specialized for our requirements:
-//!     1. value is extremely small, which can be appended to the key or be stored along with key
+//!     1. value is extremely small, which can be appended to the key or be
+//!     stored along with key
 //!     2. can bear with std::mutex.
 
 namespace sc {
 
-// clang-format off
 template <typename Key, typename Value>
 concept ShardedMapItemPolicy = requires(Key t) {
-    requires std::regular_invocable<std::hash<Key>, Key>;
-    requires std::regular_invocable<std::equal_to<Key>, Key, Key>;
-    requires std::is_default_constructible_v<Value>;
-    requires std::is_copy_constructible_v<Value>;
-    requires std::is_move_constructible_v<Value>;
+  requires std::regular_invocable<std::hash<Key>, Key>;
+  requires std::regular_invocable<std::equal_to<Key>, Key, Key>;
+  requires std::is_default_constructible_v<Value>;
+  requires std::is_copy_constructible_v<Value>;
+  requires std::is_move_constructible_v<Value>;
 };
-// clang-format on
 
+// clang-format off
 template <typename Key, typename Value>
-  requires ShardedMapItemPolicy<Key, Value>
+requires ShardedMapItemPolicy<Key, Value>
+// clang-format on
 class ShardedMap {
   struct Item {
     Key key;
@@ -39,7 +40,9 @@ class ShardedMap {
   };
 
   struct ItemHasher {
-    auto operator()(const Item& item) const -> size_t { return std::hash<Key>()(item.key); }
+    auto operator()(const Item& item) const -> size_t {
+      return std::hash<Key>()(item.key);
+    }
   };
 
   struct ItemPredictor {
@@ -76,11 +79,11 @@ class ShardedMap {
     }
   }
   auto Get(const Key& key) -> std::optional<Value> {
-    auto idx = std::hash<Key>()(
-      key) % n_shards_;
+    auto idx = std::hash<Key>()(key) % n_shards_;
     std::lock_guard<std::mutex> g(latches_[idx]);
     auto iter = shards_[idx].find(Item{key, {}});
-    return (iter == shards_[idx].end()) ? std::nullopt : std::optional<Value>(iter->value);
+    return (iter == shards_[idx].end()) ? std::nullopt
+                                        : std::optional<Value>(iter->value);
   }
   auto Delete(const Key& key) -> std::optional<Value> {
     auto idx = std::hash<Key>()(key) % n_shards_;

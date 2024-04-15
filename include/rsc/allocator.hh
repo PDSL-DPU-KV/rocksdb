@@ -1,11 +1,11 @@
 #pragma once
 
 // #include <absl/container/flat_hash_set.h>
-#include <unordered_set>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
 #include <mutex>
+#include <unordered_set>
 
 #include "first_fit_policy.hh"
 #include "policy.hh"
@@ -59,8 +59,8 @@ struct fmt::formatter<sc::Allocator<T>> {
 
   template <typename FormatContext>
   auto format(const sc::Allocator<T> &a, FormatContext &ctx) const {
-    return fmt::format_to(ctx.out(), "free list: {}\noccupied list: {}", *a.p_.get(),
-                          fmt::join(a.occupied_, " "));
+    return fmt::format_to(ctx.out(), "free list: {}\noccupied list: {}",
+                          *a.p_.get(), fmt::join(a.occupied_, " "));
   }
 };
 
@@ -72,7 +72,7 @@ auto Allocator<T>::Allocate(SizeType size) -> std::optional<AddrType> {
   std::lock_guard<std::mutex> l(mu_);
   auto o = p_->Allocate(size);
   if (o.has_value()) {
-    auto [_, ok] = occupied_.insert(RMemRange{o.value(), size}); // 
+    auto [_, ok] = occupied_.insert(RMemRange{o.value(), size});  //
     assert(ok);
     TRACE("allocate address {} size {}", o.value(), size);
   }

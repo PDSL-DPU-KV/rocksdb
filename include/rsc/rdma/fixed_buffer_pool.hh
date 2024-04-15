@@ -112,6 +112,8 @@ class FixedBufferPool {
     used_.fetch_add(-1, std::memory_order_acquire);
   }
 
+  uint32_t Buffer_size() { return buffer_size_; }
+
  private:
   // nomovable
   FixedBufferPool(FixedBufferPool&&) = delete;

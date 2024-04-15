@@ -26,16 +26,20 @@ class TraceTimer {
 
   auto Reset() -> void { trace_.resize(0); }
 
-  auto NPeriods() const -> size_t { return trace_.size() == 1 ? 0 : trace_.size() - 1; }
+  auto NPeriods() const -> size_t {
+    return trace_.size() == 1 ? 0 : trace_.size() - 1;
+  }
 
   template <typename T>
   auto Period(uint32_t i) const -> uint64_t {
-    return std::chrono::duration_cast<T>(trace_.at(i + 1) - trace_.at(i)).count();
+    return std::chrono::duration_cast<T>(trace_.at(i + 1) - trace_.at(i))
+        .count();
   }
 
   template <typename T>
   auto Elapsed() const -> uint64_t {
-    return std::chrono::duration_cast<T>(trace_.back() - trace_.front()).count();
+    return std::chrono::duration_cast<T>(trace_.back() - trace_.front())
+        .count();
   }
 
  private:

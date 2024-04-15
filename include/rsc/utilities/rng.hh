@@ -10,7 +10,9 @@ namespace sc::util::rng {
 class RandomIntGenerator {
  public:
   RandomIntGenerator(uint64_t lower, uint64_t upper)
-      : seed_(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
+      : seed_(std::chrono::high_resolution_clock::now()
+                  .time_since_epoch()
+                  .count()),
         gen_(seed_),
         dist_(lower, upper) {}
   ~RandomIntGenerator();

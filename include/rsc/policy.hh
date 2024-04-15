@@ -34,12 +34,15 @@ struct RMemRange {
 
 template <>
 struct std::hash<sc::RMemRange> {
-  auto operator()(const sc::RMemRange &info) const -> size_t { return info.lower; }
+  auto operator()(const sc::RMemRange &info) const -> size_t {
+    return info.lower;
+  }
 };
 
 template <>
 struct std::equal_to<sc::RMemRange> {
-  auto operator()(const sc::RMemRange &lhs, const sc::RMemRange &rhs) const -> bool {
+  auto operator()(const sc::RMemRange &lhs, const sc::RMemRange &rhs) const
+      -> bool {
     return lhs.lower == rhs.lower;
   }
 };

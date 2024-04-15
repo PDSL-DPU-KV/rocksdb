@@ -1,6 +1,7 @@
 #include <gflags/gflags.h>
 
 #include <algorithm>
+#include <chrono>
 #include <random>
 
 #include "rsc/allocator.hh"
@@ -29,7 +30,7 @@ DEFINE_int32(key_size, 128, "key size");
 auto main(int argc, char* argv[]) -> int {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  auto cache = DisaggregatedCache<FirstFitAllocator>();
+  auto cache = sc::DisaggregatedCache<sc::FirstFitAllocator>();
   if (not cache.Initialize(FLAGS_addr.c_str(), FLAGS_port.c_str(),
                            FLAGS_value_size, FLAGS_n_thread)) {
     return -1;

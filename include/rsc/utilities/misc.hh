@@ -9,8 +9,8 @@
 #define PAUSE
 #endif
 
-#include <cstdint>
 #include <cassert>
+#include <cstdint>
 
 namespace sc::util {
 
