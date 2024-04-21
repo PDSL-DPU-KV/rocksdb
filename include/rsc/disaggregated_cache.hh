@@ -139,8 +139,8 @@ class DisaggregatedCache {
       return std::nullopt;
     }
     h->Wait();
-    INFO("GET");
-    DEBUG("FROM REMOTE key {},value length {} {}", key, h->Size(),
+    TRACE("GET");
+    TRACE("FROM REMOTE key {},value length {} {}", key, h->Size(),
           rocksdb::Slice((char*)h->Value(), h->Size()).ToASCII());
     return std::optional{std::move(h)};
   }
@@ -150,8 +150,8 @@ class DisaggregatedCache {
   /// 2. Write remote value
   /// 3. Insert host meta index
   auto Set(const std::string& key, void* value, uint32_t length) -> bool {
-    INFO("SET");
-    DEBUG("TO REMOTE key {}, value length {} {}", key, length,
+    TRACE("SET");
+    TRACE("TO REMOTE key {}, value length {} {}", key, length,
           rocksdb::Slice((char*)value, length).ToASCII());
     util::TraceTimer t;
     t.Tick();  // 1
@@ -190,7 +190,7 @@ class DisaggregatedCache {
   /// 2. Deallocate the remote memory region
   //! BUG the concurrent problem here?
   auto Delete(const std::string& key) -> void {
-    DEBUG("DELETE REMOTE key {}", key);
+    TRACE("DELETE REMOTE key {}", key);
     auto o = index_->Delete(key);
     if (o.has_value()) {
       allocator_->Deallocate(o.value().remote_addr, o.value().value_length);

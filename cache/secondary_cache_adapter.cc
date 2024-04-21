@@ -117,7 +117,7 @@ CacheWithSecondaryAdapter::~CacheWithSecondaryAdapter() {
 bool CacheWithSecondaryAdapter::EvictionHandler(const Slice& key,
                                                 Handle* handle) {
   auto helper = GetCacheItemHelper(handle);
-  DEBUG("evict to secondary, key {}, compatible {}", key.ToASCII(),
+  TRACE("evict to secondary, key {}, compatible {}", key.ToASCII(),
         helper->IsSecondaryCacheCompatible());
   if (helper->IsSecondaryCacheCompatible()) {
     auto obj = target_->Value(handle);
@@ -154,7 +154,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     const Slice& key, const CacheItemHelper* helper, Priority priority,
     Statistics* stats, bool found_dummy_entry, bool kept_in_sec_cache) {
   assert(secondary_handle->IsReady());
-  INFO("promote from secondary");
+  TRACE("promote from secondary");
 
   ObjectPtr obj = secondary_handle->Value();
   if (!obj) {
@@ -175,7 +175,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     default:
       break;
   }
-  DEBUG("promote {}", key.ToASCII());
+  TRACE("promote {}", key.ToASCII());
   PERF_COUNTER_ADD(secondary_cache_hit_count, 1);
   RecordTick(stats, SECONDARY_CACHE_HITS);
 
@@ -184,7 +184,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
   Handle* result = nullptr;
   // Insert into primary cache, possibly as a standalone+dummy entries.
   if (secondary_cache_->SupportForceErase() && !found_dummy_entry) {
-    DEBUG("promote a dummy entry");
+    TRACE("promote a dummy entry");
     // Create standalone and insert dummy
     // Allow standalone to be created even if cache is full, to avoid
     // reading the entry from storage.
@@ -203,7 +203,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
   } else {
     // Insert regular entry into primary cache.
     // Don't allow it to spill into secondary cache again if it was kept there.
-    DEBUG("promote a regular entry");
+    TRACE("promote a regular entry");
     Status s = Insert(
         key, obj, kept_in_sec_cache ? helper->without_secondary_compat : helper,
         charge, &result, priority);
@@ -213,7 +213,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Promote(
     } else {
       // Create standalone result instead, even if cache is full, to avoid
       // reading the entry from storage.
-      DEBUG("but we still have to create standalone");
+      TRACE("but we still have to create standalone");
       result =
           CreateStandalone(key, obj, helper, charge, /*allow_uncharged*/ true);
       assert(result);
@@ -249,7 +249,7 @@ Cache::Handle* CacheWithSecondaryAdapter::Lookup(const Slice& key,
   Handle* result =
       target_->Lookup(key, helper, create_context, priority, stats);
   bool secondary_compatible = helper && helper->IsSecondaryCacheCompatible();
-  DEBUG("found {} compatible {}", result != nullptr, secondary_compatible);
+  TRACE("found {} compatible {}", result != nullptr, secondary_compatible);
   // If found dummy entry, result becomes false.
   bool found_dummy_entry =
       ProcessDummyResult(&result, /*erase=*/secondary_compatible);
@@ -260,8 +260,8 @@ Cache::Handle* CacheWithSecondaryAdapter::Lookup(const Slice& key,
         secondary_cache_->Lookup(key, helper, create_context, /*wait*/ true,
                                  found_dummy_entry, /*out*/ kept_in_sec_cache);
     if (secondary_handle) {
-      DEBUG("ok! key {} found in secondary cache", key.ToASCII());
-      DEBUG("kept in sec cache {}", kept_in_sec_cache);
+      TRACE("ok! key {} found in secondary cache", key.ToASCII());
+      TRACE("kept in sec cache {}", kept_in_sec_cache);
       result = Promote(std::move(secondary_handle), key, helper, priority,
                        stats, found_dummy_entry, kept_in_sec_cache);
     }

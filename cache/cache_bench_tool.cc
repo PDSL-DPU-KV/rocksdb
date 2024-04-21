@@ -547,7 +547,7 @@ class CacheBench {
           handle = nullptr;
         }
         // do lookup
-        INFO("do lookup");
+        TRACE("do lookup");
         handle = cache_->Lookup(key, &helper2, /*context*/ nullptr,
                                 Cache::Priority::LOW);
         if (handle) {
@@ -568,7 +568,7 @@ class CacheBench {
           handle = nullptr;
         }
         // do insert
-        INFO("do insert");
+        TRACE("do insert");
         Status s = cache_->Insert(key, createValue(thread->rnd), &helper3,
                                   FLAGS_value_bytes, &handle);
         assert(s.ok());

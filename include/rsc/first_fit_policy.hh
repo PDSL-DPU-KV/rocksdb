@@ -27,7 +27,7 @@ class FirstFitPolicy {
           free_list_.erase(iter);
         }
         used_ += n;
-        DEBUG("{}", gen_debug());
+        // DEBUG("{}", gen_debug());
         return {addr};
       }
     }
@@ -58,7 +58,7 @@ class FirstFitPolicy {
     }
     used_ -= n;
 
-    DEBUG("{}", gen_debug());
+    // DEBUG("{}", gen_debug());
   }
 
  private:

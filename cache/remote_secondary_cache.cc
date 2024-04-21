@@ -20,6 +20,8 @@
 #include "util/string_util.h"
 namespace ROCKSDB_NAMESPACE {
 
+#define PRINT_INTVAL ((1 << 15) - 1)
+
 namespace {
 // A distinct pointer value for marking "puppet" cache entries
 struct Puppet {
@@ -63,11 +65,16 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
     Cache::CreateContext* create_context, bool /*wait*/, bool advise_erase,
     bool& kept_in_sec_cache) {
   assert(helper);
-  DEBUG("secondary lookup!");
+  TRACE("secondary lookup!");
   std::unique_ptr<SecondaryCacheResultHandle> handle;
   kept_in_sec_cache = false;
   Cache::Handle* lru_handle = cache_->Lookup(key);
   num_lookups_++;
+
+  if ((num_lookups_ & PRINT_INTVAL) == 0) {
+    DEBUG("num lookup {}", num_lookups_);
+  }
+  
   if (lru_handle == nullptr) {
     return nullptr;
   }
@@ -116,13 +123,13 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   }
 
   Cache::Handle* lru_handle = cache_->Lookup(key);
-  DEBUG("secondary insert key {}", key.ToASCII());
+  TRACE("secondary insert key {}", key.ToASCII());
 
   auto internal_helper = GetHelper();
   if (lru_handle == nullptr) {
     // PERF_COUNTER_ADD(Remote_sec_cache_insert_dummy_count, 1);
     // Insert a dummy handle if the handle is evicted for the first time.
-    DEBUG("secondary insert a dummy entry");
+    TRACE("secondary insert a dummy entry");
     return cache_->Insert(key, /*obj=*/nullptr, internal_helper,
                           /*charge=*/0);
   } else {
@@ -132,7 +139,7 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
 
   size_t size = (*helper->size_cb)(value);
 
-  DEBUG("secondary real insert");
+  TRACE("secondary real insert");
   char* buf = new char[size];
   auto s = (*helper->saveto_cb)(value, 0, size, buf);
   assert(s == Status::OK());
@@ -142,6 +149,11 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   // PERF_COUNTER_ADD(Remote_sec_cache_insert_real_count, 1);
   // CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
   num_inserts_++;
+
+  if ((num_inserts_ & PRINT_INTVAL) == 0) {
+    DEBUG("num insert {}", num_inserts_);
+  }
+
   return cache_->Insert(key, kPuppetObj, &kNoopCacheItemHelper, size);
 }
 
