@@ -94,9 +94,8 @@ void LRUHandleTable::Resize() {
 
   uint32_t old_length = uint32_t{1} << length_bits_;
   int new_length_bits = length_bits_ + 1;
-  std::unique_ptr<LRUHandle* []> new_list {
-    new LRUHandle* [size_t{1} << new_length_bits] {}
-  };
+  std::unique_ptr<LRUHandle*[]> new_list{
+      new LRUHandle* [size_t{1} << new_length_bits] {}};
   [[maybe_unused]] uint32_t count = 0;
   for (uint32_t i = 0; i < old_length; i++) {
     LRUHandle* h = list_[i];
@@ -371,8 +370,8 @@ void LRUCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
 }
 
 Status LRUCacheShard::InsertItem(LRUHandle* e, LRUHandle** handle) {
-  TRACE("insert {}, charge {}, usage_ {}, capacity {}", e->key().ToASCII(),
-        e->total_charge, usage_, capacity_);
+  // TRACE("insert {}, charge {}, usage_ {}, capacity {}", e->key().ToASCII(),
+  // e->total_charge, usage_, capacity_);
   Status s = Status::OK();
   autovector<LRUHandle*> last_reference_list;
 
@@ -485,19 +484,19 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
     DMutexLock l(mutex_);
     must_free = e->Unref();
     was_in_cache = e->InCache();
-    TRACE("release begin: key {}, must_free {}, usage {}, capacity {}",
-          e->key().ToASCII(), must_free, usage_, capacity_);
+    // TRACE("release begin: key {}, must_free {}, usage {}, capacity {}",
+    // e->key().ToASCII(), must_free, usage_, capacity_);
     if (must_free && was_in_cache) {
       // The item is still in cache, and nobody else holds a reference to it.
       if (usage_ > capacity_ || erase_if_last_ref) {
-        TRACE("remove from hash");
+        // TRACE("remove from hash");
         // The LRU list must be empty since the cache is full.
         assert(lru_.next == &lru_ || erase_if_last_ref);
         // Take this opportunity and remove the item.
         table_.Remove(e->key(), e->hash);
         e->SetInCache(false);
       } else {
-        TRACE("put back to lru");
+        // TRACE("put back to lru");
         // Put the item back on the LRU list, and don't free it.
         LRU_Insert(e);
         must_free = false;
@@ -508,7 +507,7 @@ bool LRUCacheShard::Release(LRUHandle* e, bool /*useful*/,
       assert(usage_ >= e->total_charge);
       usage_ -= e->total_charge;
     }
-    TRACE("release end: must_free {} usage {}", must_free, usage_);
+    // TRACE("release end: must_free {} usage {}", must_free, usage_);
   }
 
   // Free the entry here outside of mutex for performance reasons.

@@ -154,7 +154,7 @@ class CQ {
     if (rc < 0) {
       ERROR("fail to poll cq because \"{}\"", util::ErrnoString());
     }
-    return ((rc == 1) ? std::nullopt : std::optional<ibv_wc>{wc});
+    return ((rc == 0) ? std::nullopt : std::optional<ibv_wc>{wc});
   }
 
  private:

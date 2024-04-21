@@ -387,10 +387,10 @@ struct RemoteSecondaryCacheOptions : LRUCacheOptions {
   // Avoid confusion with LRUCache
   std::shared_ptr<Cache> MakeSharedCache() const = delete;
 
-  uint32_t max_value_size{4096};
+  uint32_t max_value_size{1<<20};
   uint32_t threads{1};
-  std::string addr;
-  std::string port;
+  std::string addr{"192.168.200.53"};
+  std::string port{"10086"};
 };
 
 inline std::shared_ptr<SecondaryCache> NewRemoteSecondaryCache(

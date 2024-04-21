@@ -98,5 +98,6 @@ auto Allocator<T>::Deallocate(AddrType addr, SizeType size) -> void {
 namespace sc {
 
 using FirstFitAllocator = Allocator<FirstFitPolicy>;
+using SlabAllocator = Allocator<SlabPolicy>;
 
 }

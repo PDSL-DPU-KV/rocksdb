@@ -11,7 +11,7 @@
 namespace sc {
 
 using AddrType = std::uint64_t;
-using SizeType = std::uint32_t;
+using SizeType = std::uint64_t;
 
 // clang-format off
 template <typename T>

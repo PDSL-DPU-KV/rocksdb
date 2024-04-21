@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -19,6 +20,24 @@
 #include "utilities/timer.hh"
 
 namespace sc {
+
+class SpinWait {
+ public:
+  SpinWait() = default;
+  ~SpinWait() = default;
+
+ public:
+  auto wait() -> void {
+    while (not b.load(std::memory_order_acquire)) {
+      util::Pause();
+    }
+  }
+
+  auto notify() -> void { b.store(true, std::memory_order_release); }
+
+ private:
+  std::atomic_bool b{false};
+};
 
 struct HostMeta {
   AddrType remote_addr;
@@ -107,7 +126,8 @@ class DisaggregatedCache {
     }
     TRACE("addr: {} length: {} rkey: {}", RemoteMR()->Address(),
           RemoteMR()->Length(), RemoteMR()->RKey());
-    allocator_ = new Allocator(RemoteMR()->Address(), RemoteMR()->Length());
+    allocator_ = new Allocator(RemoteMR()->Address(), RemoteMR()->Length(),
+                               max_value_size);
     index_ = new Index(default_n_shards);
     buffer_pool_ = new rdma::FixedBufferPool(default_n_wr, max_value_size,
                                              concurrency_hint * 2);
@@ -138,10 +158,6 @@ class DisaggregatedCache {
     if (not h->InitiateRemoteOp(IBV_WR_RDMA_READ)) {
       return std::nullopt;
     }
-    h->Wait();
-    TRACE("GET");
-    TRACE("FROM REMOTE key {},value length {} {}", key, h->Size(),
-          rocksdb::Slice((char*)h->Value(), h->Size()).ToASCII());
     return std::optional{std::move(h)};
   }
 
@@ -207,9 +223,9 @@ class DisaggregatedCache {
   auto PollCQ() -> void {
     while (running_.load(std::memory_order_relaxed)) {
       if (auto wc = ctx_->GetCQ()->Poll(); wc.has_value()) {
-        auto sw = (std::atomic_flag*)wc->wr_id;
+        auto sw = (SpinWait*)wc->wr_id;
         if (sw != nullptr) {
-          sw->notify_all();
+          sw->notify();
         }
       }
       util::Pause();
@@ -237,8 +253,9 @@ class DisaggregatedCache {
 template <RemoteMemoryAllocator Allocator, HostMetaIndex Index>
 class DisaggregatedCache<Allocator, Index>::Handle {
  public:
-  auto IsReady() -> bool { return done_.test(std::memory_order_acquire); }
-  auto Wait() -> void { done_.wait(true, std::memory_order_relaxed); }
+  // auto IsReady() -> bool { return done_.test(std::memory_order_acquire); }
+  // auto Wait() -> void { done_.wait(true, std::memory_order_relaxed); }
+  auto Wait() -> void { done_.wait(); }
   auto Size() -> uint32_t { return meta_.value_length; }
   auto Value() -> const void* { return buffer_; }
 
@@ -271,6 +288,7 @@ class DisaggregatedCache<Allocator, Index>::Handle {
   }
 
   auto InitiateRemoteOp(ibv_wr_opcode opcode) -> bool {
+    std::scoped_lock<std::mutex> lock(m_);
     auto mr = cache_->buffer_pool_->GetLocalMR();
     ibv_sge sge{(uint64_t)buffer_, cache_->buffer_pool_->Buffer_size(),
                 mr->LKey()};
@@ -295,10 +313,12 @@ class DisaggregatedCache<Allocator, Index>::Handle {
   auto operator=(const Handle&) -> Handle& = delete;
 
  private:
-  std::atomic_flag done_ = ATOMIC_FLAG_INIT;
+  // std::atomic_flag done_ = ATOMIC_FLAG_INIT;
+  SpinWait done_;
   DisaggregatedCache* cache_;
   HostMeta meta_;
   void* buffer_{nullptr};
+  std::mutex m_;
 
  private:
   friend class DisaggregatedCache<Allocator, Index>;

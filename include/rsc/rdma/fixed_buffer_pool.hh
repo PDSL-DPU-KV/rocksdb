@@ -1,6 +1,11 @@
 #pragma once
 
+#include <fmt/format.h>
+
+#include <atomic>
+#include <cstdint>
 #include <exception>
+#include <mutex>
 
 #include "resources.hh"
 #include "rsc/utilities/memory.hh"
@@ -46,13 +51,14 @@ class FixedBufferPool {
     auto n_buffer_per_handle = n_buffer_ / n_handle_;
     for (uint32_t i = 0; i < n_handle_; i++) {
       auto& handle = handles_[i];
-      auto entries = (Entry*)(p + (handle_size_ * i));
-      handle.first_free = entries;
-      handle.offset = i;
-      for (uint32_t j = 0; j < n_buffer_per_handle; j++) {
-        entries[j].next_free =
-            ((j == n_buffer_per_handle - 1) ? nullptr : &entries[j + 1]);
+      std::vector<Entry*> entries{n_buffer_per_handle};
+      for (int j = (int)n_buffer_per_handle - 1; j >= 0; j--) {
+        entries[j] = (Entry*)(p + (handle_size_ * i) + (buffer_size_ * j));
+        entries[j]->next_free =
+            (j == (int)n_buffer_per_handle - 1) ? nullptr : entries[j + 1];
       }
+      handle.first_free = entries[0];
+      handle.offset = i;
     }
   }
   ~FixedBufferPool() {
@@ -73,18 +79,26 @@ class FixedBufferPool {
 
  public:
   auto Allocate() -> void* {
+    std::scoped_lock<std::mutex> lock(m_);
+    // std::string debug;
+    // for (uint32_t i = 0; i < n_handle_; i++) {
+    //   DEBUG("i {}, first_free {}", i,
+    //         fmt::ptr(handles_[i].first_free.load(std::memory_order_relaxed)));
+    // }
+    // DEBUG("");
+
     auto handle =
         &handles_[pt_idx_.fetch_add(1, std::memory_order::acquire) % n_handle_];
     Entry* next_free = nullptr;
     Entry* target = nullptr;
     do {
-      if (handle->first_free.load(std::memory_order_relaxed) == nullptr) {
+      if (handle->first_free.load(std::memory_order_acquire) == nullptr) {
         uint32_t i = handle->offset;
         uint32_t origin = i;
         do {
           handle = &handles_[(++i) % n_handle_];
         } while (i != origin and
-                 handle->first_free.load(std::memory_order_relaxed) == nullptr);
+                 handle->first_free.load(std::memory_order_acquire) == nullptr);
         if (i == origin) {
           return nullptr;
         }
@@ -92,7 +106,7 @@ class FixedBufferPool {
       target = handle->first_free.load(std::memory_order_acquire);
       next_free = (target == nullptr) ? nullptr : target->next_free;
     } while (not handle->first_free.compare_exchange_weak(
-        target, next_free, std::memory_order_relaxed,
+        target, next_free, std::memory_order_release,
         std::memory_order_acquire));
     used_.fetch_add(1, std::memory_order::acquire);
     target->next_free = nullptr;
@@ -100,6 +114,7 @@ class FixedBufferPool {
   }
 
   auto Deallocate(void* p) -> void {
+    std::scoped_lock<std::mutex> lock(m_);
     auto handle_idx = ((char*)p - (char*)memory_) / handle_size_;
     auto handle = &handles_[handle_idx];
     auto entry = (Entry*)p;
@@ -143,6 +158,7 @@ class FixedBufferPool {
   LocalMR* mr_{nullptr};
   void* memory_{nullptr};
   std::vector<Handle> handles_{};
+  std::mutex m_;
 };
 
 }  // namespace sc::rdma

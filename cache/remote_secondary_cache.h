@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "cache/cache_reservation_manager.h"
 #include "cache/lru_cache.h"
@@ -17,6 +18,8 @@
 #include "rocksdb/status.h"
 #include "rsc/allocator.hh"
 #include "rsc/disaggregated_cache.hh"
+#include "rsc/first_fit_policy.hh"
+#include "rsc/slab_policy.hh"
 #include "util/compression.h"
 #include "util/mutexlock.h"
 
@@ -105,10 +108,6 @@ class RemoteSecondaryCache : public SecondaryCache {
 
   size_t TEST_GetUsage() { return cache_->GetUsage(); }
 
-  uint32_t num_inserts() { return num_inserts_; }
-
-  uint32_t num_lookups() { return num_lookups_; }
-
  private:
   friend class RemoteSecondaryCacheTestBase;
 
@@ -119,10 +118,8 @@ class RemoteSecondaryCache : public SecondaryCache {
   mutable port::Mutex capacity_mutex_;
   std::shared_ptr<ConcurrentCacheReservationManager> cache_res_mgr_;
 
-  sc::DisaggregatedCache<sc::FirstFitAllocator> d_cache_;
-  // std::unique_ptr<sc::DisaggregatedCache<sc::FirstFitAllocator>> d_cache_;
-  uint32_t num_inserts_{0};
-  uint32_t num_lookups_{0};
+  static inline sc::DisaggregatedCache<sc::SlabAllocator> d_cache;
+  static inline std::once_flag flag;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

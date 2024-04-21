@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <cstdint>
 #include <map>
 #include <string>
 
@@ -94,6 +95,11 @@ struct PerfContextBase {
   // bytes for vals after compression in secondary cache
   uint64_t compressed_sec_cache_compressed_bytes;
 
+  uint64_t remote_sec_cache_insert_real_count;
+  uint64_t remote_sec_cache_insert_bytes;
+  uint64_t remote_sec_cache_lookup_real_count;
+  uint64_t remote_sec_cache_lookup_bytes;
+ 
   uint64_t block_checksum_time;    // total nanos spent on block checksum
   uint64_t block_decompress_time;  // total nanos spent on block decompression
 

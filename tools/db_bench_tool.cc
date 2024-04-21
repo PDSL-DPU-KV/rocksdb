@@ -309,6 +309,8 @@ DEFINE_int32(value_size_min, 100, "Min size of random value");
 
 DEFINE_int32(value_size_max, 102400, "Max size of random value");
 
+DEFINE_int32(max_value_size, 1<<20, "Max size of value hint for slab, must be power of two");
+
 DEFINE_int32(seek_nexts, 0,
              "How many times to call Next() after Seek() in "
              "fillseekseq, seekrandom, seekrandomwhilewriting and "
@@ -589,6 +591,12 @@ DEFINE_double(remote_secondary_cache_high_pri_pool_ratio, 0.0,
 
 DEFINE_double(remote_secondary_cache_low_pri_pool_ratio, 0.0,
               "Ratio of block cache reserve for low pri blocks.");
+
+DEFINE_int32(remote_secondary_cache_threads, 1, "Number of threads for rdma.");
+
+DEFINE_string(remote_addr, "192.168.200.53", "Server side addr");
+
+DEFINE_string(remote_port, "10086", "Server side port");
 
 DEFINE_bool(use_compressed_secondary_cache, false,
             "Use the CompressedSecondaryCache as the secondary cache.");
@@ -3058,6 +3066,10 @@ class Benchmark {
           FLAGS_remote_secondary_cache_high_pri_pool_ratio;
       remote_cache_opts.low_pri_pool_ratio =
           FLAGS_remote_secondary_cache_low_pri_pool_ratio;
+      remote_cache_opts.max_value_size = FLAGS_max_value_size;
+      remote_cache_opts.addr = FLAGS_remote_addr;
+      remote_cache_opts.port = FLAGS_remote_port;
+      remote_cache_opts.threads = FLAGS_remote_secondary_cache_threads;
     }
     if (FLAGS_cache_type == "clock_cache") {
       fprintf(stderr, "Old clock cache implementation has been removed.\n");
@@ -3100,7 +3112,6 @@ class Benchmark {
         opts.secondary_cache =
             NewCompressedSecondaryCache(secondary_cache_opts);
       } else if (FLAGS_use_remote_secondary_cache) {
-        printf("ok! my secondary cache\n");
         opts.secondary_cache = NewRemoteSecondaryCache(remote_cache_opts);
       }
 

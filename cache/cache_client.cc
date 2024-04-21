@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <random>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 #include "rsc/allocator.hh"
 #include "rsc/disaggregated_cache.hh"
@@ -28,21 +32,32 @@ DEFINE_int32(value_size, 4_KB, "value size");
 DEFINE_int32(key_size, 128, "key size");
 
 auto main(int argc, char* argv[]) -> int {
+  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_pattern("%t %+");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  auto cache = sc::DisaggregatedCache<sc::FirstFitAllocator>();
+  auto cache = sc::DisaggregatedCache<SlabAllocator>();
   if (not cache.Initialize(FLAGS_addr.c_str(), FLAGS_port.c_str(),
                            FLAGS_value_size, FLAGS_n_thread)) {
     return -1;
   }
+
+  std::mutex mutex_;
+  std::unordered_map<std::string, std::string> kvs;
 
   auto fn = [&]() {
     auto key = std::string(FLAGS_key_size, '\0');
     auto value = std::string(FLAGS_value_size, '\0');
     long double avg_lat = 0;
     for (int32_t i = 0; i < FLAGS_n_loop; i++) {
+    redo:
       FillRandom(key);
       FillRandom(value);
+      {
+        std::scoped_lock<std::mutex> lock(mutex_);
+        if (kvs.contains(key)) goto redo;
+        kvs[key] = value;
+      }
       auto tik = std::chrono::high_resolution_clock::now();
       if (not cache.Set(key, value.data(), value.length())) {
         CRITICAL("too fast");
@@ -65,6 +80,18 @@ auto main(int argc, char* argv[]) -> int {
 
   for (int32_t i = 0; i < FLAGS_n_thread; i++) {
     workers[i].join();
+  }
+
+  for (auto& kv : kvs) {
+    auto handle = cache.Get(kv.first);
+    assert(handle.has_value());
+    handle.value()->Wait();
+    auto v = std::string((const char*)handle.value()->Value(),
+                         handle.value()->Size());
+    if (v != kv.second) {
+      DEBUG("v {}, kv {}", v, kv.second);
+    }
+    assert(v == kv.second);
   }
 
   return 0;

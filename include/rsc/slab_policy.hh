@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
+#include <stdexcept>
 
 #include "policy.hh"
 #include "util/spdlogger.h"
@@ -14,13 +16,15 @@ class SlabPolicy {
   using RMemInfo = sc::RMemRange;
 
  public:
-  SlabPolicy(AddrType addr, SizeType size, SizeType elem_size, uint32_t n_slab)
+  SlabPolicy(AddrType addr, SizeType size, SizeType elem_size = 1024,
+             uint32_t n_slab = 4)
       : base_(addr),
         size_(size),
         elem_size_(elem_size),
         n_slab_(n_slab),
         slab_size_(size / n_slab),
         n_elem_(slab_size_ / elem_size) {
+    DEBUG("slab_size_ {} size {}", slab_size_, size);
     if (slab_size_ % elem_size != 0 or size % n_slab != 0) {
       throw std::invalid_argument(
           "invalid slab number or invalid element size");
@@ -53,9 +57,10 @@ class SlabPolicy {
 
  public:
   auto Allocate(SizeType n) -> std::optional<AddrType> {
-    if (n != elem_size_) {
+    std::scoped_lock<std::mutex> lock(m_);
+    if (n > elem_size_) {
       ERROR("expected element size {} actual {}", elem_size_, n);
-      return std::nullopt;
+      throw std::runtime_error("actual size larger than element size");
     }
     auto cur_handle = &handles_[pt_idx_.fetch_add(1) % n_slab_];
     // we may need to steal some entry from other slab
@@ -87,9 +92,10 @@ class SlabPolicy {
   }
 
   auto Deallocate(AddrType addr, SizeType n) -> void {
-    if (n != elem_size_) {
-      throw std::runtime_error("invalid memory region");
-    }
+    std::scoped_lock<std::mutex> lock(m_);
+    // if (n != elem_size_) {
+    // throw std::runtime_error("invalid memory region");
+    // }
     // locate which slab it belongs to.
     auto slab_idx = (addr - base_) / slab_size_;
     auto handle = &handles_[slab_idx];
@@ -135,6 +141,8 @@ class SlabPolicy {
   std::atomic_uint32_t used_{0};  // used entry number
 
   SlabHandle *handles_{nullptr};
+
+  std::mutex m_;
 
 #ifdef ENABLE_TEST
   friend class SlabPolicyTest;

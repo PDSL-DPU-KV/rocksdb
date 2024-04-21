@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include "util/spdlogger.h"
 #ifndef GFLAGS
 #include <cstdio>
 int main() {
@@ -16,6 +17,8 @@ int main() {
 #else
 #include "rocksdb/db_bench_tool.h"
 int main(int argc, char** argv) {
+  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_pattern("%t %+");
   return ROCKSDB_NAMESPACE::db_bench_tool(argc, argv);
 }
 #endif  // GFLAGS

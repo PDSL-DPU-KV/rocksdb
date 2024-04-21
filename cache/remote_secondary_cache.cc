@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include "memory/allocator.h"
@@ -15,12 +16,12 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rsc/disaggregated_cache.hh"
+#include "rsc/slab_policy.hh"
 #include "util/compression.h"
 #include "util/spdlogger.h"
 #include "util/string_util.h"
 namespace ROCKSDB_NAMESPACE {
-
-#define PRINT_INTVAL ((1 << 15) - 1)
 
 namespace {
 // A distinct pointer value for marking "puppet" cache entries
@@ -42,9 +43,10 @@ RemoteSecondaryCache::RemoteSecondaryCache(
          opts.threads != 0);
   DEBUG("opts.addr {} port {} mvs {} threads {}", opts.addr, opts.port,
         opts.max_value_size, opts.threads);
-  auto s = d_cache_.Initialize(opts.addr.c_str(), opts.port.c_str(),
-                               opts.max_value_size, opts.threads);
-  assert(s);
+  std::call_once(flag, [opts]() {
+    d_cache.Initialize(opts.addr.c_str(), opts.port.c_str(),
+                       opts.max_value_size, opts.threads);
+  });
 }
 
 RemoteSecondaryCache::~RemoteSecondaryCache() {
@@ -55,7 +57,7 @@ bool RemoteSecondaryCache::Release(const Slice& key, Cache::Handle* handle,
                                    bool erase_if_last_ref) {
   auto erase = cache_->Release(handle, erase_if_last_ref);
   if (erase) {
-    d_cache_.Delete(key.ToString());
+    d_cache.Delete(key.ToString());
   }
   return erase;
 }
@@ -69,12 +71,7 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
   std::unique_ptr<SecondaryCacheResultHandle> handle;
   kept_in_sec_cache = false;
   Cache::Handle* lru_handle = cache_->Lookup(key);
-  num_lookups_++;
 
-  if ((num_lookups_ & PRINT_INTVAL) == 0) {
-    DEBUG("num lookup {}", num_lookups_);
-  }
-  
   if (lru_handle == nullptr) {
     return nullptr;
   }
@@ -93,10 +90,13 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
   size_t charge{0};
   MemoryAllocator* allocator = cache_options_.memory_allocator.get();
 
-  auto d_handle = d_cache_.Get(key.ToString());
+  PERF_COUNTER_ADD(remote_sec_cache_lookup_real_count, 1)
+  auto d_handle = d_cache.Get(key.ToString());
   assert(d_handle.has_value());
   auto hd = std::move(d_handle.value());
   assert(hd->Size() == handle_value_charge);
+  PERF_COUNTER_ADD(remote_sec_cache_lookup_bytes, handle_value_charge);
+  hd->Wait();
   s = helper->create_cb(Slice((const char*)hd->Value(), handle_value_charge),
                         create_context, allocator, &value, &charge);
   if (!s.ok()) {
@@ -138,27 +138,23 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   }
 
   size_t size = (*helper->size_cb)(value);
-
-  TRACE("secondary real insert");
+  PERF_COUNTER_ADD(remote_sec_cache_insert_bytes, size);
   char* buf = new char[size];
   auto s = (*helper->saveto_cb)(value, 0, size, buf);
-  assert(s == Status::OK());
-  d_cache_.Set(key.ToString(), buf, size);  // TODO avoid this extra memcpy
+  if (!s.ok()) {
+    return s;
+  }
+  PERF_COUNTER_ADD(remote_sec_cache_insert_real_count, 1);
+  d_cache.Set(key.ToString(), buf, size);  // TODO avoid this extra memcpy
   delete[] buf;
 
-  // PERF_COUNTER_ADD(Remote_sec_cache_insert_real_count, 1);
   // CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
-  num_inserts_++;
-
-  if ((num_inserts_ & PRINT_INTVAL) == 0) {
-    DEBUG("num insert {}", num_inserts_);
-  }
 
   return cache_->Insert(key, kPuppetObj, &kNoopCacheItemHelper, size);
 }
 
 void RemoteSecondaryCache::Erase(const Slice& key) {
-  d_cache_.Delete(key.ToString());
+  d_cache.Delete(key.ToString());
   cache_->Erase(key);
 }
 

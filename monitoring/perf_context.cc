@@ -67,6 +67,10 @@ struct PerfContextByLevelInt {
   defCmd(compressed_sec_cache_insert_dummy_count)  \
   defCmd(compressed_sec_cache_uncompressed_bytes)  \
   defCmd(compressed_sec_cache_compressed_bytes)    \
+  defCmd(remote_sec_cache_insert_real_count)       \
+  defCmd(remote_sec_cache_insert_bytes)            \
+  defCmd(remote_sec_cache_lookup_real_count)       \
+  defCmd(remote_sec_cache_lookup_bytes)            \
   defCmd(block_checksum_time)                      \
   defCmd(block_decompress_time)                    \
   defCmd(get_read_bytes)                           \
@@ -253,10 +257,10 @@ void PerfContext::Reset() {
 #endif
 }
 
-void PerfContextByLevel::Reset() {
+void PerfContextByLevel::Reset(){
 #ifndef NPERF_CONTEXT
 #define EMIT_FIELDS(x) x = 0;
-  DEF_PERF_CONTEXT_LEVEL_METRICS(EMIT_FIELDS)
+    DEF_PERF_CONTEXT_LEVEL_METRICS(EMIT_FIELDS)
 #undef EMIT_FIELDS
 #endif
 }
