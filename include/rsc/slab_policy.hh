@@ -16,7 +16,7 @@ class SlabPolicy {
   using RMemInfo = sc::RMemRange;
 
  public:
-  SlabPolicy(AddrType addr, SizeType size, SizeType elem_size = 1024,
+  SlabPolicy(AddrType addr, SizeType size, SizeType elem_size = 8388608,
              uint32_t n_slab = 4)
       : base_(addr),
         size_(size),

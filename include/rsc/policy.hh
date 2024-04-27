@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -11,7 +12,7 @@
 namespace sc {
 
 using AddrType = std::uint64_t;
-using SizeType = std::uint64_t;
+using SizeType = std::size_t;
 
 // clang-format off
 template <typename T>

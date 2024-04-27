@@ -28,7 +28,7 @@ DEFINE_int32(n_loop, 10000, "bench loop number");
 DEFINE_int32(n_thread, 1, "bench worker thread number");
 DEFINE_string(addr, "192.168.200.53", "server address");
 DEFINE_string(port, "10086", "server port");
-DEFINE_int32(value_size, 4_KB, "value size");
+DEFINE_int32(value_size, 1_KB, "value size");
 DEFINE_int32(key_size, 128, "key size");
 
 auto main(int argc, char* argv[]) -> int {
@@ -82,16 +82,31 @@ auto main(int argc, char* argv[]) -> int {
     workers[i].join();
   }
 
-  for (auto& kv : kvs) {
-    auto handle = cache.Get(kv.first);
+  auto rng = std::mt19937{std::random_device{}()};
+  std::uniform_int_distribution<> dist(0, 1);
+  std::unordered_map<std::string, std::string> kvs_d;
+  for (auto& [k, v] : kvs) {
+    auto t = dist(rng);
+    if (t == 0) {
+      kvs_d[k] = v;
+      cache.Delete(k);
+    }
+  }
+
+  for (auto& [k, v] : kvs) {
+    auto handle = cache.Get(k);
+    if (kvs_d.contains(k)) {
+      assert(not handle.has_value());
+      continue;
+    }
     assert(handle.has_value());
     handle.value()->Wait();
-    auto v = std::string((const char*)handle.value()->Value(),
-                         handle.value()->Size());
-    if (v != kv.second) {
-      DEBUG("v {}, kv {}", v, kv.second);
+    auto va = std::string((const char*)handle.value()->Value(),
+                          handle.value()->Size());
+    if (va != v) {
+      DEBUG("v {}, va {}", v, va);
     }
-    assert(v == kv.second);
+    assert(v == va);
   }
 
   return 0;

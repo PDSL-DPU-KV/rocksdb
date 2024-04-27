@@ -3,6 +3,7 @@
 #include <infiniband/verbs.h>
 #include <rdma/rdma_cma.h>
 
+#include <cstdint>
 #include <optional>
 
 #include "rsc/utilities/errno.hh"
@@ -12,17 +13,17 @@ namespace sc::rdma {
 
 class RemoteMR {
  public:
-  RemoteMR(void* addr, uint32_t length, uint32_t rkey)
+  RemoteMR(void* addr, size_t length, uint32_t rkey)
       : addr_(addr), length_(length), rkey_(rkey) {}
 
  public:
   auto Address() -> uint64_t { return (uint64_t)addr_; }
-  auto Length() -> uint32_t { return length_; }
+  auto Length() -> size_t { return length_; }
   auto RKey() -> uint32_t { return rkey_; }
 
  private:
   void* addr_;
-  uint32_t length_;
+  size_t length_;
   uint32_t rkey_;
 };
 
@@ -62,7 +63,7 @@ class LocalMR {
 
  public:
   auto Address() const -> uint64_t { return (uint64_t)mr_->addr; }
-  auto Length() const -> uint32_t { return mr_->length; }
+  auto Length() const -> size_t { return mr_->length; }
   auto RKey() const -> uint32_t { return mr_->rkey; }
   auto LKey() const -> uint32_t { return mr_->lkey; }
 
@@ -101,7 +102,7 @@ class PD {
   auto operator=(const PD&) -> PD& = delete;
 
  public:
-  auto RegisterMemory(void* buffer, uint32_t length, int access) -> LocalMR* {
+  auto RegisterMemory(void* buffer, size_t length, int access) -> LocalMR* {
     TRACE("register buffer address: {}, length: {}", buffer, length);
     auto mr = ibv_reg_mr(pd_, buffer, length, access);
 

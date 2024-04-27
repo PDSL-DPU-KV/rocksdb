@@ -12,7 +12,7 @@ namespace sc {
 
 class FirstFitPolicy {
  public:
-  FirstFitPolicy(AddrType addr, SizeType size) : addr_(addr), size_(size) {
+  FirstFitPolicy(AddrType addr, SizeType size, SizeType value_size) : addr_(addr), size_(size) {
     DEBUG("initialize with address {} size {}", addr, size);
     free_list_.push_back({addr, addr + size});
   }

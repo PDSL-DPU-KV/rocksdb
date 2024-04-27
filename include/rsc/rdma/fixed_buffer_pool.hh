@@ -80,12 +80,6 @@ class FixedBufferPool {
  public:
   auto Allocate() -> void* {
     std::scoped_lock<std::mutex> lock(m_);
-    // std::string debug;
-    // for (uint32_t i = 0; i < n_handle_; i++) {
-    //   DEBUG("i {}, first_free {}", i,
-    //         fmt::ptr(handles_[i].first_free.load(std::memory_order_relaxed)));
-    // }
-    // DEBUG("");
 
     auto handle =
         &handles_[pt_idx_.fetch_add(1, std::memory_order::acquire) % n_handle_];

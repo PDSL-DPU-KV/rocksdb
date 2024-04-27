@@ -30,6 +30,7 @@ struct Puppet {
 };
 const Puppet kPuppet{};
 Cache::ObjectPtr const kPuppetObj = const_cast<Puppet*>(&kPuppet);
+const size_t size_limit = 32 << 10;
 }  // namespace
 
 RemoteSecondaryCache::RemoteSecondaryCache(
@@ -90,18 +91,34 @@ std::unique_ptr<SecondaryCacheResultHandle> RemoteSecondaryCache::Lookup(
   size_t charge{0};
   MemoryAllocator* allocator = cache_options_.memory_allocator.get();
 
-  PERF_COUNTER_ADD(remote_sec_cache_lookup_real_count, 1)
-  auto d_handle = d_cache.Get(key.ToString());
-  assert(d_handle.has_value());
-  auto hd = std::move(d_handle.value());
-  assert(hd->Size() == handle_value_charge);
-  PERF_COUNTER_ADD(remote_sec_cache_lookup_bytes, handle_value_charge);
-  hd->Wait();
-  s = helper->create_cb(Slice((const char*)hd->Value(), handle_value_charge),
-                        create_context, allocator, &value, &charge);
-  if (!s.ok()) {
-    Release(key, lru_handle, /*erase_if_last_ref=*/true);
-    return nullptr;
+  if (handle_value_charge < size_limit) {
+    assert(handle_value != kPuppetObj);
+    auto ptr = reinterpret_cast<CacheAllocationPtr*>(handle_value);
+    s = helper->create_cb(Slice(ptr->get(), handle_value_charge),
+                          create_context, allocator, &value, &charge);
+    if (!s.ok()) {
+      cache_->Release(lru_handle, true);
+      return nullptr;
+    }
+  } else {
+    assert(handle_value == kPuppetObj);
+    PERF_COUNTER_ADD(remote_sec_cache_lookup_real_count, 1)
+    auto d_handle = d_cache.Get(key.ToString());
+    assert(d_handle.has_value());
+    if (not d_handle.has_value()) {
+      ERROR("d_handle must have value");
+      return nullptr;
+    }
+    auto hd = std::move(d_handle.value());
+    assert(hd->Size() == handle_value_charge);
+    PERF_COUNTER_ADD(remote_sec_cache_lookup_bytes, handle_value_charge);
+    hd->Wait();
+    s = helper->create_cb(Slice((const char*)hd->Value(), handle_value_charge),
+                          create_context, allocator, &value, &charge);
+    if (!s.ok()) {
+      Release(key, lru_handle, /*erase_if_last_ref=*/true);
+      return nullptr;
+    }
   }
 
   if (advise_erase) {
@@ -138,6 +155,18 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
   }
 
   size_t size = (*helper->size_cb)(value);
+  if (size < size_limit) {
+    CacheAllocationPtr ptr =
+        AllocateBlock(size, cache_options_.memory_allocator.get());
+    Status s = (*helper->saveto_cb)(value, 0, size, ptr.get());
+    if (!s.ok()) {
+      return s;
+    }
+    CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));
+    return cache_->Insert(key, buf, internal_helper, size);
+  }
+
+  DEBUG("insert size {}", size);
   PERF_COUNTER_ADD(remote_sec_cache_insert_bytes, size);
   char* buf = new char[size];
   auto s = (*helper->saveto_cb)(value, 0, size, buf);
@@ -145,7 +174,10 @@ Status RemoteSecondaryCache::Insert(const Slice& key, Cache::ObjectPtr value,
     return s;
   }
   PERF_COUNTER_ADD(remote_sec_cache_insert_real_count, 1);
-  d_cache.Set(key.ToString(), buf, size);  // TODO avoid this extra memcpy
+  while (not d_cache.Set(key.ToString(), buf, size)) {
+    CRITICAL("too fast");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }  // TODO avoid this extra memcpy
   delete[] buf;
 
   // CacheAllocationPtr* buf = new CacheAllocationPtr(std::move(ptr));

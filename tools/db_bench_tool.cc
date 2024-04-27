@@ -309,7 +309,8 @@ DEFINE_int32(value_size_min, 100, "Min size of random value");
 
 DEFINE_int32(value_size_max, 102400, "Max size of random value");
 
-DEFINE_int32(max_value_size, 1<<20, "Max size of value hint for slab, must be power of two");
+DEFINE_int32(max_value_size, 8 << 20,  // 8MB
+             "Max size of value hint for slab, must be power of two");
 
 DEFINE_int32(seek_nexts, 0,
              "How many times to call Next() after Seek() in "
@@ -575,7 +576,7 @@ DEFINE_string(cache_type, "lru_cache", "Type of block cache.");
 DEFINE_bool(use_remote_secondary_cache, false,
             "Use the remote memory as the secondary cache.");
 
-DEFINE_int64(remote_secondary_cache_size, 1 << 30,
+DEFINE_int64(remote_secondary_cache_size, 2LL << 30,  // 2GB
              "Number of bytes to use as a cache of data");
 
 DEFINE_int32(remote_secondary_cache_numshardbits, 6,
@@ -591,8 +592,6 @@ DEFINE_double(remote_secondary_cache_high_pri_pool_ratio, 0.0,
 
 DEFINE_double(remote_secondary_cache_low_pri_pool_ratio, 0.0,
               "Ratio of block cache reserve for low pri blocks.");
-
-DEFINE_int32(remote_secondary_cache_threads, 1, "Number of threads for rdma.");
 
 DEFINE_string(remote_addr, "192.168.200.53", "Server side addr");
 
@@ -3069,7 +3068,7 @@ class Benchmark {
       remote_cache_opts.max_value_size = FLAGS_max_value_size;
       remote_cache_opts.addr = FLAGS_remote_addr;
       remote_cache_opts.port = FLAGS_remote_port;
-      remote_cache_opts.threads = FLAGS_remote_secondary_cache_threads;
+      remote_cache_opts.threads = FLAGS_threads;
     }
     if (FLAGS_cache_type == "clock_cache") {
       fprintf(stderr, "Old clock cache implementation has been removed.\n");

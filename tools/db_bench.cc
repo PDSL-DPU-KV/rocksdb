@@ -17,7 +17,7 @@ int main() {
 #else
 #include "rocksdb/db_bench_tool.h"
 int main(int argc, char** argv) {
-  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_level(spdlog::level::info);
   spdlog::set_pattern("%t %+");
   return ROCKSDB_NAMESPACE::db_bench_tool(argc, argv);
 }

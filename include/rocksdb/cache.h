@@ -128,7 +128,7 @@ struct ShardedCacheOptions {
   // Capacity of the cache, in the same units as the `charge` of each entry.
   // This is typically measured in bytes, but can be a different unit if using
   // kDontChargeCacheMetadata.
-  size_t capacity = 0;
+  int64_t capacity = 0;
 
   // Cache is sharded into 2^num_shard_bits shards, by hash of key.
   // If < 0, a good default is chosen based on the capacity and the

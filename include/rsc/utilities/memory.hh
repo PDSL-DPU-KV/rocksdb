@@ -21,7 +21,7 @@ inline auto align(uint64_t x, uint64_t base) -> uint64_t {
 constexpr static uint64_t huge_page_size = 2_MB;
 #endif
 
-inline auto Alloc(uint32_t len) -> void * {
+inline auto Alloc(size_t len) -> void * {
 #ifdef USE_HUGEPAGE
   auto p = mmap(nullptr, align(len, huge_page_size), PROT_READ | PROT_WRITE,
                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
@@ -37,7 +37,7 @@ inline auto Dealloc(void *p, uint32_t len) -> void {
     ERROR("fail to unmap {} because \"{}\"", p, ErrnoString());
   }
 #else
-inline auto Dealloc(void *p, [[maybe_unused]] uint32_t len) -> void {
+inline auto Dealloc(void *p, [[maybe_unused]] size_t len) -> void {
   delete[](char *) p;
 #endif
 }

@@ -126,8 +126,7 @@ class DisaggregatedCache {
     }
     TRACE("addr: {} length: {} rkey: {}", RemoteMR()->Address(),
           RemoteMR()->Length(), RemoteMR()->RKey());
-    allocator_ = new Allocator(RemoteMR()->Address(), RemoteMR()->Length(),
-                               max_value_size);
+    allocator_ = new Allocator(RemoteMR()->Address(), RemoteMR()->Length(), max_value_size);
     index_ = new Index(default_n_shards);
     buffer_pool_ = new rdma::FixedBufferPool(default_n_wr, max_value_size,
                                              concurrency_hint * 2);
@@ -355,7 +354,7 @@ class RemoteDaemon {
   };
 
  public:
-  auto Initialize(const char* host, const char* port, uint32_t size) -> bool {
+  auto Initialize(const char* host, const char* port, size_t size) -> bool {
     size_ = size;
     memory_ = util::Alloc(size_);
     if (memory_ == nullptr) {
@@ -398,7 +397,7 @@ class RemoteDaemon {
   rdma::ConnContext* ctx_{nullptr};
   rdma::LocalMR* mr_{nullptr};
   void* memory_{nullptr};
-  uint32_t size_{0};
+  size_t size_{0};
   rdma::SimpleAcceptor acceptor_;
 };
 
