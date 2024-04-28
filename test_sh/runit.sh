@@ -19,9 +19,9 @@ val_size=${11}
 
 shift 11
 
-rm -rf $dbdir; mkdir $dbdir; bash l.sh $dbdir $bgflush $bgcomp $subcomp $nmkeys $fillrand $block_align $val_size
+# rm -rf $dbdir; mkdir $dbdir; bash l.sh $dbdir $bgflush $bgcomp $subcomp $nmkeys $fillrand $block_align $val_size
 
-for cleanup in none memtable L0 L1 ; do
+for cleanup in all ; do
   echo
   first=1
   for nthr in "$@" ; do

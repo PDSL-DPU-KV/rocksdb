@@ -26,7 +26,17 @@ killall -q vmstat
 
 sfx=nthr${nthr}.cachemb${cachemb}.cleanup${cleanup_state}.existkey${existingkeys}.nmkeys${nmkeys}
 
-if [ $cleanup_todo == "L1" ]; then
+if [ $cleanup_todo == "all" ]; then
+  echo "Compact all"
+  $bench_file_path \
+    --benchmarks=stats,flush,waitforcompaction,compactall,waitforcompaction,stats \
+    --db=$dbdir \
+    --use_existing_db=1 \
+    --block_align=$block_align \
+    --compression_type=none \
+    --use_direct_io_for_flush_and_compaction \
+    --use_direct_reads >& o.q.res.$sfx
+elif [ $cleanup_todo == "L1" ]; then
   echo "Flush memtable. Compact L0,L1"
   $bench_file_path \
     --benchmarks=stats,flush,waitforcompaction,compact0,waitforcompaction,compact1,waitforcompaction,stats \

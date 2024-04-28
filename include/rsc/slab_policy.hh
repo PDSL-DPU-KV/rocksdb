@@ -57,7 +57,7 @@ class SlabPolicy {
 
  public:
   auto Allocate(SizeType n) -> std::optional<AddrType> {
-    std::scoped_lock<std::mutex> lock(m_);
+    // std::scoped_lock<std::mutex> lock(m_);
     if (n > elem_size_) {
       ERROR("expected element size {} actual {}", elem_size_, n);
       throw std::runtime_error("actual size larger than element size");
@@ -92,7 +92,7 @@ class SlabPolicy {
   }
 
   auto Deallocate(AddrType addr, SizeType n) -> void {
-    std::scoped_lock<std::mutex> lock(m_);
+    // std::scoped_lock<std::mutex> lock(m_);
     // if (n != elem_size_) {
     // throw std::runtime_error("invalid memory region");
     // }
@@ -142,7 +142,7 @@ class SlabPolicy {
 
   SlabHandle *handles_{nullptr};
 
-  std::mutex m_;
+  // std::mutex m_;
 
 #ifdef ENABLE_TEST
   friend class SlabPolicyTest;

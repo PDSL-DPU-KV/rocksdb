@@ -120,6 +120,7 @@ class RemoteSecondaryCache : public SecondaryCache {
 
   static inline sc::DisaggregatedCache<sc::SlabAllocator> d_cache;
   static inline std::once_flag flag;
+  std::mutex m_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

@@ -79,8 +79,7 @@ class FixedBufferPool {
 
  public:
   auto Allocate() -> void* {
-    std::scoped_lock<std::mutex> lock(m_);
-
+    // std::scoped_lock<std::mutex> lock(m_);
     auto handle =
         &handles_[pt_idx_.fetch_add(1, std::memory_order::acquire) % n_handle_];
     Entry* next_free = nullptr;
@@ -108,7 +107,7 @@ class FixedBufferPool {
   }
 
   auto Deallocate(void* p) -> void {
-    std::scoped_lock<std::mutex> lock(m_);
+    // std::scoped_lock<std::mutex> lock(m_);
     auto handle_idx = ((char*)p - (char*)memory_) / handle_size_;
     auto handle = &handles_[handle_idx];
     auto entry = (Entry*)p;
@@ -152,7 +151,7 @@ class FixedBufferPool {
   LocalMR* mr_{nullptr};
   void* memory_{nullptr};
   std::vector<Handle> handles_{};
-  std::mutex m_;
+  // std::mutex m_;
 };
 
 }  // namespace sc::rdma
