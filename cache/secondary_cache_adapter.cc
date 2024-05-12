@@ -227,6 +227,7 @@ Status CacheWithSecondaryAdapter::Insert(const Slice& key, ObjectPtr value,
                                          const CacheItemHelper* helper,
                                          size_t charge, Handle** handle,
                                          Priority priority) {
+  assert(false);
   Status s = target_->Insert(key, value, helper, charge, handle, priority);
   if (s.ok() && value == nullptr && distribute_cache_res_) {
     size_t sec_charge = static_cast<size_t>(charge * (sec_cache_res_ratio_));

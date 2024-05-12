@@ -173,7 +173,6 @@ class ShardedCache : public ShardedCacheBase {
   Status Insert(const Slice& key, ObjectPtr obj, const CacheItemHelper* helper,
                 size_t charge, Handle** handle = nullptr,
                 Priority priority = Priority::LOW) override {
-    assert(helper);
     HashVal hash = CacheShard::ComputeHash(key, hash_seed_);
     auto h_out = reinterpret_cast<HandleImpl**>(handle);
     return GetShard(hash).Insert(key, hash, obj, helper, charge, h_out,
