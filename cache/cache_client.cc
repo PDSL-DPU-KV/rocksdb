@@ -26,7 +26,7 @@ auto FillRandom(std::string& s) -> void {
 
 DEFINE_int32(n_loop, 10000, "bench loop number");
 DEFINE_int32(n_thread, 1, "bench worker thread number");
-DEFINE_string(addr, "192.168.200.53", "server address");
+DEFINE_string(addr, "192.168.200.11", "server address");
 DEFINE_string(port, "10086", "server port");
 DEFINE_int32(value_size, 1_KB, "value size");
 DEFINE_int32(key_size, 128, "key size");

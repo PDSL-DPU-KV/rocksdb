@@ -389,7 +389,7 @@ struct RemoteSecondaryCacheOptions : LRUCacheOptions {
 
   uint32_t max_value_size{1<<20};
   uint32_t threads{1};
-  std::string addr{"192.168.200.53"};
+  std::string addr{"192.168.200.11"};
   std::string port{"10086"};
 };
 

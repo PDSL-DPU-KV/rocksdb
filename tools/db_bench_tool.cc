@@ -593,7 +593,7 @@ DEFINE_double(remote_secondary_cache_high_pri_pool_ratio, 0.0,
 DEFINE_double(remote_secondary_cache_low_pri_pool_ratio, 0.0,
               "Ratio of block cache reserve for low pri blocks.");
 
-DEFINE_string(remote_addr, "192.168.200.53", "Server side addr");
+DEFINE_string(remote_addr, "192.168.200.11", "Server side addr");
 
 DEFINE_string(remote_port, "10086", "Server side port");
 

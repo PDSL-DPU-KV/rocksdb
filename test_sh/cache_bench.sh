@@ -13,7 +13,7 @@ $bench_file_path \
 capacity=1000000; \
 max_value_size=10000; \
 threads=1; \
-addr=192.168.200.53; \
+addr=192.168.200.11; \
 port=10086" \
 --threads=$threads \
 --ops_per_thread=$ops_per_thread \

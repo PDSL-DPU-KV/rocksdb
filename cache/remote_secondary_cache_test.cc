@@ -181,7 +181,7 @@ class RemoteSecondaryCacheTestBase : public testing::Test,
 
     remote_cache_opts.max_value_size = 1500;
     remote_cache_opts.threads = 1;
-    remote_cache_opts.addr = "192.168.200.53";
+    remote_cache_opts.addr = "192.168.200.11";
     remote_cache_opts.port = "10086";
     remote_cache_opts.capacity = 6000;
     remote_cache_opts.num_shard_bits = 0;
