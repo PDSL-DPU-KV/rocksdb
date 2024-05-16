@@ -1,7 +1,7 @@
 #include <gflags/gflags.h>
 
 #include "rsc/disaggregated_cache.hh"
-#include "spdlog/cfg/env.h"
+// #include "spdlog/cfg/env.h"
 #include "util/spdlogger.h"
 
 using namespace sc;
@@ -11,7 +11,7 @@ DEFINE_string(addr, "192.168.200.53", "server address");
 DEFINE_string(port, "10086", "server port");
 
 auto main(int argc, char* argv[]) -> int {
-  spdlog::cfg::load_env_levels();
+  // spdlog::cfg::load_env_levels();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   auto daemon = sc::RemoteDaemon();

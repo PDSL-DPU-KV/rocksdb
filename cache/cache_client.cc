@@ -32,8 +32,8 @@ DEFINE_int32(value_size, 1_KB, "value size");
 DEFINE_int32(key_size, 128, "key size");
 
 auto main(int argc, char* argv[]) -> int {
-  spdlog::set_level(spdlog::level::debug);
-  spdlog::set_pattern("%t %+");
+  // spdlog::set_level(spdlog::level::debug);
+  // spdlog::set_pattern("%t %+");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   auto cache = sc::DisaggregatedCache<SlabAllocator>();
@@ -48,7 +48,7 @@ auto main(int argc, char* argv[]) -> int {
   auto fn = [&]() {
     auto key = std::string(FLAGS_key_size, '\0');
     auto value = std::string(FLAGS_value_size, '\0');
-    long double avg_lat = 0;
+    double avg_lat = 0;
     for (int32_t i = 0; i < FLAGS_n_loop; i++) {
     redo:
       FillRandom(key);
@@ -69,6 +69,7 @@ auto main(int argc, char* argv[]) -> int {
           std::chrono::duration_cast<std::chrono::microseconds>(tok - tik)
               .count();
     }
+    printf("%lf", avg_lat / FLAGS_n_loop);
     INFO("{}", avg_lat / FLAGS_n_loop);
   };
 
