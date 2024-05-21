@@ -667,6 +667,15 @@ class Env : public Customizable {
 
   // If you're adding methods here, remember to add them to EnvWrapper too.
 
+  // for FEAT usage
+  virtual std::string GetThreadPoolTimeStateString() {
+    return "haven't been implemented";
+  }
+  virtual std::vector<std::pair<size_t, uint64_t>>* GetThreadPoolWaitingTime(
+      Env::Priority /*priority*/) {
+    return nullptr;
+  }
+
  protected:
   // The pointer to an internal structure that will update the
   // status of each thread.

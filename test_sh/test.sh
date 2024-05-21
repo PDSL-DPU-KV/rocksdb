@@ -4,44 +4,69 @@
 key_array=(16)
 value_array=(1024)
 block_array=(4096)
-op_array=("none" "snappy")
+op_array=("snappy")
+f_array=("8")
+wn_array=("8")
+t_array=("16")
+db_array=("1")
 
 ### Benchmark parameters
-db="/mnt/ssd/test"
-wal_dir="/mnt/ssd/test"
+db="/mnt/ssd0/test"
+num_multi_db="1"
+wal_dir="/mnt/ssd0/test"
 use_existing_db="true"
-threads="1"
+threads="32"
 benchmarks="fillrandom,stats,wait,stats"
 num="100000000"
 #reads="10000000"
 key_size="16"
-value_size="100"
+value_size="1000"
+batch_size="1"
+
+### MemTable parameters
+memtablerep="skip_list"
+max_write_buffer_number="2"
+#write_buffer_size="134217728"
 
 ### Compression parameters
 block_size="4096"
 compression_type="none" #"none,zlib,lz4,dpu"
 #min_level_to_compress="2"
 #compression_per_level="none,none,lz4,lz4,zstd"
+#checksum_type="1"
 
 ### Compaction parameters
-max_background_flushes="1"
+#max_background_jobs="2"
+max_background_flushes="8"
 max_background_compactions="16"
-subcompactions="4"
+subcompactions="64"
 #level_compaction_dynamic_level_bytes="true"
 disable_auto_compactions="true"
 use_direct_io_for_flush_and_compaction="true"
 use_direct_reads="true"
-disable_wal="true"
+level0_slowdown_writes_trigger="20"
+level0_stop_writes_trigger="36"
 
-### Read parameters
+### Write optimization parameters
+#disable_wal="true"
+unordered_write="false"
+enable_pipelined_write="true"
+allow_concurrent_memtable_write="true"
+
+### Read optimization parameters
 bloom_bits=10
 #cache_size=1073741824
 
+### BlobDB parameters
+# enable_blob_files="true"
+# blob_compression_type="snappy"
+
 ### Statistics parameters
-target_io="nvme3c3n1"
-target_net="enp134s0f1np1"
+#target_io="nvme3c3n1"
+#target_net="enp134s0f1np1"
 report_bg_io_stats="true"
-#report_fillrandom_latency="true"
+report_interval_seconds="1"
+report_csv="true"
 statistics="true"
 #stats_level="3"
 #stats_dump_period_sec="10"
@@ -50,6 +75,10 @@ statistics="true"
 #histogram="true"
 #show_table_properties="true"
 perf_level="3"
+
+### Tuner parameters
+TEA_enable="false"
+FEA_enable="false"
 
 tdate=$(date "+%Y_%m_%d_%H_%M_%S")
 
@@ -73,6 +102,18 @@ function FILL_PARAMS() {
 
     if [ -n "$db" ];then
         const_params=$const_params"--db=$db "
+    fi
+
+    if [ -n "$num_multi_db" ];then
+        const_params=$const_params"--num_multi_db=$num_multi_db "
+    fi
+
+    if [ -n "$memtablerep" ];then
+        const_params=$const_params"--memtablerep=$memtablerep "
+    fi
+
+    if [ -n "$allow_concurrent_memtable_write" ];then
+        const_params=$const_params"--allow_concurrent_memtable_write=$allow_concurrent_memtable_write "
     fi
 
     if [ -n "$wal_dir" ];then
@@ -103,8 +144,16 @@ function FILL_PARAMS() {
         const_params=$const_params"--value_size=$value_size "
     fi
 
+    if [ -n "$batch_size" ];then
+        const_params=$const_params"--batch_size=$batch_size "
+    fi
+
     if [ -n "$block_size" ];then
         const_params=$const_params"--block_size=$block_size "
+    fi
+
+    if [ -n "$checksum_type" ];then
+        const_params=$const_params"--checksum_type=$checksum_type "
     fi
 
     if [ -n "$compression_type" ];then
@@ -127,6 +176,18 @@ function FILL_PARAMS() {
         const_params=$const_params"--threads=$threads "
     fi
 
+    if [ -n "$max_write_buffer_number" ];then
+        const_params=$const_params"--max_write_buffer_number=$max_write_buffer_number "
+    fi
+
+    if [ -n "$write_buffer_size" ];then
+        const_params=$const_params"--write_buffer_size=$write_buffer_size "
+    fi
+
+    if [ -n "$max_background_jobs" ];then
+        const_params=$const_params"--max_background_jobs=$max_background_jobs "
+    fi
+
     if [ -n "$max_background_flushes" ];then
         const_params=$const_params"--max_background_flushes=$max_background_flushes "
     fi
@@ -137,6 +198,22 @@ function FILL_PARAMS() {
 
     if [ -n "$subcompactions" ];then
         const_params=$const_params"--subcompactions=$subcompactions "
+    fi
+    
+    if [ -n "$level0_slowdown_writes_trigger" ];then
+        const_params=$const_params"--level0_slowdown_writes_trigger=$level0_slowdown_writes_trigger "
+    fi
+
+    if [ -n "$level0_stop_writes_trigger" ];then
+        const_params=$const_params"--level0_stop_writes_trigger=$level0_stop_writes_trigger "
+    fi
+
+    if [ -n "$unordered_write" ];then
+        const_params=$const_params"--unordered_write=$unordered_write "
+    fi
+
+    if [ -n "$enable_pipelined_write" ];then
+        const_params=$const_params"--enable_pipelined_write=$enable_pipelined_write "
     fi
 
     if [ -n "$disable_wal" ];then
@@ -163,12 +240,24 @@ function FILL_PARAMS() {
             const_params=$const_params"--cache_size=$cache_size "
     fi
 
+    if [ -n "$enable_blob_files" ];then
+        const_params=$const_params"--enable_blob_files=$enable_blob_files "
+    fi
+    
+    if [ -n "$blob_compression_type" ];then
+        const_params=$const_params"--blob_compression_type=$blob_compression_type "
+    fi
+
     if [ -n "$report_bg_io_stats" ];then
         const_params=$const_params"--report_bg_io_stats=$report_bg_io_stats "
     fi
 
-    if [ -n "$report_fillrandom_latency" ];then
-        const_params=$const_params"--report_fillrandom_latency=$report_fillrandom_latency "
+    if [ -n "$report_interval_seconds" ];then
+        const_params=$const_params"--report_interval_seconds=$report_interval_seconds "
+    fi
+
+    if [ -n "$report_csv" ];then
+        const_params=$const_params"--report_csv=$report_csv "
     fi
 
     if [ -n "$statistics" ];then
@@ -203,8 +292,12 @@ function FILL_PARAMS() {
         const_params=$const_params"--histogram=$histogram "
     fi
 
-    if [ -n "$show_table_properties" ];then
-        const_params=$const_params"--show_table_properties=$show_table_properties "
+    if [ -n "$TEA_enable" ];then
+        const_params=$const_params"--TEA_enable=$TEA_enable "
+    fi
+
+    if [ -n "$FEA_enable" ];then
+        const_params=$const_params"--FEA_enable=$FEA_enable "
     fi
 }
 
@@ -234,21 +327,23 @@ RUN_ONE_TEST() {
     const_params=""
     FILL_PARAMS
     #cmd="sudo $bench_file_path $const_params"
-    cmd="sudo $bench_file_path $const_params | tee -a out.out"
+    cmd="$bench_file_path $const_params | tee -a out.out"
+    #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params | tee -a out.out"
     if [ "$1" == "numa" ];then
         #cmd="sudo numactl -N 1 $bench_file_path $const_params"
-        cmd="sudo numactl -N 0 $bench_file_path $const_params | tee -a out.out"
+        cmd="numactl -C 0-8 $bench_file_path $const_params | tee -a out.out"
+        #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params"
     fi
-    echo $cmd >out.out
+    echo $cmd >>out.out
     echo $cmd
     eval $cmd
 }
 
 CLEAN_CACHE() {
-    #if [ -n "$db" ];then
-    #    sudo rm -f $db/*
-    #fi
-    #sleep 2
+    if [ -n "$db" ];then
+       sudo rm -f $db/*
+    fi
+    sleep 2
     sync
     echo 3 | sudo tee -a /proc/sys/vm/drop_caches > /dev/null
     sleep 2
@@ -265,6 +360,9 @@ COPY_OUT_FILE() {
     res_dir=$bench_file_dir/result_overall_$tdate/$1_$2
     mkdir $res_dir > /dev/null 2>&1
     \cp -f $bench_file_dir/out.out $res_dir/
+    \cp -f $bench_file_dir/*.csv $res_dir/
+    \rm -f $bench_file_dir/out.out
+    \rm -f $bench_file_dir/*.csv
     # \cp -f $bench_file_dir/cpu.log $res_dir/
     # \cp -f $bench_file_dir/net.log $res_dir/
     # \cp -f $bench_file_dir/io.log $res_dir/
@@ -276,16 +374,17 @@ COPY_OUT_FILE() {
 }
 
 FILLRANDOM() {
-    benchmarks="fillrandom,stats,wait,stats"
+    benchmarks="fillrandom,stats"
     num="$1"
     use_existing_db="$2"
 
     RUN_ONE_TEST numa "0-32"
+    #RUN_ONE_TEST
     if [ $? -ne 0 ];then
         exit 1
     fi
     sleep 5
-    COPY_OUT_FILE fillrandom $3
+    COPY_OUT_FILE threads $3
 }
 
 READRANDOM() {
@@ -303,14 +402,28 @@ READRANDOM() {
 
 RUN_ALL_TEST() {
     for op in ${op_array[@]}; do
-	#REMOUNT_SSD
-	CLEAN_CACHE
-	# set parameters
-	compression_type="$op"
-	# run benchmark
-	FILLRANDOM 20000000 false $op
-        # READRANDOM 2000000 true $op
-	sleep 5
+        for t in ${t_array[@]}; do
+            for wn in ${wn_array[@]}; do
+                for fth in ${f_array[@]}; do
+                    for ndb in ${db_array[@]}; do
+                        #REMOUNT_SSD
+                        CLEAN_CACHE
+                        # set parameters
+                        compression_type="$op"
+                        threads="$t"
+                        blob_compression_type="$op"
+                        max_background_flushes="$fth"
+                        max_write_buffer_number="$wn"
+                        num_multi_db="$ndb"
+                        # run benchmark
+                        ops_per_thread=$(((100000000/$threads)/$num_multi_db))
+                        FILLRANDOM $ops_per_thread false $t
+                        # READRANDOM 2000000 true $op
+                        sleep 5
+                    done
+                done
+            done
+        done
     done
 }
 

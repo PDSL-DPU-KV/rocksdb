@@ -934,7 +934,11 @@ set(SOURCES
         utilities/ttl/db_ttl_impl.cc
         utilities/wal_filter.cc
         utilities/write_batch_with_index/write_batch_with_index.cc
-        utilities/write_batch_with_index/write_batch_with_index_internal.cc)
+        utilities/write_batch_with_index/write_batch_with_index_internal.cc
+        utilities/DOTA/DOTA_tuner.cc
+        utilities/DOTA/report_agent.cc
+        ycsbcore/core_workload.cc
+        ycsbcore/acknowledged_counter_generator.cc)
 
 list(APPEND SOURCES
   utilities/transactions/lock/range/range_tree/lib/locktree/concurrent_tree.cc

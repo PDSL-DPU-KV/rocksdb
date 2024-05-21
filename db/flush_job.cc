@@ -212,6 +212,14 @@ void FlushJob::PickMemTable() {
 
 Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
                      bool* switched_to_mempurge) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  static std::atomic_uint32_t current_ = 0;
+  auto core_id = (current_++) % 20;
+  printf("core id: %d\n", core_id);
+  CPU_SET(core_id + 20, &cpuset);
+  pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
   TEST_SYNC_POINT("FlushJob::Start");
   db_mutex_->AssertHeld();
   assert(pick_memtable_called);
@@ -1048,6 +1056,20 @@ Status FlushJob::WriteLevel0Table() {
       InternalStats::BYTES_FLUSHED,
       stats.bytes_written + stats.bytes_written_blob);
   RecordFlushIOStats();
+
+  FlushMetrics metrics;
+  metrics.total_bytes = stats.bytes_written;
+  metrics.memtable_ratio = 0.0;
+  for (auto mem : mems_) {
+    metrics.memtable_ratio += (double)mem->ApproximateMemoryUsage() /
+                              mutable_cf_options_.write_buffer_size;
+  }
+  auto vfs = cfd_->current()->storage_info();
+  metrics.l0_files = vfs->NumLevelFiles(vfs->base_level());
+  metrics.memtable_ratio /= mems_.size();
+  metrics.write_out_bandwidth = stats.bytes_written / stats.micros;
+
+  db_options_.flush_stats->push_back(metrics);
 
   return s;
 }

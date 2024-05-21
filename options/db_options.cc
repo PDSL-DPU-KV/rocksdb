@@ -755,11 +755,16 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       checksum_handoff_file_types(options.checksum_handoff_file_types),
       lowest_used_cache_tier(options.lowest_used_cache_tier),
       compaction_service(options.compaction_service),
-      enforce_single_del_contracts(options.enforce_single_del_contracts) {
+      enforce_single_del_contracts(options.enforce_single_del_contracts),
+      core_number(options.core_number),
+      max_memtable_size(options.max_memtable_size) {
   fs = env->GetFileSystem();
   clock = env->GetSystemClock().get();
   logger = info_log.get();
   stats = statistics.get();
+
+  job_stats = std::make_shared<std::vector<QuicksandMetrics>>();
+  flush_stats = std::make_shared<std::vector<FlushMetrics>>();
 }
 
 void ImmutableDBOptions::Dump(Logger* log) const {
@@ -899,8 +904,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "            Options.wal_compression: %d",
                    wal_compression);
   ROCKS_LOG_HEADER(log, "            Options.atomic_flush: %d", atomic_flush);
-  ROCKS_LOG_HEADER(log,
-                   "            Options.avoid_unnecessary_blocking_io: %d",
+  ROCKS_LOG_HEADER(log, "            Options.avoid_unnecessary_blocking_io: %d",
                    avoid_unnecessary_blocking_io);
   ROCKS_LOG_HEADER(log, "                Options.persist_stats_to_disk: %u",
                    persist_stats_to_disk);
@@ -1036,14 +1040,13 @@ void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log,
                    "                     Options.wal_bytes_per_sync: %" PRIu64,
                    wal_bytes_per_sync);
-  ROCKS_LOG_HEADER(log,
-                   "                  Options.strict_bytes_per_sync: %d",
+  ROCKS_LOG_HEADER(log, "                  Options.strict_bytes_per_sync: %d",
                    strict_bytes_per_sync);
   ROCKS_LOG_HEADER(log,
                    "      Options.compaction_readahead_size: %" ROCKSDB_PRIszt,
                    compaction_readahead_size);
   ROCKS_LOG_HEADER(log, "                 Options.max_background_flushes: %d",
-                          max_background_flushes);
+                   max_background_flushes);
 }
 
 Status GetMutableDBOptionsFromStrings(
