@@ -51,6 +51,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "db/compaction/compaction_service.h"
 #include "db/db_impl/db_impl.h"
 #include "db/malloc_stats.h"
 #include "db/version_set.h"
@@ -538,6 +539,9 @@ static ROCKSDB_NAMESPACE::CompactionPri FLAGS_compaction_pri_e;
 DEFINE_int32(compaction_pri,
              (int32_t)ROCKSDB_NAMESPACE::Options().compaction_pri,
              "priority of files to compaction: by size or by data age");
+
+DEFINE_bool(allow_remote_compaction, false,
+            "Allow the remote compaction service");
 
 DEFINE_int32(universal_size_ratio, 0,
              "Percentage flexibility while comparing file size "
@@ -4818,6 +4822,14 @@ class Benchmark {
               DBWithColumnFamilies* db) {
     uint64_t open_start = FLAGS_report_open_timing ? FLAGS_env->NowNanos() : 0;
     Status s;
+    if (FLAGS_allow_remote_compaction) {
+      std::vector<std::shared_ptr<EventListener>> remote_listeners;
+      std::vector<std::shared_ptr<TablePropertiesCollectorFactory>>
+          remote_table_properties_collector_factories;
+      options.compaction_service = std::make_shared<MyTestCompactionService>(
+          db_name, options, dbstats, remote_listeners,
+          remote_table_properties_collector_factories);
+    }
     // Open with column families if necessary.
     if (FLAGS_num_column_families > 1) {
       size_t num_hot = FLAGS_num_column_families;

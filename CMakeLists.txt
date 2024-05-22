@@ -87,6 +87,8 @@ endif()
 
 include(CMakeDependentOption)
 
+include(${PROJECT_SOURCE_DIR}/cmake/modules/grpc.cmake)
+
 if(MSVC)
   option(WITH_GFLAGS "build with GFlags" OFF)
   option(WITH_XPRESS "build with windows built in compression" OFF)
@@ -617,6 +619,40 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
+
+# Proto file
+get_filename_component(compaction_service_proto "db/compaction/remote_compaction/protos/compaction_service.proto" ABSOLUTE)
+get_filename_component(compaction_service_proto_path "${compaction_service_proto}" PATH)
+
+# Generated sources
+set(compaction_service_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/compaction_service.pb.cc")
+set(compaction_service_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/compaction_service.pb.h")
+set(compaction_service_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/compaction_service.grpc.pb.cc")
+set(compaction_service_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/compaction_service.grpc.pb.h")
+add_custom_command(
+        OUTPUT "${compaction_service_proto_srcs}" "${compaction_service_proto_hdrs}" "${compaction_service_grpc_srcs}" "${compaction_service_grpc_hdrs}"
+        COMMAND ${_PROTOBUF_PROTOC}
+        ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
+        --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+        -I "${compaction_service_proto_path}"
+        --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+        "${compaction_service_proto}"
+        DEPENDS "${compaction_service_proto}")
+
+# Include generated *.pb.h files
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+
+# compaction_service_grpc_proto
+add_library(compaction_service_grpc_proto
+        ${compaction_service_grpc_srcs}
+        ${compaction_service_grpc_hdrs}
+        ${compaction_service_proto_srcs}
+        ${compaction_service_proto_hdrs})
+target_link_libraries(compaction_service_grpc_proto
+        ${_REFLECTION}
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
+
 # Main library source code
 
 set(SOURCES
@@ -938,7 +974,10 @@ set(SOURCES
         utilities/DOTA/DOTA_tuner.cc
         utilities/DOTA/report_agent.cc
         ycsbcore/core_workload.cc
-        ycsbcore/acknowledged_counter_generator.cc)
+        ycsbcore/acknowledged_counter_generator.cc
+        db/compaction/compaction_service.cc
+        ${compaction_service_grpc_srcs}
+        ${compaction_service_proto_srcs})
 
 list(APPEND SOURCES
   utilities/transactions/lock/range/range_tree/lib/locktree/concurrent_tree.cc
@@ -1036,6 +1075,11 @@ if(USE_FOLLY_LITE)
   add_definitions(-DUSE_FOLLY -DFOLLY_NO_CONFIG)
   list(APPEND THIRDPARTY_LIBS glog)
 endif()
+
+list(APPEND THIRDPARTY_LIBS
+        ${_REFLECTION}
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
 
 set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
 set(ROCKSDB_SHARED_LIB rocksdb-shared${ARTIFACT_SUFFIX})
@@ -1142,7 +1186,7 @@ endif()
 option(WITH_JNI "build with JNI" OFF)
 # Tests are excluded from Release builds
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
-  "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
+ "CMAKE_BUILD_TYPE STREQUAL Debug" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1476,6 +1520,19 @@ if(WITH_TESTS)
   set(TESTUTILLIB testutillib${ARTIFACT_SUFFIX})
   add_library(${TESTUTILLIB} STATIC ${TESTUTIL_SOURCE})
   target_link_libraries(${TESTUTILLIB} ${ROCKSDB_LIB} ${FOLLY_LIBS})
+
+  # Targets compaction_service_(client|server)
+  foreach(_target csa_server procp_server)
+    add_executable(${_target}
+            "db/compaction/remote_compaction/${_target}.cc")
+    target_link_libraries(${_target}
+            #          compaction_service_helper
+            ${_REFLECTION}
+            ${_GRPC_GRPCPP}
+            ${_PROTOBUF_LIBPROTOBUF}
+            ${ROCKSDB_LIB})
+  endforeach()
+
   if(MSVC)
     set_target_properties(${TESTUTILLIB} PROPERTIES COMPILE_FLAGS "/Fd${CMAKE_CFG_INTDIR}/testutillib${ARTIFACT_SUFFIX}.pdb")
   endif()

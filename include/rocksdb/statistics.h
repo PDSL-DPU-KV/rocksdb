@@ -630,6 +630,10 @@ enum Histograms : uint32_t {
   // system's prefetch) from the end of SST table during block based table open
   TABLE_OPEN_PREFETCH_TAIL_READ_BYTES,
 
+  REMOTE_COMPACT_PROCESS,
+
+  REMOTE_COMPACT_OPEN_DB_DELAY,
+
   HISTOGRAM_ENUM_MAX
 };
 
