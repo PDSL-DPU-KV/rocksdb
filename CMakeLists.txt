@@ -34,6 +34,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 
+set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/dc/grpc/build")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 include(ReadVersion)
 include(GoogleTest)
