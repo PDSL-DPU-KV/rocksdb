@@ -67,6 +67,7 @@ endif(CCACHE_FOUND)
 
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
 option(WITH_LIBURING "build with liburing" ON)
+option(WITH_HDFS "build with HDFS and write data to HDFS" ON)
 option(WITH_SNAPPY "build with SNAPPY" OFF)
 option(WITH_LZ4 "build with lz4" OFF)
 option(WITH_ZLIB "build with zlib" OFF)
@@ -993,6 +994,11 @@ list(APPEND SOURCES
   utilities/transactions/lock/range/range_tree/lib/standalone_port.cc
   utilities/transactions/lock/range/range_tree/lib/util/dbt.cc
   utilities/transactions/lock/range/range_tree/lib/util/memarena.cc)
+
+if(WITH_HDFS)
+  set(ROCKSDB_PLUGINS "hdfs")
+  add_definitions(-DHDFS)
+endif ()
 
 message(STATUS "ROCKSDB_PLUGINS: ${ROCKSDB_PLUGINS}")
 if ( ROCKSDB_PLUGINS )

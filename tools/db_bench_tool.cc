@@ -10,6 +10,8 @@
 #include <gflags/gflags.h>
 #include <pthread.h>
 
+#include <algorithm>
+
 #include "rocksdb/compression_type.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/utilities/report_agent.h"
@@ -3995,6 +3997,17 @@ class Benchmark {
     delete[] arg;
 
     if (FLAGS_report_csv) {
+      uint64_t total_done = FLAGS_num * (n - 1) - 1;
+      std::sort(shared.latencys, shared.latencys + total_done);
+      uint64_t cnt90 = 0.90 * total_done;
+      uint64_t cnt99 = 0.99 * total_done;
+      uint64_t cnt999 = 0.999 * total_done;
+      uint64_t cnt9999 = 0.9999 * total_done;
+      uint64_t cnt99999 = 0.99999 * total_done;
+      std::cout << "p90," << shared.latencys[cnt90] << ",p99,"
+                << shared.latencys[cnt99] << ",p999," << shared.latencys[cnt999]
+                << ",p9999," << shared.latencys[cnt9999] << ",p99999,"
+                << shared.latencys[cnt99999] << std::endl;
       delete shared.latencys;
     }
 

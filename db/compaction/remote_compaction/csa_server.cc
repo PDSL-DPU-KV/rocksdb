@@ -76,7 +76,8 @@ class CSAImpl final : public compactionservice::CSAService::Service {
                   << compaction_task_args.task_id() << ") finish" << std::endl;
       } else {
         std::cout << GetTime() << "Compaction task ("
-                  << compaction_task_args.task_id() << ") failed" << std::endl;
+                  << compaction_task_args.task_id() << ") failed "
+                  << s.ToString() << std::endl;
       }
       compaction_reply.set_result(std::move(compaction_service_result));
       local_task_nums_--;

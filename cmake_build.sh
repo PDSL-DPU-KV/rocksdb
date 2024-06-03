@@ -1,5 +1,3 @@
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/dc/grpc/build/lib
-
 if [ -n "$1" ]
 then
 /usr/bin/cmake --build ./build/ --target $1 -- -j 32
