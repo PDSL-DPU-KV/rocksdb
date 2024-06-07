@@ -20,13 +20,13 @@ benchmarks="fillrandom,stats,wait,stats"
 num="100000000"
 #reads="10000000"
 key_size="16"
-value_size="1000"
-batch_size="1"
+value_size="100"
+batch_size="4"
 
 ### MemTable parameters
 memtablerep="skip_list"
 max_write_buffer_number="2"
-#write_buffer_size="134217728"
+write_buffer_size="134217728"
 
 ### Compression parameters
 block_size="4096"
@@ -36,12 +36,13 @@ compression_type="none" #"none,zlib,lz4,dpu"
 #checksum_type="1"
 
 ### Compaction parameters
+allow_remote_compaction="false"
 #max_background_jobs="2"
 max_background_flushes="8"
 max_background_compactions="16"
 subcompactions="64"
 #level_compaction_dynamic_level_bytes="true"
-disable_auto_compactions="true"
+disable_auto_compactions="false"
 use_direct_io_for_flush_and_compaction="true"
 use_direct_reads="true"
 level0_slowdown_writes_trigger="20"
@@ -60,6 +61,10 @@ bloom_bits=10
 ### BlobDB parameters
 # enable_blob_files="true"
 # blob_compression_type="snappy"
+
+### Env paramemters
+use_nas="true"
+fs_svr_addr="ofi+verbs://192.168.200.11:12345"
 
 ### Statistics parameters
 #target_io="nvme3c3n1"
@@ -184,6 +189,10 @@ function FILL_PARAMS() {
         const_params=$const_params"--write_buffer_size=$write_buffer_size "
     fi
 
+    if [ -n "$allow_remote_compaction" ];then
+        const_params=$const_params"--allow_remote_compaction=$allow_remote_compaction "
+    fi
+
     if [ -n "$max_background_jobs" ];then
         const_params=$const_params"--max_background_jobs=$max_background_jobs "
     fi
@@ -246,6 +255,14 @@ function FILL_PARAMS() {
     
     if [ -n "$blob_compression_type" ];then
         const_params=$const_params"--blob_compression_type=$blob_compression_type "
+    fi
+
+    if [ -n "$use_nas" ];then
+        const_params=$const_params"--use_nas=$use_nas "
+    fi
+    
+    if [ -n "$fs_svr_addr" ];then
+        const_params=$const_params"--fs_svr_addr=$fs_svr_addr "
     fi
 
     if [ -n "$report_bg_io_stats" ];then
@@ -373,6 +390,18 @@ COPY_OUT_FILE() {
     # \rm -f $bench_file_dir/lsm_stats
 }
 
+LOAD() {
+    benchmarks="fillrandom,stats,wait,stats"
+    num="$1"
+    threads="$2"
+
+    RUN_ONE_TEST
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+}
+
 FILLRANDOM() {
     benchmarks="fillrandom,stats"
     num="$1"
@@ -410,12 +439,14 @@ RUN_ALL_TEST() {
                         CLEAN_CACHE
                         # set parameters
                         compression_type="$op"
-                        threads="$t"
                         blob_compression_type="$op"
                         max_background_flushes="$fth"
                         max_write_buffer_number="$wn"
                         num_multi_db="$ndb"
+                        # # load data
+                        # LOAD 200000000 1
                         # run benchmark
+                        threads="$t"
                         ops_per_thread=$(((100000000/$threads)/$num_multi_db))
                         FILLRANDOM $ops_per_thread false $t
                         # READRANDOM 2000000 true $op
