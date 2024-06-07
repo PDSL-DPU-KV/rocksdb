@@ -194,7 +194,8 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FC /d2Zi+ /W4 /wd4127 /wd4800 /wd4996 /wd4351 /wd4100 /wd4204 /wd4324")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wextra -Wall -pthread")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wshadow -Wno-unused-parameter -Wno-unused-variable -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing -Wno-invalid-offsetof")
+  # -Wshadow  
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-parameter -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing -Wno-invalid-offsetof")
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wstrict-prototypes")
   endif()
@@ -621,6 +622,17 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
+set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/")
+option(WITH_MERCURY "Build with mercury" ON)
+if(WITH_MERCURY)
+  find_package(PkgConfig REQUIRED)
+  if (PKGCONFIG_FOUND)
+    message(STATUS "pkg-config found")
+  else()
+    message(FATAL_ERROR "pkg-config not found")
+  endif()
+  pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
+endif()
 
 # Proto file
 get_filename_component(compaction_service_proto "db/compaction/remote_compaction/protos/compaction_service.proto" ABSOLUTE)
@@ -979,7 +991,9 @@ set(SOURCES
         ycsbcore/acknowledged_counter_generator.cc
         db/compaction/compaction_service.cc
         ${compaction_service_grpc_srcs}
-        ${compaction_service_proto_srcs})
+        ${compaction_service_proto_srcs}
+        plugin/nas/nas_env.cc
+        plugin/nas/nas_rpc.cc)
 
 list(APPEND SOURCES
   utilities/transactions/lock/range/range_tree/lib/locktree/concurrent_tree.cc
@@ -1159,12 +1173,12 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1194,6 +1208,7 @@ option(WITH_JNI "build with JNI" OFF)
 # Tests are excluded from Release builds
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
  "CMAKE_BUILD_TYPE STREQUAL Debug" ON)
+option(WITH_NAS_SERVER "build with nas server" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1585,13 +1600,20 @@ if(WITH_TESTS)
   endif()
 endif()
 
+if (WITH_NAS_SERVER)
+  add_executable(nas_server${ARTIFACT_SUFFIX}
+    plugin/nas/nas_server.cc)
+  target_link_libraries(nas_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+endif()
+
 if(WITH_BENCHMARK_TOOLS)
   add_executable(db_bench${ARTIFACT_SUFFIX}
     tools/simulated_hybrid_file_system.cc
     tools/db_bench.cc
     tools/db_bench_tool.cc)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX}
-    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS})
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
 
   add_executable(cache_bench${ARTIFACT_SUFFIX}
     cache/cache_bench.cc

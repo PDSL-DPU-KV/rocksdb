@@ -12,6 +12,7 @@
 
 #include <algorithm>
 
+#include "plugin/nas/nas_env.h"
 #include "rocksdb/compression_type.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/utilities/report_agent.h"
@@ -1346,6 +1347,10 @@ static bool ValidateTableCacheNumshardbits(const char* flagname,
   return true;
 }
 DEFINE_int32(table_cache_numshardbits, 4, "");
+
+DEFINE_bool(use_nas, false, "Use remote filesystem.");
+DEFINE_string(fs_svr_addr, "ofi+tcp://192.168.200.10:12345",
+              "NAS server address.");
 
 DEFINE_string(env_uri, "",
               "URI for registry Env lookup. Mutually exclusive with --fs_uri");
@@ -9330,6 +9335,14 @@ int db_bench_tool(int argc, char** argv) {
     FLAGS_env = composite_env.get();
   }
 
+  RPCEngine* rpc_engine;
+  if (FLAGS_use_nas) {
+    rpc_engine = new RPCEngine(FLAGS_fs_svr_addr);
+    static std::shared_ptr<ROCKSDB_NAMESPACE::Env> composite_env =
+        NewCompositeEnv(NewRemoteFileSystem(rpc_engine));
+    FLAGS_env = composite_env.get();
+  }
+
   // Let -readonly imply -use_existing_db
   FLAGS_use_existing_db |= FLAGS_readonly;
 
@@ -9420,6 +9433,10 @@ int db_bench_tool(int argc, char** argv) {
     std::string stats_string;
     ROCKSDB_NAMESPACE::DumpMallocStats(&stats_string);
     fprintf(stdout, "Malloc stats:\n%s\n", stats_string.c_str());
+  }
+
+  if (FLAGS_use_nas) {
+    delete rpc_engine;
   }
 
   return 0;
