@@ -1,58 +1,41 @@
 This directory contains the hdfs extensions needed to make rocksdb store
 files in HDFS.
 
-The configuration assumes that packages libhdfs0, libhdfs0-dev are
-installed which basically means that hdfs.h is $HADOOP_HOME/include.
+# HDFS Cluster Topology
 
-The env_hdfs.[cc,h] define a factory function NewHdfsEnv(...) that creates
-a HdfsEnv object given a string-baed uri representing the uri of the HDFS.
+s11: DataNode, NameNode
 
-The env_hdfs_impl.[cc,h] files define the HdfsEnv needed to talk to an
-underlying HDFS.
+s12: DataNode, SecondaryNameNode
 
-# Build
-If you want to compile rocksdb with hdfs support, please set $JAVA_HOME and
-$HADOOP_HOME accordingly. On my devserver, I have
-```
-$ echo $JAVA_HOME
-/usr/local/fb-jdk-8/
-$ echo $HADOOP_HOME
-/home/<username>/hadoop-3.3.1/
-```
-The hadoop-3.3.1 is the directory resulting from untaring a standard hadoop-3.3.1.tar.gz
-downloaded from https://hadoop.apache.org/releases.html.
+s13: DataNode
 
-Next, run the commands listed in setup.sh:
-```
-export LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64:$HADOOP_HOME/lib/native
+Run `start-dfs.sh` on s11 to start HDFS cluster.
+Run `tunnel.sh` on localhost to export website.
 
-export CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath --glob`
-for f in `find $HADOOP_HOME/share/hadoop/hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done
-for f in `find $HADOOP_HOME/share/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done
-for f in `find $HADOOP_HOME/share/hadoop/client | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done
-```
+When finish test, run `stop-dfs.sh` on s11 to stop HDFS cluster
 
-The code first needs to be linked under RocksDB's "plugin/" directory. In your
-RocksDB directory, run:
-```
-$ pushd ./plugin/
-$ git clone https://github.com/riversand963/rocksdb-hdfs-env.git hdfs
-```
-Note that please do not clone it into a directory whose name contains `-`,
-otherwise the Makefile won't pick it up. In this example, we clone it into
-a directory called 'hdfs'.
+# How to use HDFS in RocksDB
 
-Next, we can build and install RocksDB with this plugin as follows:
-```
-$ popd
-$ make clean && DEBUG_LEVEL=0 ROCKSDB_PLUGINS="hdfs" make -j48 db_bench db_stress install
-```
+You need to setup enviorment variable for HDFS. See `setup.sh` and change the path to your own.
 
-# Tool usage
-For RocksDB binaries, e.g. db_bench and db_stress we built earlier, the plugin
-can be enabled through configuration. Db_bench and db_stress in particular
-takes a -env_uri where we can specify a HDFS. For example
-```
-$ ./db_stress -env_uri=hdfs://localhost:9000/ -compression_type=none
-$ ./db_bench -benchmarks=fillrandom -env_uri=hdfs://localhost:9000/ --compression_type=none
-```
+Modify `cmake_configure.sh` to set `-DWITH_HDFS=1`.
+
+# How to run CaaS-LSM
+
+Modify `include/rocksdb/options.h` to set `hdfs_address`,`csa_address`,`pro_cp_address`. And recompile rocksdb.
+
+First, start `csa_server` and `procp_server` on dpu10 (BF2) or dpu21(BF3) or s21 (CPU). Notice that if you want to run on other servers, you need install hadoop, openjdk-11-jdk and grpc on them.
+
+Then, modify `test.sh` to set parameter `allow_remote_compaction=true` and run it.
+
+# RocksDB dependencies
+
+cd `./plugin/nas/` and run `./setup.sh` to install mercury and libfabrics. (If don't want to use nas env, use commit `8147863`)
+
+Then, you need to install grpc in your local path. 
+
+Modify `CMakeLists.txt` to point to the above libraries.
+
+You may also need to install compression libraries.
+
+
