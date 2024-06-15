@@ -1,8 +1,8 @@
-Set seed to 1718441751833691 because --seed was 0
+Set seed to 1718442791680840 because --seed was 0
 Initializing RocksDB Options from the specified file
 Initializing RocksDB Options from command-line flags
 Integrated BlobDB: blob cache disabled
-getaddr:733051c8d040, last_alloc_idx:0
+getaddr:7bf9a43bd040, last_alloc_idx:0
 Keys:       16 bytes each (+ 0 bytes user-defined timestamp)
 Values:     100 bytes each (50 bytes after compression)
 Entries:    6250000
@@ -18,108 +18,108 @@ Memtablerep: SkipListFactory
 Perf Level: 3
 ------------------------------------------------
 DB path: [/home/lsc/hadoop/zqy2023/rocksdb_test]
-getaddr:73305a88d040, last_alloc_idx:1
+getaddr:7bf9acfbd040, last_alloc_idx:1
 core id: 0
-nums:0, head_key_ptr:7330596a60c1
-nums:0, key1:144115188075855872
-nums:0, next_key_ptr:7330549f1da9
-nums:0, key2:144115188075855872
-mt_buf_head:733051c8d040, key_head:7330596a60b8, mt_flag_:1
-getaddr:73306348d040, last_alloc_idx:2
+nums:0, head_key_ptr:7bf9a633b711
+nums:0, key1:216172782113783808
+nums:0, next_key_ptr:7bf9a9ae8b31
+nums:0, key2:288230376151711744
+mt_buf_head:7bf9a43bd040, key_head:7bf9a633b708, mt_flag_:1
+getaddr:7bf9b5bbd040, last_alloc_idx:2
 core id: 1
-nums:1, head_key_ptr:733062011929
-nums:1, key1:72057594037927936
-nums:1, next_key_ptr:733060aef049
-nums:1, key2:432345564227567616
-mt_buf_head:73305a88d040, key_head:733062011920, mt_flag_:1
-getaddr:73306c08d040, last_alloc_idx:3
+nums:1, head_key_ptr:7bf9b2b74d21
+nums:1, key1:1513209474796486656
+nums:1, next_key_ptr:7bf9ae99e351
+nums:1, key2:1585267068834414592
+mt_buf_head:7bf9acfbd040, key_head:7bf9b2b74d18, mt_flag_:1
+getaddr:7bf9be7bd040, last_alloc_idx:3
 core id: 2
-nums:2, head_key_ptr:733067addca1
-nums:2, key1:288230376151711744
-nums:2, next_key_ptr:733064c58ee9
-nums:2, key2:432345564227567616
-mt_buf_head:73306348d040, key_head:733067addc98, mt_flag_:1
-getaddr:733074c8d040, last_alloc_idx:4
+nums:2, head_key_ptr:7bf9b7a76679
+nums:2, key1:144115188075855872
+nums:2, next_key_ptr:7bf9b5eebbe1
+nums:2, key2:216172782113783808
+mt_buf_head:7bf9b5bbd040, key_head:7bf9b7a76670, mt_flag_:1
+getaddr:7bf9c73bd040, last_alloc_idx:4
 core id: 3
-nums:3, head_key_ptr:73307113d339
-nums:3, key1:72057594037927936
-nums:3, next_key_ptr:7330709b50c9
-nums:3, key2:144115188075855872
-mt_buf_head:73306c08d040, key_head:73307113d330, mt_flag_:1
-getaddr:733051c8d040
+nums:3, head_key_ptr:7bf9beaab4e1
+nums:3, key1:720575940379279360
+nums:3, next_key_ptr:7bf9bf9413e9
+nums:3, key2:2305843009213693952
+mt_buf_head:7bf9be7bd040, key_head:7bf9beaab4d8, mt_flag_:1
+getaddr:7bf9a43bd040
 core id: 4
-nums:4, head_key_ptr:73307c8b8981
-nums:4, key1:648518346341351424
-nums:4, next_key_ptr:733077d6da19
-nums:4, key2:1008806316530991104
-mt_buf_head:733074c8d040, key_head:73307c8b8978, mt_flag_:1
-getaddr:73305a88d040
+nums:4, head_key_ptr:7bf9c7861981
+nums:4, key1:1008806316530991104
+nums:4, next_key_ptr:7bf9cece75a1
+nums:4, key2:1152921504606846976
+mt_buf_head:7bf9c73bd040, key_head:7bf9c7861978, mt_flag_:1
+getaddr:7bf9cffbd040, last_alloc_idx:5
 core id: 5
-nums:5, head_key_ptr:733058105d51
-nums:5, key1:72057594037927936
-nums:5, next_key_ptr:7330563570e1
-nums:5, key2:432345564227567616
-mt_buf_head:733051c8d040, key_head:733058105d48, mt_flag_:1
-getaddr:73307d88d040, last_alloc_idx:5
+nums:5, head_key_ptr:7bf9a83442a1
+nums:5, key1:720575940379279360
+nums:5, next_key_ptr:7bf9a5eda049
+nums:5, key2:1008806316530991104
+mt_buf_head:7bf9a43bd040, key_head:7bf9a8344298, mt_flag_:1
+getaddr:7bf9acfbd040
 core id: 6
-nums:6, head_key_ptr:73305d130761
-nums:6, key1:504403158265495552
-nums:6, next_key_ptr:733060e8de61
-nums:6, key2:648518346341351424
-mt_buf_head:73305a88d040, key_head:73305d130758, mt_flag_:1
-getaddr:73306348d040
+nums:6, head_key_ptr:7bf9d5194bf1
+nums:6, key1:144115188075855872
+nums:6, next_key_ptr:7bf9d4cf4049
+nums:6, key2:288230376151711744
+mt_buf_head:7bf9cffbd040, key_head:7bf9d5194be8, mt_flag_:1
+getaddr:7bf9b5bbd040
 core id: 7
-nums:7, head_key_ptr:73307e512611
-nums:7, key1:0
-nums:7, next_key_ptr:733083604599
-nums:7, key2:576460752303423488
-mt_buf_head:73307d88d040, key_head:73307e512608, mt_flag_:1
-getaddr:73308648d040, last_alloc_idx:6
+nums:7, head_key_ptr:7bf9ae767971
+nums:7, key1:432345564227567616
+nums:7, next_key_ptr:7bf9ade72cd9
+nums:7, key2:504403158265495552
+mt_buf_head:7bf9acfbd040, key_head:7bf9ae767968, mt_flag_:1
+getaddr:7bf9d8bbd040, last_alloc_idx:6
 core id: 8
-nums:8, head_key_ptr:73306729cd79
-nums:8, key1:720575940379279360
-nums:8, next_key_ptr:73306ada0e81
+nums:8, head_key_ptr:7bf9bc440ec1
+nums:8, key1:72057594037927936
+nums:8, next_key_ptr:7bf9bac2e329
 nums:8, key2:1008806316530991104
-mt_buf_head:73306348d040, key_head:73306729cd70, mt_flag_:1
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bc440eb8, mt_flag_:1
 core id: 0
 core id: 1
 core id: 2
 core id: 3
-getaddr:73306c08d040
+getaddr:7bf9be7bd040
 core id: 9
-nums:9, head_key_ptr:733089c30a19
-nums:9, key1:792633534417207296
-nums:9, next_key_ptr:73308d4b4581
-nums:9, key2:1945555039024054272
-mt_buf_head:73308648d040, key_head:733089c30a10, mt_flag_:1
-getaddr:733074c8d040
+nums:9, head_key_ptr:7bf9dae33d39
+nums:9, key1:0
+nums:9, next_key_ptr:7bf9da686181
+nums:9, key2:1297036692682702848
+mt_buf_head:7bf9d8bbd040, key_head:7bf9dae33d30, mt_flag_:1
+getaddr:7bf9c73bd040
 core id: 10
-nums:10, head_key_ptr:733071c9f441
+nums:10, head_key_ptr:7bf9c5d65a21
 nums:10, key1:0
-nums:10, next_key_ptr:733072ef5659
-nums:10, key2:72057594037927936
-mt_buf_head:73306c08d040, key_head:733071c9f438, mt_flag_:1
-getaddr:73308f08d040, last_alloc_idx:7
+nums:10, next_key_ptr:7bf9c36a7d49
+nums:10, key2:1441151880758558720
+mt_buf_head:7bf9be7bd040, key_head:7bf9c5d65a18, mt_flag_:1
+getaddr:7bf9e17bd040, last_alloc_idx:7
 core id: 11
-nums:11, head_key_ptr:73307902b391
-nums:11, key1:216172782113783808
-nums:11, next_key_ptr:733076e741e9
-nums:11, key2:864691128455135232
-mt_buf_head:733074c8d040, key_head:73307902b388, mt_flag_:1
-getaddr:733051c8d040
+nums:11, head_key_ptr:7bf9cb65a569
+nums:11, key1:432345564227567616
+nums:11, next_key_ptr:7bf9c92426f1
+nums:11, key2:1152921504606846976
+mt_buf_head:7bf9c73bd040, key_head:7bf9cb65a560, mt_flag_:1
+getaddr:7bf9a43bd040
 core id: 12
-nums:12, head_key_ptr:733094bd94f9
-nums:12, key1:216172782113783808
-nums:12, next_key_ptr:73308ff29fc9
-nums:12, key2:576460752303423488
-mt_buf_head:73308f08d040, key_head:733094bd94f0, mt_flag_:1
-getaddr:73305a88d040
+nums:12, head_key_ptr:7bf9e7178611
+nums:12, key1:504403158265495552
+nums:12, next_key_ptr:7bf9e33ee301
+nums:12, key2:1080863910568919040
+mt_buf_head:7bf9e17bd040, key_head:7bf9e7178608, mt_flag_:1
+getaddr:7bf9cffbd040
 core id: 13
-nums:13, head_key_ptr:733052aa1c19
+nums:13, head_key_ptr:7bf9a8b24951
 nums:13, key1:144115188075855872
-nums:13, next_key_ptr:73305691acd1
-nums:13, key2:1513209474796486656
-mt_buf_head:733051c8d040, key_head:733052aa1c10, mt_flag_:1
+nums:13, next_key_ptr:7bf9a5706371
+nums:13, key2:1008806316530991104
+mt_buf_head:7bf9a43bd040, key_head:7bf9a8b24948, mt_flag_:1
 core id: 4
 core id: 5
 core id: 6
@@ -127,141 +127,390 @@ core id: 7
 core id: 8
 core id: 9
 core id: 10
-getaddr:73307d88d040
+getaddr:7bf9acfbd040
 core id: 14
-nums:14, head_key_ptr:7330610a2249
-nums:14, key1:576460752303423488
-nums:14, next_key_ptr:733061bfd1a1
-nums:14, key2:2017612633061982208
-mt_buf_head:73305a88d040, key_head:7330610a2240, mt_flag_:1
-getaddr:73306348d040
+nums:14, head_key_ptr:7bf9d0eb4519
+nums:14, key1:72057594037927936
+nums:14, next_key_ptr:7bf9d35e8ae9
+nums:14, key2:576460752303423488
+mt_buf_head:7bf9cffbd040, key_head:7bf9d0eb4510, mt_flag_:1
+getaddr:7bf9b5bbd040
 core id: 15
-nums:15, head_key_ptr:73307eb86809
-nums:15, key1:936748722493063168
-nums:15, next_key_ptr:73307e231d91
-nums:15, key2:1080863910568919040
-mt_buf_head:73307d88d040, key_head:73307eb86800, mt_flag_:1
-getaddr:73308648d040
+nums:15, head_key_ptr:7bf9ad895121
+nums:15, key1:72057594037927936
+nums:15, next_key_ptr:7bf9addffd29
+nums:15, key2:432345564227567616
+mt_buf_head:7bf9acfbd040, key_head:7bf9ad895118, mt_flag_:1
+getaddr:7bf9d8bbd040
 core id: 16
-nums:16, head_key_ptr:733066ce2069
-nums:16, key1:360287970189639680
-nums:16, next_key_ptr:7330663e2441
-nums:16, key2:1224979098644774912
-mt_buf_head:73306348d040, key_head:733066ce2060, mt_flag_:1
-getaddr:73306c08d040
+nums:16, head_key_ptr:7bf9ba68b7c1
+nums:16, key1:1369094286720630784
+nums:16, next_key_ptr:7bf9b6ab02f9
+nums:16, key2:1441151880758558720
+mt_buf_head:7bf9b5bbd040, key_head:7bf9ba68b7b8, mt_flag_:1
+getaddr:7bf9be7bd040
 core id: 17
-nums:17, head_key_ptr:73308c4f1859
-nums:17, key1:144115188075855872
-nums:17, next_key_ptr:733087d6e8f1
-nums:17, key2:144115188075855872
-mt_buf_head:73308648d040, key_head:73308c4f1850, mt_flag_:1
+nums:17, head_key_ptr:7bf9da3369d1
+nums:17, key1:288230376151711744
+nums:17, next_key_ptr:7bf9df7120b9
+nums:17, key2:432345564227567616
+mt_buf_head:7bf9d8bbd040, key_head:7bf9da3369c8, mt_flag_:1
 core id: 11
 core id: 12
 core id: 13
 core id: 14
 core id: 15
 core id: 16
-getaddr:733074c8d040
+getaddr:7bf9c73bd040
 core id: 18
-nums:18, head_key_ptr:73306eac5cd9
-nums:18, key1:360287970189639680
-nums:18, next_key_ptr:73307053f0a9
-nums:18, key2:2449958197289549824
-mt_buf_head:73306c08d040, key_head:73306eac5cd0, mt_flag_:1
-getaddr:73308f08d040
+nums:18, head_key_ptr:7bf9c45f23b9
+nums:18, key1:216172782113783808
+nums:18, next_key_ptr:7bf9c3baff69
+nums:18, key2:360287970189639680
+mt_buf_head:7bf9be7bd040, key_head:7bf9c45f23b0, mt_flag_:1
+getaddr:7bf9e17bd040
 core id: 19
-nums:19, head_key_ptr:733079974d41
-nums:19, key1:0
-nums:19, next_key_ptr:7330752472e1
-nums:19, key2:2666130979403333632
-mt_buf_head:733074c8d040, key_head:733079974d38, mt_flag_:1
-getaddr:733051c8d040
+nums:19, head_key_ptr:7bf9ce62ddd9
+nums:19, key1:288230376151711744
+nums:19, next_key_ptr:7bf9ce9a3aa9
+nums:19, key2:1152921504606846976
+mt_buf_head:7bf9c73bd040, key_head:7bf9ce62ddd0, mt_flag_:1
+getaddr:7bf9a43bd040
 core id: 0
-nums:20, head_key_ptr:733094b76af9
-nums:20, key1:144115188075855872
-nums:20, next_key_ptr:7330906219c9
-nums:20, key2:504403158265495552
-mt_buf_head:73308f08d040, key_head:733094b76af0, mt_flag_:1
-getaddr:73305a88d040
+nums:20, head_key_ptr:7bf9e27ea141
+nums:20, key1:0
+nums:20, next_key_ptr:7bf9e65cad21
+nums:20, key2:1152921504606846976
+mt_buf_head:7bf9e17bd040, key_head:7bf9e27ea138, mt_flag_:1
+getaddr:7bf9cffbd040
 core id: 1
-nums:21, head_key_ptr:733057c5de49
-nums:21, key1:432345564227567616
-nums:21, next_key_ptr:7330538a5c11
-nums:21, key2:1080863910568919040
-mt_buf_head:733051c8d040, key_head:733057c5de40, mt_flag_:1
+nums:21, head_key_ptr:7bf9a4daa171
+nums:21, key1:0
+nums:21, next_key_ptr:7bf9a7056ba1
+nums:21, key2:144115188075855872
+mt_buf_head:7bf9a43bd040, key_head:7bf9a4daa168, mt_flag_:1
 core id: 17
 core id: 18
 core id: 19
-core id: 1
 core id: 0
+core id: 1
 core id: 2
 core id: 3
 core id: 4
-getaddr:73307d88d040
+getaddr:7bf9acfbd040
 core id: 2
-nums:22, head_key_ptr:73305e929301
-nums:22, key1:288230376151711744
-nums:22, next_key_ptr:73305ae36d21
-nums:22, key2:288230376151711744
-mt_buf_head:73305a88d040, key_head:73305e9292f8, mt_flag_:1
-getaddr:73306348d040
+nums:22, head_key_ptr:7bf9d5afd6d9
+nums:22, key1:432345564227567616
+nums:22, next_key_ptr:7bf9d4c19f71
+nums:22, key2:720575940379279360
+mt_buf_head:7bf9cffbd040, key_head:7bf9d5afd6d0, mt_flag_:1
+getaddr:7bf9b5bbd040
 core id: 3
-nums:23, head_key_ptr:73307e3d97e9
-nums:23, key1:432345564227567616
-nums:23, next_key_ptr:73307ebac8a1
-nums:23, key2:1513209474796486656
-mt_buf_head:73307d88d040, key_head:73307e3d97e0, mt_flag_:1
-getaddr:73308648d040
+nums:23, head_key_ptr:7bf9aeb78401
+nums:23, key1:144115188075855872
+nums:23, next_key_ptr:7bf9addf7da9
+nums:23, key2:576460752303423488
+mt_buf_head:7bf9acfbd040, key_head:7bf9aeb783f8, mt_flag_:1
+getaddr:7bf9d8bbd040
 core id: 4
-nums:24, head_key_ptr:73306486fa51
-nums:24, key1:0
-nums:24, next_key_ptr:7330647cc819
-nums:24, key2:648518346341351424
-mt_buf_head:73306348d040, key_head:73306486fa48, mt_flag_:1
-getaddr:73306c08d040
+nums:24, head_key_ptr:7bf9ba24a681
+nums:24, key1:360287970189639680
+nums:24, next_key_ptr:7bf9b875a749
+nums:24, key2:360287970189639680
+mt_buf_head:7bf9b5bbd040, key_head:7bf9ba24a678, mt_flag_:1
+getaddr:7bf9be7bd040
 core id: 5
-nums:25, head_key_ptr:733087800fe1
-nums:25, key1:72057594037927936
-nums:25, next_key_ptr:7330898fb849
-nums:25, key2:504403158265495552
-mt_buf_head:73308648d040, key_head:733087800fd8, mt_flag_:1
+nums:25, head_key_ptr:7bf9dfaaf8c1
+nums:25, key1:504403158265495552
+nums:25, next_key_ptr:7bf9dbeaae09
+nums:25, key2:576460752303423488
+mt_buf_head:7bf9d8bbd040, key_head:7bf9dfaaf8b8, mt_flag_:1
 core id: 5
 core id: 6
-core id: 8
 core id: 7
+core id: 8
 core id: 9
 core id: 10
 core id: 11
-getaddr:733074c8d040
-core id: 6
-nums:26, head_key_ptr:73306f5f9481
-nums:26, key1:2017612633061982208
-nums:26, next_key_ptr:733073b01189
-nums:26, key2:2522015791327477760
-mt_buf_head:73306c08d040, key_head:73306f5f9478, mt_flag_:1
 core id: 12
-getaddr:73308f08d040
-core id: 7
-nums:27, head_key_ptr:73307b96acc9
-nums:27, key1:144115188075855872
-nums:27, next_key_ptr:733079e3f421
-nums:27, key2:1729382256910270464
+getaddr:7bf9c73bd040
+core id: 6
+nums:26, head_key_ptr:7bf9c351daa1
+nums:26, key1:72057594037927936
+nums:26, next_key_ptr:7bf9c1e70621
+nums:26, key2:288230376151711744
+mt_buf_head:7bf9be7bd040, key_head:7bf9c351da98, mt_flag_:1
 core id: 13
-mt_buf_head:733074c8d040, key_head:73307b96acc0, mt_flag_:1
-getaddr:733051c8d040
+getaddr:7bf9e17bd040
+core id: 7
+nums:27, head_key_ptr:7bf9ce0efe79
+nums:27, key1:0
+nums:27, next_key_ptr:7bf9c8ca8779
+nums:27, key2:576460752303423488
+core id: 14
+mt_buf_head:7bf9c73bd040, key_head:7bf9ce0efe70, mt_flag_:1
+getaddr:7bf9a43bd040
 core id: 8
-nums:28, head_key_ptr:733091a12ce1
-nums:28, key1:216172782113783808
-nums:28, next_key_ptr:733093f22d71
-nums:28, key2:864691128455135232
-mt_buf_head:73308f08d040, key_head:733091a12cd8, mt_flag_:1
-getaddr:73305a88d040
+nums:28, head_key_ptr:7bf9e80fdc61
+nums:28, key1:72057594037927936
+nums:28, next_key_ptr:7bf9e4e8cc99
+nums:28, key2:936748722493063168
+mt_buf_head:7bf9e17bd040, key_head:7bf9e80fdc58, mt_flag_:1
+getaddr:7bf9cffbd040
 core id: 9
-nums:29, head_key_ptr:7330535b85b9
-nums:29, key1:648518346341351424
-nums:29, next_key_ptr:733056714359
-nums:29, key2:936748722493063168
-mt_buf_head:733051c8d040, key_head:7330535b85b0, mt_flag_:1
+nums:29, head_key_ptr:7bf9a5874c89
+nums:29, key1:360287970189639680
+nums:29, next_key_ptr:7bf9a6d252b9
+nums:29, key2:576460752303423488
+mt_buf_head:7bf9a43bd040, key_head:7bf9a5874c80, mt_flag_:1
+core id: 15
+core id: 16
+core id: 17
+core id: 18
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+getaddr:7bf9acfbd040
+core id: 10
+nums:30, head_key_ptr:7bf9d5f7d7f9
+nums:30, key1:792633534417207296
+nums:30, next_key_ptr:7bf9d73894e9
+nums:30, key2:864691128455135232
+mt_buf_head:7bf9cffbd040, key_head:7bf9d5f7d7f0, mt_flag_:1
+core id: 3
+getaddr:7bf9b5bbd040
+core id: 11
+nums:31, head_key_ptr:7bf9ae4c8431
+nums:31, key1:432345564227567616
+nums:31, next_key_ptr:7bf9aec93cc1
+nums:31, key2:1801439850948198400
+core id: 4
+mt_buf_head:7bf9acfbd040, key_head:7bf9ae4c8428, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 12
+nums:32, head_key_ptr:7bf9b9cad961
+nums:32, key1:72057594037927936
+nums:32, next_key_ptr:7bf9ba6e95d1
+nums:32, key2:432345564227567616
+mt_buf_head:7bf9b5bbd040, key_head:7bf9b9cad958, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 13
+nums:33, head_key_ptr:7bf9ddc25341
+nums:33, key1:0
+nums:33, next_key_ptr:7bf9d9d71d81
+nums:33, key2:72057594037927936
+mt_buf_head:7bf9d8bbd040, key_head:7bf9ddc25338, mt_flag_:1
+core id: 5
+core id: 6
+core id: 7
+core id: 8
+core id: 9
+core id: 10
+core id: 11
+core id: 12
+getaddr:7bf9c73bd040
+core id: 14
+nums:34, head_key_ptr:7bf9c10e3c31
+nums:34, key1:1152921504606846976
+nums:34, next_key_ptr:7bf9bf27fa01
+nums:34, key2:1297036692682702848
+mt_buf_head:7bf9be7bd040, key_head:7bf9c10e3c28, mt_flag_:1
+core id: 13
+getaddr:7bf9e17bd040
+core id: 15
+nums:35, head_key_ptr:7bf9c8c6f869
+nums:35, key1:360287970189639680
+nums:35, next_key_ptr:7bf9cd3643a1
+nums:35, key2:432345564227567616
+core id: 14
+mt_buf_head:7bf9c73bd040, key_head:7bf9c8c6f860, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 16
+nums:36, head_key_ptr:7bf9e2369199
+nums:36, key1:288230376151711744
+nums:36, next_key_ptr:7bf9e64dd0d1
+nums:36, key2:432345564227567616
+mt_buf_head:7bf9e17bd040, key_head:7bf9e2369190, mt_flag_:1
+getaddr:7bf9cffbd040
+core id: 17
+nums:37, head_key_ptr:7bf9abe0c221
+nums:37, key1:360287970189639680
+nums:37, next_key_ptr:7bf9a63f4a11
+nums:37, key2:1224979098644774912
+mt_buf_head:7bf9a43bd040, key_head:7bf9abe0c218, mt_flag_:1
+core id: 15
+core id: 16
+core id: 18
+core id: 17
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+getaddr:7bf9acfbd040
+core id: 18
+nums:38, head_key_ptr:7bf9d5866481
+nums:38, key1:720575940379279360
+nums:38, next_key_ptr:7bf9d423b8a9
+nums:38, key2:864691128455135232
+mt_buf_head:7bf9cffbd040, key_head:7bf9d5866478, mt_flag_:1
+core id: 3
+getaddr:7bf9b5bbd040
+core id: 19
+nums:39, head_key_ptr:7bf9adad59a9
+nums:39, key1:1080863910568919040
+nums:39, next_key_ptr:7bf9ae5cd6a9
+nums:39, key2:1224979098644774912
+core id: 4
+mt_buf_head:7bf9acfbd040, key_head:7bf9adad59a0, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 0
+nums:40, head_key_ptr:7bf9b5eb79c1
+nums:40, key1:504403158265495552
+nums:40, next_key_ptr:7bf9b8781099
+nums:40, key2:1152921504606846976
+mt_buf_head:7bf9b5bbd040, key_head:7bf9b5eb79b8, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 1
+nums:41, head_key_ptr:7bf9df0e4259
+nums:41, key1:648518346341351424
+nums:41, next_key_ptr:7bf9d9dff419
+nums:41, key2:936748722493063168
+mt_buf_head:7bf9d8bbd040, key_head:7bf9df0e4250, mt_flag_:1
+core id: 5
+core id: 6
+core id: 7
+core id: 8
+core id: 9
+core id: 10
+core id: 11
+core id: 12
+getaddr:7bf9c73bd040
+core id: 2
+nums:42, head_key_ptr:7bf9bfb2a8f9
+nums:42, key1:72057594037927936
+nums:42, next_key_ptr:7bf9bea91cd1
+nums:42, key2:648518346341351424
+mt_buf_head:7bf9be7bd040, key_head:7bf9bfb2a8f0, mt_flag_:1
+core id: 13
+getaddr:7bf9e17bd040
+core id: 3
+nums:43, head_key_ptr:7bf9c9cfd9f1
+nums:43, key1:0
+nums:43, next_key_ptr:7bf9c94a1c89
+nums:43, key2:1152921504606846976
+core id: 14
+mt_buf_head:7bf9c73bd040, key_head:7bf9c9cfd9e8, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 4
+nums:44, head_key_ptr:7bf9e60e0e09
+nums:44, key1:576460752303423488
+nums:44, next_key_ptr:7bf9e29550f9
+nums:44, key2:1152921504606846976
+mt_buf_head:7bf9e17bd040, key_head:7bf9e60e0e00, mt_flag_:1
+getaddr:7bf9cffbd040
+core id: 5
+nums:45, head_key_ptr:7bf9a444d2a1
+nums:45, key1:360287970189639680
+nums:45, next_key_ptr:7bf9a6da0991
+nums:45, key2:864691128455135232
+mt_buf_head:7bf9a43bd040, key_head:7bf9a444d298, mt_flag_:1
+core id: 15
+core id: 16
+core id: 17
+core id: 18
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+getaddr:7bf9acfbd040
+core id: 6
+nums:46, head_key_ptr:7bf9d7c3d301
+nums:46, key1:936748722493063168
+nums:46, next_key_ptr:7bf9d6e67aa1
+nums:46, key2:1008806316530991104
+mt_buf_head:7bf9cffbd040, key_head:7bf9d7c3d2f8, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 7
+nums:47, head_key_ptr:7bf9b3f324a9
+nums:47, key1:72057594037927936
+nums:47, next_key_ptr:7bf9ae0687d9
+nums:47, key2:144115188075855872
+mt_buf_head:7bf9acfbd040, key_head:7bf9b3f324a0, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 8
+nums:48, head_key_ptr:7bf9bc3ab859
+nums:48, key1:504403158265495552
+nums:48, next_key_ptr:7bf9b8914361
+nums:48, key2:504403158265495552
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bc3ab850, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 9
+nums:49, head_key_ptr:7bf9df284d51
+nums:49, key1:648518346341351424
+nums:49, next_key_ptr:7bf9dd909281
+nums:49, key2:792633534417207296
+mt_buf_head:7bf9d8bbd040, key_head:7bf9df284d48, mt_flag_:1
+core id: 3
+core id: 4
+getaddr:7bf9c73bd040
+core id: 10
+nums:50, head_key_ptr:7bf9c53c4379
+nums:50, key1:1224979098644774912
+nums:50, next_key_ptr:7bf9c38bd269
+nums:50, key2:1441151880758558720
+mt_buf_head:7bf9be7bd040, key_head:7bf9c53c4370, mt_flag_:1
+core id: 5
+core id: 6
+core id: 7
+core id: 8
+core id: 9
+core id: 10
+core id: 11
+core id: 12
+getaddr:7bf9e17bd040
+core id: 11
+nums:51, head_key_ptr:7bf9cd4c5059
+nums:51, key1:504403158265495552
+nums:51, next_key_ptr:7bf9ce850fd9
+nums:51, key2:648518346341351424
+mt_buf_head:7bf9c73bd040, key_head:7bf9cd4c5050, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 12
+nums:52, head_key_ptr:7bf9e1e47459
+nums:52, key1:504403158265495552
+nums:52, next_key_ptr:7bf9e8440309
+nums:52, key2:792633534417207296
+mt_buf_head:7bf9e17bd040, key_head:7bf9e1e47450, mt_flag_:1
+getaddr:7bf9cffbd040
+core id: 13
+nums:53, head_key_ptr:7bf9a7db4b41
+nums:53, key1:648518346341351424
+nums:53, next_key_ptr:7bf9a908a6f9
+nums:53, key2:1008806316530991104
+mt_buf_head:7bf9a43bd040, key_head:7bf9a7db4b38, mt_flag_:1
+core id: 13
+getaddr:7bf9acfbd040
+core id: 14
+nums:54, head_key_ptr:7bf9d0355b61
+nums:54, key1:216172782113783808
+nums:54, next_key_ptr:7bf9d2a7b919
+nums:54, key2:648518346341351424
+mt_buf_head:7bf9cffbd040, key_head:7bf9d0355b58, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 15
+nums:55, head_key_ptr:7bf9b22ae731
+nums:55, key1:144115188075855872
+nums:55, next_key_ptr:7bf9b2c01269
+nums:55, key2:432345564227567616
+mt_buf_head:7bf9acfbd040, key_head:7bf9b22ae728, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 16
+nums:56, head_key_ptr:7bf9b7b383f9
+nums:56, key1:576460752303423488
+nums:56, next_key_ptr:7bf9bad09011
+nums:56, key2:864691128455135232
+mt_buf_head:7bf9b5bbd040, key_head:7bf9b7b383f0, mt_flag_:1
 core id: 14
 core id: 15
 core id: 16
@@ -270,8 +519,803 @@ core id: 18
 core id: 19
 core id: 0
 core id: 1
-getaddr:73307d88d040
+core id: 2
+core id: 3
+core id: 4
+getaddr:7bf9be7bd040
+core id: 17
+nums:57, head_key_ptr:7bf9da649739
+nums:57, key1:288230376151711744
+nums:57, next_key_ptr:7bf9d9e03511
+nums:57, key2:576460752303423488
+mt_buf_head:7bf9d8bbd040, key_head:7bf9da649730, mt_flag_:1
+core id: 5
+getaddr:7bf9c73bd040
+core id: 18
+nums:58, head_key_ptr:7bf9c3357c11
+nums:58, key1:216172782113783808
+nums:58, next_key_ptr:7bf9bf9dd521
+nums:58, key2:360287970189639680
+core id: 6
+core id: 7
+core id: 8
+mt_buf_head:7bf9be7bd040, key_head:7bf9c3357c08, mt_flag_:1
+getaddr:7bf9e17bd040
+core id: 19
+nums:59, head_key_ptr:7bf9cc30df51
+nums:59, key1:1585267068834414592
+nums:59, next_key_ptr:7bf9c7566509
+nums:59, key2:4035225266123964416
+mt_buf_head:7bf9c73bd040, key_head:7bf9cc30df48, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 0
+nums:60, head_key_ptr:7bf9e69cce39
+nums:60, key1:576460752303423488
+nums:60, next_key_ptr:7bf9e7b5a0d9
+nums:60, key2:720575940379279360
+mt_buf_head:7bf9e17bd040, key_head:7bf9e69cce30, mt_flag_:1
+core id: 9
 core id: 10
-nums:30, head_key_ptr:73305e9e7ac9
-nums:30, key1:0
-nums:30, next_key_ptr:733061fe
+core id: 11
+core id: 12
+core id: 13
+core id: 14
+core id: 15
+getaddr:7bf9cffbd040
+core id: 1
+nums:61, head_key_ptr:7bf9a54f0839
+nums:61, key1:144115188075855872
+nums:61, next_key_ptr:7bf9a4ffa9c1
+nums:61, key2:360287970189639680
+mt_buf_head:7bf9a43bd040, key_head:7bf9a54f0830, mt_flag_:1
+core id: 16
+getaddr:7bf9acfbd040
+core id: 2
+nums:62, head_key_ptr:7bf9d3d0fda1
+nums:62, key1:504403158265495552
+nums:62, next_key_ptr:7bf9d0648df9
+nums:62, key2:648518346341351424
+core id: 17
+mt_buf_head:7bf9cffbd040, key_head:7bf9d3d0fd98, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 3
+nums:63, head_key_ptr:7bf9ae95d161
+nums:63, key1:72057594037927936
+nums:63, next_key_ptr:7bf9add59ae1
+nums:63, key2:216172782113783808
+mt_buf_head:7bf9acfbd040, key_head:7bf9ae95d158, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 4
+nums:64, head_key_ptr:7bf9bd291789
+nums:64, key1:360287970189639680
+nums:64, next_key_ptr:7bf9b8ea1d91
+nums:64, key2:936748722493063168
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bd291780, mt_flag_:1
+core id: 18
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+core id: 3
+core id: 4
+core id: 5
+getaddr:7bf9be7bd040
+core id: 5
+nums:65, head_key_ptr:7bf9dc656541
+nums:65, key1:720575940379279360
+nums:65, next_key_ptr:7bf9dc33d389
+nums:65, key2:936748722493063168
+mt_buf_head:7bf9d8bbd040, key_head:7bf9dc656538, mt_flag_:1
+core id: 6
+getaddr:7bf9c73bd040
+core id: 6
+nums:66, head_key_ptr:7bf9c1d53419
+nums:66, key1:1080863910568919040
+nums:66, next_key_ptr:7bf9c23dc681
+nums:66, key2:1224979098644774912
+core id: 7
+mt_buf_head:7bf9be7bd040, key_head:7bf9c1d53410, mt_flag_:1
+getaddr:7bf9e17bd040
+core id: 7
+nums:67, head_key_ptr:7bf9c8783bc1
+nums:67, key1:144115188075855872
+nums:67, next_key_ptr:7bf9c806a9d1
+nums:67, key2:792633534417207296
+mt_buf_head:7bf9c73bd040, key_head:7bf9c8783bb8, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 8
+nums:68, head_key_ptr:7bf9e6c07d51
+nums:68, key1:216172782113783808
+nums:68, next_key_ptr:7bf9e18106d1
+nums:68, key2:288230376151711744
+mt_buf_head:7bf9e17bd040, key_head:7bf9e6c07d48, mt_flag_:1
+core id: 8
+core id: 9
+core id: 10
+core id: 11
+core id: 12
+core id: 13
+core id: 14
+core id: 15
+getaddr:7bf9cffbd040
+core id: 9
+nums:69, head_key_ptr:7bf9a8799959
+nums:69, key1:0
+nums:69, next_key_ptr:7bf9abff9de9
+nums:69, key2:1008806316530991104
+mt_buf_head:7bf9a43bd040, key_head:7bf9a8799950, mt_flag_:1
+getaddr:7bf9acfbd040
+core id: 10
+nums:70, head_key_ptr:7bf9d1005cc9
+nums:70, key1:288230376151711744
+nums:70, next_key_ptr:7bf9d6123241
+nums:70, key2:1945555039024054272
+mt_buf_head:7bf9cffbd040, key_head:7bf9d1005cc0, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 11
+nums:71, head_key_ptr:7bf9b273b859
+nums:71, key1:0
+nums:71, next_key_ptr:7bf9b1f11219
+nums:71, key2:72057594037927936
+mt_buf_head:7bf9acfbd040, key_head:7bf9b273b850, mt_flag_:1
+getaddr:7bf9d8bbd040
+core id: 12
+nums:72, head_key_ptr:7bf9bccb20c9
+nums:72, key1:1008806316530991104
+nums:72, next_key_ptr:7bf9b6a814b9
+nums:72, key2:1008806316530991104
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bccb20c0, mt_flag_:1
+core id: 16
+getaddr:7bf9be7bd040
+core id: 13
+nums:73, head_key_ptr:7bf9daa83de1
+nums:73, key1:504403158265495552
+nums:73, next_key_ptr:7bf9dd4b1fa9
+nums:73, key2:1152921504606846976
+mt_buf_head:7bf9d8bbd040, key_head:7bf9daa83dd8, mt_flag_:1
+getaddr:7bf9c73bd040
+core id: 14
+nums:74, head_key_ptr:7bf9c3276e81
+nums:74, key1:1152921504606846976
+nums:74, next_key_ptr:7bf9c1bffe61
+nums:74, key2:1729382256910270464
+mt_buf_head:7bf9be7bd040, key_head:7bf9c3276e78, mt_flag_:1
+getaddr:7bf9e17bd040
+core id: 15
+nums:75, head_key_ptr:7bf9cc230591
+nums:75, key1:0
+nums:75, next_key_ptr:7bf9ccbd23f1
+nums:75, key2:792633534417207296
+core id: 17
+core id: 18
+mt_buf_head:7bf9c73bd040, key_head:7bf9cc230588, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 16
+nums:76, head_key_ptr:7bf9e787c999
+nums:76, key1:792633534417207296
+nums:76, next_key_ptr:7bf9e29d0619
+nums:76, key2:1945555039024054272
+mt_buf_head:7bf9e17bd040, key_head:7bf9e787c990, mt_flag_:1
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+core id: 3
+core id: 4
+core id: 5
+core id: 6
+core id: 7
+core id: 8
+getaddr:7bf9cffbd040
+core id: 17
+nums:77, head_key_ptr:7bf9aa75a339
+nums:77, key1:432345564227567616
+nums:77, next_key_ptr:7bf9a7c79fa1
+nums:77, key2:792633534417207296
+mt_buf_head:7bf9a43bd040, key_head:7bf9aa75a330, mt_flag_:1
+getaddr:7bf9acfbd040
+core id: 18
+nums:78, head_key_ptr:7bf9d3536541
+nums:78, key1:288230376151711744
+nums:78, next_key_ptr:7bf9d66e78c9
+nums:78, key2:432345564227567616
+mt_buf_head:7bf9cffbd040, key_head:7bf9d3536538, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 19
+nums:79, head_key_ptr:7bf9b1666761
+nums:79, key1:144115188075855872
+nums:79, next_key_ptr:7bf9af2b7d01
+nums:79, key2:720575940379279360
+mt_buf_head:7bf9acfbd040, key_head:7bf9b1666758, mt_flag_:1
+core id: 9
+getaddr:7bf9d8bbd040
+core id: 0
+nums:80, head_key_ptr:7bf9b98f1c31
+nums:80, key1:432345564227567616
+nums:80, next_key_ptr:7bf9b6475af1
+nums:80, key2:1224979098644774912
+mt_buf_head:7bf9b5bbd040, key_head:7bf9b98f1c28, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 1
+nums:81, head_key_ptr:7bf9ddd1d049
+nums:81, key1:1080863910568919040
+nums:81, next_key_ptr:7bf9d9477389
+nums:81, key2:1224979098644774912
+mt_buf_head:7bf9d8bbd040, key_head:7bf9ddd1d040, mt_flag_:1
+core id: 10
+core id: 11
+core id: 12
+getaddr:7bf9c73bd040
+core id: 2
+nums:82, head_key_ptr:7bf9bff18029
+nums:82, key1:216172782113783808
+nums:82, next_key_ptr:7bf9c17f0819
+nums:82, key2:360287970189639680
+mt_buf_head:7bf9be7bd040, key_head:7bf9bff18020, mt_flag_:1
+getaddr:7bf9e17bd040
+core id: 3
+nums:83, head_key_ptr:7bf9c860dad9
+nums:83, key1:0
+nums:83, next_key_ptr:7bf9c8bd6d49
+nums:83, key2:576460752303423488
+mt_buf_head:7bf9c73bd040, key_head:7bf9c860dad0, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 4
+nums:84, head_key_ptr:7bf9e194fb09
+nums:84, key1:72057594037927936
+nums:84, next_key_ptr:7bf9e81b5c39
+nums:84, key2:288230376151711744
+mt_buf_head:7bf9e17bd040, key_head:7bf9e194fb00, mt_flag_:1
+core id: 13
+core id: 14
+core id: 15
+core id: 16
+core id: 17
+core id: 18
+core id: 19
+core id: 0
+core id: 1
+core id: 2
+core id: 3
+getaddr:7bf9cffbd040
+core id: 5
+nums:85, head_key_ptr:7bf9a9d5c511
+nums:85, key1:0
+nums:85, next_key_ptr:7bf9a6d02d61
+nums:85, key2:936748722493063168
+mt_buf_head:7bf9a43bd040, key_head:7bf9a9d5c508, mt_flag_:1
+getaddr:7bf9acfbd040
+core id: 6
+nums:86, head_key_ptr:7bf9d71c09b9
+nums:86, key1:216172782113783808
+nums:86, next_key_ptr:7bf9d3a033f9
+nums:86, key2:504403158265495552
+mt_buf_head:7bf9cffbd040, key_head:7bf9d71c09b0, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 7
+nums:87, head_key_ptr:7bf9ad2e37b9
+nums:87, key1:1297036692682702848
+nums:87, next_key_ptr:7bf9b4584721
+nums:87, key2:1873497444986126336
+mt_buf_head:7bf9acfbd040, key_head:7bf9ad2e37b0, mt_flag_:1
+core id: 4
+getaddr:7bf9d8bbd040
+core id: 8
+nums:88, head_key_ptr:7bf9bba02ce1
+nums:88, key1:792633534417207296
+nums:88, next_key_ptr:7bf9bb333db9
+nums:88, key2:1008806316530991104
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bba02cd8, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 9
+nums:89, head_key_ptr:7bf9d92b9ca1
+nums:89, key1:288230376151711744
+nums:89, next_key_ptr:7bf9db6d6559
+nums:89, key2:1585267068834414592
+mt_buf_head:7bf9d8bbd040, key_head:7bf9d92b9c98, mt_flag_:1
+getaddr:7bf9c73bd040
+core id: 10
+nums:90, head_key_ptr:7bf9c44e17a1
+nums:90, key1:144115188075855872
+nums:90, next_key_ptr:7bf9bf656fc1
+nums:90, key2:288230376151711744
+mt_buf_head:7bf9be7bd040, key_head:7bf9c44e1798, mt_flag_:1
+core id: 5
+core id: 6
+core id: 7
+getaddr:7bf9e17bd040
+core id: 11
+nums:91, head_key_ptr:7bf9cd8f4fc1
+nums:91, key1:0
+nums:91, next_key_ptr:7bf9c9a24451
+nums:91, key2:72057594037927936
+mt_buf_head:7bf9c73bd040, key_head:7bf9cd8f4fb8, mt_flag_:1
+core id: 8
+getaddr:7bf9a43bd040
+core id: 12
+nums:92, head_key_ptr:7bf9e5f7c1f9
+nums:92, key1:1008806316530991104
+nums:92, next_key_ptr:7bf9e68ecd89
+nums:92, key2:1080863910568919040
+mt_buf_head:7bf9e17bd040, key_head:7bf9e5f7c1f0, mt_flag_:1
+getaddr:7bf9cffbd040
+core id: 13
+nums:93, head_key_ptr:7bf9a506a109
+nums:93, key1:360287970189639680
+nums:93, next_key_ptr:7bf9a6b8bd79
+nums:93, key2:864691128455135232
+mt_buf_head:7bf9a43bd040, key_head:7bf9a506a100, mt_flag_:1
+getaddr:7bf9acfbd040
+core id: 14
+nums:94, head_key_ptr:7bf9d7da2061
+nums:94, key1:1008806316530991104
+nums:94, next_key_ptr:7bf9d78d5249
+nums:94, key2:1801439850948198400
+mt_buf_head:7bf9cffbd040, key_head:7bf9d7da2058, mt_flag_:1
+core id: 9
+core id: 10
+core id: 11
+core id: 12
+core id: 13
+core id: 14
+core id: 15
+core id: 16
+core id: 17
+core id: 18
+core id: 19
+core id: 0
+getaddr:7bf9b5bbd040
+core id: 15
+nums:95, head_key_ptr:7bf9b0f22fb9
+nums:95, key1:0
+nums:95, next_key_ptr:7bf9afa12ee9
+nums:95, key2:1585267068834414592
+mt_buf_head:7bf9acfbd040, key_head:7bf9b0f22fb0, mt_flag_:1
+core id: 1
+getaddr:7bf9d8bbd040
+core id: 16
+nums:96, head_key_ptr:7bf9bb190ae9
+nums:96, key1:144115188075855872
+nums:96, next_key_ptr:7bf9b8a06039
+nums:96, key2:288230376151711744
+core id: 2
+core id: 3
+mt_buf_head:7bf9b5bbd040, key_head:7bf9bb190ae0, mt_flag_:1
+getaddr:7bf9be7bd040
+core id: 17
+nums:97, head_key_ptr:7bf9dc12a511
+nums:97, key1:792633534417207296
+nums:97, next_key_ptr:7bf9dfbeccd1
+nums:97, key2:1152921504606846976
+mt_buf_head:7bf9d8bbd040, key_head:7bf9dc12a508, mt_flag_:1
+core id: 4
+core id: 5
+core id: 6
+core id: 7
+core id: 8
+core id: 9
+core id: 10
+core id: 11
+getaddr:7bf9c73bd040
+core id: 18
+nums:98, head_key_ptr:7bf9c2b7c901
+nums:98, key1:0
+nums:98, next_key_ptr:7bf9bf30c571
+nums:98, key2:0
+mt_buf_head:7bf9be7bd040, key_head:7bf9c2b7c8f8, mt_flag_:1
+core id: 12
+getaddr:7bf9e17bd040
+core id: 19
+nums:99, head_key_ptr:7bf9c86dc249
+nums:99, key1:72057594037927936
+nums:99, next_key_ptr:7bf9c800c7a1
+nums:99, key2:216172782113783808
+core id: 13
+mt_buf_head:7bf9c73bd040, key_head:7bf9c86dc240, mt_flag_:1
+getaddr:7bf9a43bd040
+core id: 0
+nums:100, head_key_ptr:7bf9e5166b19
+nums:100, key1:720575940379279360
+nums:100, next_key_ptr:7bf9e526dc21
+nums:100, key2:1008806316530991104
+mt_buf_head:7bf9e17bd040, key_head:7bf9e5166b10, mt_flag_:1
+getaddr:7bf9cffbd040
+core id: 1
+nums:101, head_key_ptr:7bf9aad0ce81
+nums:101, key1:0
+nums:101, next_key_ptr:7bf9abc80c81
+nums:101, key2:504403158265495552
+mt_buf_head:7bf9a43bd040, key_head:7bf9aad0ce78, mt_flag_:1
+core id: 14
+core id: 15
+core id: 16
+core id: 17
+core id: 18
+core id: 19
+core id: 0
+core id: 1
+getaddr:7bf9acfbd040
+core id: 2
+nums:102, head_key_ptr:7bf9d2ab0351
+nums:102, key1:144115188075855872
+nums:102, next_key_ptr:7bf9d2e10a61
+nums:102, key2:288230376151711744
+mt_buf_head:7bf9cffbd040, key_head:7bf9d2ab0348, mt_flag_:1
+getaddr:7bf9b5bbd040
+core id: 3
+nums:103, head_key_ptr:7bf9af891699
+nums:103, key1:1585267068834414592
+nums:103, next_key_ptr:7bf9af7f2781
+nums:103, key2:1585267068834414592
+mt_buf_head:7bf9acfbd040, key_head:7bf9af891690, mt_flag_:1
+fillrandom   :       8.688 micros/op 1941036 ops/sec 51.519 seconds 100000000 operations;  214.7 MB/s PERF_CONTEXT:
+user_key_comparison_count = 214607467, block_cache_hit_count = 0, block_read_count = 0, block_read_byte = 0, block_read_time = 0, block_read_cpu_time = 0, block_cache_index_hit_count = 0, block_cache_standalone_handle_count = 0, block_cache_real_handle_count = 0, index_block_read_count = 0, block_cache_filter_hit_count = 0, filter_block_read_count = 0, compression_dict_block_read_count = 0, secondary_cache_hit_count = 0, compressed_sec_cache_insert_real_count = 0, compressed_sec_cache_insert_dummy_count = 0, compressed_sec_cache_uncompressed_bytes = 0, compressed_sec_cache_compressed_bytes = 0, block_checksum_time = 0, block_decompress_time = 0, get_read_bytes = 0, multiget_read_bytes = 0, iter_read_bytes = 0, blob_cache_hit_count = 0, blob_read_count = 0, blob_read_byte = 0, blob_read_time = 0, blob_checksum_time = 0, blob_decompress_time = 0, internal_key_skipped_count = 0, internal_delete_skipped_count = 0, internal_recent_skipped_count = 0, internal_merge_count = 0, internal_merge_point_lookup_count = 0, internal_range_del_reseek_count = 0, get_snapshot_time = 0, get_from_memtable_time = 0, get_from_memtable_count = 0, get_post_process_time = 0, get_from_output_files_time = 0, seek_on_memtable_time = 0, seek_on_memtable_count = 0, next_on_memtable_count = 0, prev_on_memtable_count = 0, seek_child_seek_time = 0, seek_child_seek_count = 0, seek_min_heap_time = 0, seek_max_heap_time = 0, seek_internal_seek_time = 0, find_next_user_entry_time = 0, write_wal_time = 1130000765, write_memtable_time = 216262361, write_delay_time = 1205443177, write_scheduling_flushes_compactions_time = 28184322, write_pre_and_post_process_time = 43085390211, write_thread_wait_nanos = 18729410627, db_mutex_lock_nanos = 0, db_condition_wait_nanos = 0, merge_operator_time_nanos = 0, read_index_block_nanos = 0, read_filter_block_nanos = 0, new_table_block_iter_nanos = 0, new_table_iterator_nanos = 0, block_seek_nanos = 0, find_table_nanos = 0, bloom_memtable_hit_count = 0, bloom_memtable_miss_count = 0, bloom_sst_hit_count = 0, bloom_sst_miss_count = 0, key_lock_wait_time = 0, key_lock_wait_count = 0, env_new_sequential_file_nanos = 0, env_new_random_access_file_nanos = 0, env_new_writable_file_nanos = 0, env_reuse_writable_file_nanos = 0, env_new_random_rw_file_nanos = 0, env_new_directory_nanos = 0, env_file_exists_nanos = 0, env_get_children_nanos = 0, env_get_children_file_attributes_nanos = 0, env_delete_file_nanos = 0, env_create_dir_nanos = 0, env_create_dir_if_missing_nanos = 0, env_delete_dir_nanos = 0, env_get_file_size_nanos = 0, env_get_file_modification_time_nanos = 0, env_rename_file_nanos = 0, env_link_file_nanos = 0, env_lock_file_nanos = 0, env_unlock_file_nanos = 0, env_new_logger_nanos = 0, get_cpu_nanos = 0, iter_next_cpu_nanos = 0, iter_prev_cpu_nanos = 0, iter_seek_cpu_nanos = 0, iter_next_count = 0, iter_prev_count = 0, iter_seek_count = 0, encrypt_data_nanos = 0, decrypt_data_nanos = 0, number_async_seek = 0, bloom_filter_useful = bloom_filter_full_positive = bloom_filter_full_true_positive = user_key_return_count = get_from_table_nanos = block_cache_hit_count = block_cache_miss_count =
+core id: 2
+p90,21,p99,28,p999,2144,p9999,2154,p99999,2166
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      6/4   357.05 MB   0.5      1.2     0.0      1.2       6.9      5.7       0.0   1.2      3.6     21.3    330.50             52.40       107    3.089     17M  3453K       0.0       0.0
+  L1      9/0   325.69 MB   1.3      9.6     5.4      4.2       6.2      2.0       0.0   1.2    401.4    259.3     24.39             66.41        20    1.219    146M    51M       0.0       0.0
+  L2      9/0   381.80 MB   0.1      3.2     1.4      1.9       2.0      0.1       0.3   1.4    150.3     90.9     22.13             17.58        33    0.671     51M    19M       0.0       0.0
+ Sum     24/4    1.04 GB   0.0     14.0     6.7      7.2      15.0      7.8       0.3   2.5     37.9     40.8    377.01            136.38       160    2.356    215M    74M       0.0       0.0
+ Int      0/0    0.00 KB   0.0     14.0     6.7      7.2      15.0      7.8       0.3   2.5     37.9     40.8    377.01            136.38       160    2.356    215M    74M       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0     14.0     6.7      7.2       9.1      1.9       0.0   0.0    254.0    165.1     56.32             91.38        58    0.971    215M    74M       0.0       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       5.9      5.9       0.0   0.0      0.0     18.9    320.69             45.00       102    3.144       0      0       0.0       0.0
+
+Blob file count: 0, total size: 0.0 GB, garbage size: 0.0 GB, space amp: 0.0
+
+Uptime(secs): 53.3 total, 53.2 interval
+Flush(GB): cumulative 5.927, interval 5.927
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 15.01 GB write, 288.54 MB/s write, 13.97 GB read, 268.56 MB/s read, 377.0 seconds
+Interval compaction: 15.01 GB write, 288.70 MB/s write, 13.97 GB read, 268.70 MB/s read, 377.0 seconds
+Write Stall (count): cf-l0-file-count-limit-delays-with-ongoing-compaction: 0, cf-l0-file-count-limit-stops-with-ongoing-compaction: 0, l0-file-count-limit-delays: 0, l0-file-count-limit-stops: 0, memtable-limit-delays: 114, memtable-limit-stops: 0, pending-compaction-bytes-delays: 0, pending-compaction-bytes-stops: 0, total-delays: 114, total-stops: 0
+interval: 114 total count
+Block cache LRUCache@0x6257c0b315d0#627540 capacity: 32.00 MB seed: 606747464 usage: 0.09 KB table_size: 1024 occupancy: 1 collections: 1 last_copies: 0 last_secs: 5.6e-05 secs_since: 53
+Block cache entry stats(count,size,portion): Misc(1,0.00 KB,0%)
+
+** File Read Latency Histogram By Level [default] **
+** Level 0 read latency histogram (micros):
+Count: 3808 Average: 2835.4997  StdDev: 4849.32
+Min: 575  Median: 1041.7493  Max: 69932
+Percentiles: P50: 1041.75 P75: 3005.77 P99: 27344.39 P99.9: 49018.86 P99.99: 69932.00
+------------------------------------------------------
+(     380,     580 ]        3   0.079%   0.079% 
+(     580,     870 ]     1627  42.726%  42.805% #########
+(     870,    1300 ]      686  18.015%  60.819% ####
+(    1300,    1900 ]      332   8.718%  69.538% ##
+(    1900,    2900 ]      186   4.884%  74.422% #
+(    2900,    4400 ]      312   8.193%  82.616% ##
+(    4400,    6600 ]      306   8.036%  90.651% ##
+(    6600,    9900 ]      156   4.097%  94.748% #
+(    9900,   14000 ]       75   1.970%  96.717% 
+(   14000,   22000 ]       67   1.759%  98.477% 
+(   22000,   33000 ]       41   1.077%  99.554% 
+(   33000,   50000 ]       14   0.368%  99.921% 
+(   50000,   75000 ]        3   0.079% 100.000% 
+
+** Level 1 read latency histogram (micros):
+Count: 3252 Average: 3216.3180  StdDev: 6182.81
+Min: 93  Median: 885.4773  Max: 56896
+Percentiles: P50: 885.48 P75: 1747.73 P99: 31870.84 P99.9: 49032.55 P99.99: 56896.00
+------------------------------------------------------
+(      76,     110 ]        1   0.031%   0.031% 
+(     110,     170 ]        2   0.062%   0.092% 
+(     170,     250 ]        2   0.062%   0.154% 
+(     250,     380 ]       10   0.308%   0.461% 
+(     380,     580 ]       26   0.800%   1.261% 
+(     580,     870 ]     1562  48.032%  49.293% ##########
+(     870,    1300 ]      639  19.649%  68.942% ####
+(    1300,    1900 ]      264   8.118%  77.060% ##
+(    1900,    2900 ]      105   3.229%  80.289% #
+(    2900,    4400 ]      128   3.936%  84.225% #
+(    4400,    6600 ]      115   3.536%  87.761% #
+(    6600,    9900 ]      111   3.413%  91.175% #
+(    9900,   14000 ]       73   2.245%  93.419% 
+(   14000,   22000 ]      107   3.290%  96.710% #
+(   22000,   33000 ]       83   2.552%  99.262% #
+(   33000,   50000 ]       22   0.677%  99.938% 
+(   50000,   75000 ]        2   0.062% 100.000% 
+
+** Level 2 read latency histogram (micros):
+Count: 849 Average: 1625.8834  StdDev: 2439.80
+Min: 38  Median: 777.3415  Max: 15243
+Percentiles: P50: 777.34 P75: 944.42 P99: 14453.33 P99.9: 15243.00 P99.99: 15243.00
+------------------------------------------------------
+(      34,      51 ]        1   0.118%   0.118% 
+(      76,     110 ]        1   0.118%   0.236% 
+(     170,     250 ]        3   0.353%   0.589% 
+(     380,     580 ]        1   0.118%   0.707% 
+(     580,     870 ]      615  72.438%  73.145% ##############
+(     870,    1300 ]       91  10.718%  83.863% ##
+(    1300,    1900 ]       29   3.416%  87.279% #
+(    1900,    2900 ]       15   1.767%  89.046% 
+(    2900,    4400 ]       19   2.238%  91.284% 
+(    4400,    6600 ]       10   1.178%  92.462% 
+(    6600,    9900 ]       48   5.654%  98.115% #
+(    9900,   14000 ]        7   0.824%  98.940% 
+(   14000,   22000 ]        9   1.060% 100.000% 
+
+
+** DB Stats **
+Uptime(secs): 53.3 total, 53.2 interval
+Cumulative writes: 25M writes, 100M keys, 5315K commit groups, 4.7 writes per commit group, ingest: 11.14 GB, 214.23 MB/s
+Cumulative WAL: 25M writes, 0 syncs, 25000000.00 writes per sync, written: 11.14 GB, 214.23 MB/s
+Cumulative stall: 00:00:18.092 H:M:S, 34.0 percent
+Interval writes: 25M writes, 100M keys, 5315K commit groups, 4.7 writes per commit group, ingest: 11409.55 MB, 214.34 MB/s
+Interval WAL: 25M writes, 0 syncs, 25000000.00 writes per sync, written: 11.14 GB, 214.34 MB/s
+Interval stall: 00:00:18.092 H:M:S, 34.0 percent
+Write Stall (count): write-buffer-manager-limit-stops: 0
+
+STATISTICS:
+rocksdb.block.cache.miss COUNT : 6600164
+rocksdb.block.cache.hit COUNT : 0
+rocksdb.block.cache.add COUNT : 0
+rocksdb.block.cache.add.failures COUNT : 0
+rocksdb.block.cache.index.miss COUNT : 0
+rocksdb.block.cache.index.hit COUNT : 0
+rocksdb.block.cache.index.add COUNT : 0
+rocksdb.block.cache.index.bytes.insert COUNT : 0
+rocksdb.block.cache.filter.miss COUNT : 0
+rocksdb.block.cache.filter.hit COUNT : 0
+rocksdb.block.cache.filter.add COUNT : 0
+rocksdb.block.cache.filter.bytes.insert COUNT : 0
+rocksdb.block.cache.data.miss COUNT : 6600164
+rocksdb.block.cache.data.hit COUNT : 0
+rocksdb.block.cache.data.add COUNT : 0
+rocksdb.block.cache.data.bytes.insert COUNT : 0
+rocksdb.block.cache.bytes.read COUNT : 0
+rocksdb.block.cache.bytes.write COUNT : 0
+rocksdb.bloom.filter.useful COUNT : 0
+rocksdb.bloom.filter.full.positive COUNT : 0
+rocksdb.bloom.filter.full.true.positive COUNT : 0
+rocksdb.persistent.cache.hit COUNT : 0
+rocksdb.persistent.cache.miss COUNT : 0
+rocksdb.sim.block.cache.hit COUNT : 0
+rocksdb.sim.block.cache.miss COUNT : 0
+rocksdb.memtable.hit COUNT : 0
+rocksdb.memtable.miss COUNT : 0
+rocksdb.l0.hit COUNT : 0
+rocksdb.l1.hit COUNT : 0
+rocksdb.l2andup.hit COUNT : 0
+rocksdb.compaction.key.drop.new COUNT : 74900605
+rocksdb.compaction.key.drop.obsolete COUNT : 0
+rocksdb.compaction.key.drop.range_del COUNT : 0
+rocksdb.compaction.key.drop.user COUNT : 0
+rocksdb.compaction.range_del.drop.obsolete COUNT : 0
+rocksdb.compaction.optimized.del.drop.obsolete COUNT : 0
+rocksdb.compaction.cancelled COUNT : 0
+rocksdb.number.keys.written COUNT : 100000000
+rocksdb.number.keys.read COUNT : 0
+rocksdb.number.keys.updated COUNT : 0
+rocksdb.bytes.written COUNT : 11963785028
+rocksdb.bytes.read COUNT : 0
+rocksdb.number.db.seek COUNT : 0
+rocksdb.number.db.next COUNT : 0
+rocksdb.number.db.prev COUNT : 0
+rocksdb.number.db.seek.found COUNT : 0
+rocksdb.number.db.next.found COUNT : 0
+rocksdb.number.db.prev.found COUNT : 0
+rocksdb.db.iter.bytes.read COUNT : 0
+rocksdb.no.file.opens COUNT : 316
+rocksdb.no.file.errors COUNT : 0
+rocksdb.stall.micros COUNT : 18092181
+rocksdb.db.mutex.wait.micros COUNT : 0
+rocksdb.number.multiget.get COUNT : 0
+rocksdb.number.multiget.keys.read COUNT : 0
+rocksdb.number.multiget.bytes.read COUNT : 0
+rocksdb.number.merge.failures COUNT : 0
+rocksdb.bloom.filter.prefix.checked COUNT : 0
+rocksdb.bloom.filter.prefix.useful COUNT : 0
+rocksdb.bloom.filter.prefix.true.positive COUNT : 0
+rocksdb.number.reseeks.iteration COUNT : 0
+rocksdb.getupdatessince.calls COUNT : 0
+rocksdb.wal.synced COUNT : 0
+rocksdb.wal.bytes COUNT : 11963785028
+rocksdb.write.self COUNT : 5315419
+rocksdb.write.other COUNT : 19684581
+rocksdb.write.wal COUNT : 25000000
+rocksdb.compact.read.bytes COUNT : 15948685653
+rocksdb.compact.write.bytes COUNT : 9671625216
+rocksdb.flush.write.bytes COUNT : 6364309586
+rocksdb.compact.read.marked.bytes COUNT : 0
+rocksdb.compact.read.periodic.bytes COUNT : 0
+rocksdb.compact.read.ttl.bytes COUNT : 0
+rocksdb.compact.write.marked.bytes COUNT : 0
+rocksdb.compact.write.periodic.bytes COUNT : 0
+rocksdb.compact.write.ttl.bytes COUNT : 0
+rocksdb.number.direct.load.table.properties COUNT : 0
+rocksdb.number.superversion_acquires COUNT : 0
+rocksdb.number.superversion_releases COUNT : 0
+rocksdb.number.superversion_cleanups COUNT : 0
+rocksdb.number.block.compressed COUNT : 7080208
+rocksdb.number.block.decompressed COUNT : 6600479
+rocksdb.number.block.not_compressed COUNT : 0
+rocksdb.merge.operation.time.nanos COUNT : 0
+rocksdb.filter.operation.time.nanos COUNT : 0
+rocksdb.row.cache.hit COUNT : 0
+rocksdb.row.cache.miss COUNT : 0
+rocksdb.read.amp.estimate.useful.bytes COUNT : 0
+rocksdb.read.amp.total.read.bytes COUNT : 0
+rocksdb.number.rate_limiter.drains COUNT : 0
+rocksdb.number.iter.skip COUNT : 0
+rocksdb.blobdb.num.put COUNT : 0
+rocksdb.blobdb.num.write COUNT : 0
+rocksdb.blobdb.num.get COUNT : 0
+rocksdb.blobdb.num.multiget COUNT : 0
+rocksdb.blobdb.num.seek COUNT : 0
+rocksdb.blobdb.num.next COUNT : 0
+rocksdb.blobdb.num.prev COUNT : 0
+rocksdb.blobdb.num.keys.written COUNT : 0
+rocksdb.blobdb.num.keys.read COUNT : 0
+rocksdb.blobdb.bytes.written COUNT : 0
+rocksdb.blobdb.bytes.read COUNT : 0
+rocksdb.blobdb.write.inlined COUNT : 0
+rocksdb.blobdb.write.inlined.ttl COUNT : 0
+rocksdb.blobdb.write.blob COUNT : 0
+rocksdb.blobdb.write.blob.ttl COUNT : 0
+rocksdb.blobdb.blob.file.bytes.written COUNT : 0
+rocksdb.blobdb.blob.file.bytes.read COUNT : 0
+rocksdb.blobdb.blob.file.synced COUNT : 0
+rocksdb.blobdb.blob.index.expired.count COUNT : 0
+rocksdb.blobdb.blob.index.expired.size COUNT : 0
+rocksdb.blobdb.blob.index.evicted.count COUNT : 0
+rocksdb.blobdb.blob.index.evicted.size COUNT : 0
+rocksdb.blobdb.gc.num.files COUNT : 0
+rocksdb.blobdb.gc.num.new.files COUNT : 0
+rocksdb.blobdb.gc.failures COUNT : 0
+rocksdb.blobdb.gc.num.keys.relocated COUNT : 0
+rocksdb.blobdb.gc.bytes.relocated COUNT : 0
+rocksdb.blobdb.fifo.num.files.evicted COUNT : 0
+rocksdb.blobdb.fifo.num.keys.evicted COUNT : 0
+rocksdb.blobdb.fifo.bytes.evicted COUNT : 0
+rocksdb.txn.overhead.mutex.prepare COUNT : 0
+rocksdb.txn.overhead.mutex.old.commit.map COUNT : 0
+rocksdb.txn.overhead.duplicate.key COUNT : 0
+rocksdb.txn.overhead.mutex.snapshot COUNT : 0
+rocksdb.txn.get.tryagain COUNT : 0
+rocksdb.number.multiget.keys.found COUNT : 0
+rocksdb.num.iterator.created COUNT : 0
+rocksdb.num.iterator.deleted COUNT : 0
+rocksdb.block.cache.compression.dict.miss COUNT : 0
+rocksdb.block.cache.compression.dict.hit COUNT : 0
+rocksdb.block.cache.compression.dict.add COUNT : 0
+rocksdb.block.cache.compression.dict.bytes.insert COUNT : 0
+rocksdb.block.cache.add.redundant COUNT : 0
+rocksdb.block.cache.index.add.redundant COUNT : 0
+rocksdb.block.cache.filter.add.redundant COUNT : 0
+rocksdb.block.cache.data.add.redundant COUNT : 0
+rocksdb.block.cache.compression.dict.add.redundant COUNT : 0
+rocksdb.files.marked.trash COUNT : 0
+rocksdb.files.deleted.immediately COUNT : 382
+rocksdb.error.handler.bg.error.count COUNT : 0
+rocksdb.error.handler.bg.errro.count COUNT : 0
+rocksdb.error.handler.bg.io.error.count COUNT : 0
+rocksdb.error.handler.bg.io.errro.count COUNT : 0
+rocksdb.error.handler.bg.retryable.io.error.count COUNT : 0
+rocksdb.error.handler.bg.retryable.io.errro.count COUNT : 0
+rocksdb.error.handler.autoresume.count COUNT : 0
+rocksdb.error.handler.autoresume.retry.total.count COUNT : 0
+rocksdb.error.handler.autoresume.success.count COUNT : 0
+rocksdb.memtable.payload.bytes.at.flush COUNT : 12140265632
+rocksdb.memtable.garbage.bytes.at.flush COUNT : 886656296
+rocksdb.secondary.cache.hits COUNT : 0
+rocksdb.verify_checksum.read.bytes COUNT : 0
+rocksdb.backup.read.bytes COUNT : 0
+rocksdb.backup.write.bytes COUNT : 0
+rocksdb.remote.compact.read.bytes COUNT : 0
+rocksdb.remote.compact.write.bytes COUNT : 0
+rocksdb.hot.file.read.bytes COUNT : 0
+rocksdb.warm.file.read.bytes COUNT : 0
+rocksdb.cold.file.read.bytes COUNT : 0
+rocksdb.hot.file.read.count COUNT : 0
+rocksdb.warm.file.read.count COUNT : 0
+rocksdb.cold.file.read.count COUNT : 0
+rocksdb.last.level.read.bytes COUNT : 0
+rocksdb.last.level.read.count COUNT : 0
+rocksdb.non.last.level.read.bytes COUNT : 16215319695
+rocksdb.non.last.level.read.count COUNT : 7909
+rocksdb.last.level.seek.filtered COUNT : 0
+rocksdb.last.level.seek.filter.match COUNT : 0
+rocksdb.last.level.seek.data COUNT : 0
+rocksdb.last.level.seek.data.useful.no.filter COUNT : 0
+rocksdb.last.level.seek.data.useful.filter.match COUNT : 0
+rocksdb.non.last.level.seek.filtered COUNT : 0
+rocksdb.non.last.level.seek.filter.match COUNT : 0
+rocksdb.non.last.level.seek.data COUNT : 0
+rocksdb.non.last.level.seek.data.useful.no.filter COUNT : 0
+rocksdb.non.last.level.seek.data.useful.filter.match COUNT : 0
+rocksdb.block.checksum.compute.count COUNT : 6601111
+rocksdb.block.checksum.mismatch.count COUNT : 0
+rocksdb.multiget.coroutine.count COUNT : 0
+rocksdb.blobdb.cache.miss COUNT : 0
+rocksdb.blobdb.cache.hit COUNT : 0
+rocksdb.blobdb.cache.add COUNT : 0
+rocksdb.blobdb.cache.add.failures COUNT : 0
+rocksdb.blobdb.cache.bytes.read COUNT : 0
+rocksdb.blobdb.cache.bytes.write COUNT : 0
+rocksdb.read.async.micros COUNT : 0
+rocksdb.async.read.error.count COUNT : 0
+rocksdb.secondary.cache.filter.hits COUNT : 0
+rocksdb.secondary.cache.index.hits COUNT : 0
+rocksdb.secondary.cache.data.hits COUNT : 0
+rocksdb.table.open.prefetch.tail.miss COUNT : 0
+rocksdb.table.open.prefetch.tail.hit COUNT : 1580
+rocksdb.timestamp.filter.table.checked COUNT : 0
+rocksdb.timestamp.filter.table.filtered COUNT : 0
+rocksdb.bytes.compressed.from COUNT : 28440813582
+rocksdb.bytes.compressed.to COUNT : 15910402041
+rocksdb.bytes.compression_bypassed COUNT : 0
+rocksdb.bytes.compression.rejected COUNT : 0
+rocksdb.number.block_compression_bypassed COUNT : 0
+rocksdb.number.block_compression_rejected COUNT : 0
+rocksdb.bytes.decompressed.from COUNT : 14853271870
+rocksdb.bytes.decompressed.to COUNT : 26523253876
+rocksdb.db.get.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.db.write.micros P50 : 19.352827 P95 : 32.210290 P99 : 33.934132 P100 : 5399.000000 COUNT : 25000000 SUM : 790159031
+rocksdb.compaction.times.micros P50 : 696086.956522 P95 : 3203867.000000 P99 : 3203867.000000 P100 : 3203867.000000 COUNT : 58 SUM : 56320466
+rocksdb.compaction.times.cpu_micros P50 : 715000.000000 P95 : 4221250.000000 P99 : 4989674.000000 P100 : 4989674.000000 COUNT : 58 SUM : 91383738
+rocksdb.subcompaction.setup.times.micros P50 : 9570.000000 P95 : 17767.000000 P99 : 17767.000000 P100 : 17767.000000 COUNT : 20 SUM : 210838
+rocksdb.table.sync.micros P50 : 206.626506 P95 : 308.500000 P99 : 578.666667 P100 : 1194.000000 COUNT : 102 SUM : 21585
+rocksdb.compaction.outfile.sync.micros P50 : 219.361702 P95 : 6930.000000 P99 : 20176.000000 P100 : 26481.000000 COUNT : 214 SUM : 273096
+rocksdb.wal.file.sync.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.manifest.file.sync.micros P50 : 5395.238095 P95 : 8184.000000 P99 : 11758.666667 P100 : 12619.000000 COUNT : 164 SUM : 923045
+rocksdb.table.open.io.micros P50 : 1274.328358 P95 : 3182.352941 P99 : 4297.647059 P100 : 9659.000000 COUNT : 316 SUM : 480759
+rocksdb.db.multiget.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.read.block.compaction.micros P50 : 0.818085 P95 : 1.887664 P99 : 1.992460 P100 : 70386.000000 COUNT : 6600167 SUM : 37197957
+rocksdb.read.block.get.micros P50 : 130.833333 P95 : 348.150000 P99 : 542.285714 P100 : 760.000000 COUNT : 632 SUM : 92995
+rocksdb.write.raw.block.micros P50 : 0.501654 P95 : 0.953143 P99 : 0.993276 P100 : 75010.000000 COUNT : 7081163 SUM : 32817197
+rocksdb.numfiles.in.singlecompaction P50 : 2.785714 P95 : 12.458333 P99 : 13.000000 P100 : 13.000000 COUNT : 61 SUM : 303
+rocksdb.db.seek.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.db.write.stall P50 : 0.651722 P95 : 2173.000000 P99 : 2173.000000 P100 : 2173.000000 COUNT : 41924 SUM : 18093964
+rocksdb.sst.read.micros P50 : 900.670904 P95 : 12770.000000 P99 : 29620.161290 P100 : 69932.000000 COUNT : 7910 SUM : 22654921
+rocksdb.file.read.flush.micros P50 : 784.705882 P95 : 1891.428571 P99 : 4385.000000 P100 : 9163.000000 COUNT : 102 SUM : 96314
+rocksdb.file.read.compaction.micros P50 : 907.244094 P95 : 12904.903226 P99 : 29710.645161 P100 : 69932.000000 COUNT : 7808 SUM : 22558607
+rocksdb.file.read.db.open.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.num.subcompactions.scheduled P50 : 8.133333 P95 : 12.000000 P99 : 12.000000 P100 : 12.000000 COUNT : 20 SUM : 164
+rocksdb.bytes.per.read P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.bytes.per.write P50 : 2274.894276 P95 : 4234.728573 P99 : 5868.049415 P100 : 7628.000000 COUNT : 5315419 SUM : 11963785028
+rocksdb.bytes.per.multiget P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.bytes.compressed P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.bytes.decompressed P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.compression.times.nanos P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.decompression.times.nanos P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.read.num.merge_operands P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.key.size P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.value.size P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.write.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.get.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.multiget.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.seek.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.next.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.prev.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.blob.file.write.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.blob.file.read.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.blob.file.sync.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.compression.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.blobdb.decompression.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.db.flush.micros P50 : 3512859.000000 P95 : 3512859.000000 P99 : 3512859.000000 P100 : 3512859.000000 COUNT : 102 SUM : 320689978
+rocksdb.sst.batch.size P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.num.index.and.filter.blocks.read.per.level P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.num.sst.read.per.level P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.error.handler.autoresume.retry.count P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.async.read.bytes P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.poll.wait.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.prefetched.bytes.discarded P50 : 815912.162162 P95 : 1959285.714286 P99 : 2095041.000000 P100 : 2095041.000000 COUNT : 1317 SUM : 1124300962
+rocksdb.multiget.io.batch.size P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.num.level.read.per.multiget P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.async.prefetch.abort.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.table.open.prefetch.tail.read.bytes P50 : 1166000.000000 P95 : 1846382.978723 P99 : 4648448.000000 P100 : 4648448.000000 COUNT : 316 SUM : 375936000
+rocksdb.remote.compact.delay.total.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+rocksdb.remote.compact.open.db.delay.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0
+
