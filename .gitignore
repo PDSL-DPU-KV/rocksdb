@@ -101,5 +101,3 @@ cmake-build-*
 third-party/folly/
 .cache
 *.sublime-*
-
-!dflush/build/

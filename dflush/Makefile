@@ -50,9 +50,6 @@ all: create_dirs $(HOST_APP_NAMES) $(ASMS)
 %.elf: %.a
 	dpacc-extract $< -o $@
 
-%.exe: $(BUILD_DIR)/%.o  $(KERNEL_LIBS)
-	$(CXX) -o $@ $^ $(CFLAGS) $(LDFLAGS)
-
 .PRECIOUS: $(HOST_APP_OBJS) $(HOST_APP_NAMES)
 
 define KERNEL_RULE
@@ -70,9 +67,6 @@ $$(KERNEL_LIB): $$(KERNEL_OBJS)
 endef
 
 $(foreach e,$(KERNEL_NAMES),$(eval $(call KERNEL_RULE,$(e))))
-
-$(BUILD_DIR)/%.o: %.c* $(HOST_INCLUDES)
-	$(CXX) -c -o $@ $< $(CFLAGS)
 
 $(BUILD_DIR)/%.dpa.o: %.c $(KERNEL_INCLUDES)
 	dpacc -c -o $@ $< $(DEVCC_CFLAGS)

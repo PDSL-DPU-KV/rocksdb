@@ -1,8 +1,8 @@
-Set seed to 1718431031528354 because --seed was 0
+Set seed to 1718441751833691 because --seed was 0
 Initializing RocksDB Options from the specified file
 Initializing RocksDB Options from command-line flags
 Integrated BlobDB: blob cache disabled
-getaddr:7d818e3bd040, last_alloc_idx:0
+getaddr:733051c8d040, last_alloc_idx:0
 Keys:       16 bytes each (+ 0 bytes user-defined timestamp)
 Values:     100 bytes each (50 bytes after compression)
 Entries:    6250000
@@ -18,94 +18,108 @@ Memtablerep: SkipListFactory
 Perf Level: 3
 ------------------------------------------------
 DB path: [/home/lsc/hadoop/zqy2023/rocksdb_test]
-getaddr:7d8196fbd040, last_alloc_idx:1
+getaddr:73305a88d040, last_alloc_idx:1
 core id: 0
-nums:0, key1:576460752303423488
-nums:0, next_key_ptr:7d818f4349d9
-nums:0, key2:792633534417207296
-mt_buf_head:7d818e3bd040, key_head:7d81925801d8, mt_flag_:1
-getaddr:7d819fbbd040, last_alloc_idx:2
+nums:0, head_key_ptr:7330596a60c1
+nums:0, key1:144115188075855872
+nums:0, next_key_ptr:7330549f1da9
+nums:0, key2:144115188075855872
+mt_buf_head:733051c8d040, key_head:7330596a60b8, mt_flag_:1
+getaddr:73306348d040, last_alloc_idx:2
 core id: 1
-nums:1, key1:1369094286720630784
-nums:1, next_key_ptr:7d819b0cd891
-nums:1, key2:1513209474796486656
-mt_buf_head:7d8196fbd040, key_head:7d819a8b9850, mt_flag_:1
-getaddr:7d81a87bd040, last_alloc_idx:3
+nums:1, head_key_ptr:733062011929
+nums:1, key1:72057594037927936
+nums:1, next_key_ptr:733060aef049
+nums:1, key2:432345564227567616
+mt_buf_head:73305a88d040, key_head:733062011920, mt_flag_:1
+getaddr:73306c08d040, last_alloc_idx:3
 core id: 2
-nums:2, key1:864691128455135232
-nums:2, next_key_ptr:7d81a24812d9
-nums:2, key2:1008806316530991104
-mt_buf_head:7d819fbbd040, key_head:7d81a10f73a8, mt_flag_:1
-getaddr:7d81b13bd040, last_alloc_idx:4
+nums:2, head_key_ptr:733067addca1
+nums:2, key1:288230376151711744
+nums:2, next_key_ptr:733064c58ee9
+nums:2, key2:432345564227567616
+mt_buf_head:73306348d040, key_head:733067addc98, mt_flag_:1
+getaddr:733074c8d040, last_alloc_idx:4
 core id: 3
-nums:3, key1:360287970189639680
-nums:3, next_key_ptr:7d81ad8df851
-nums:3, key2:504403158265495552
-mt_buf_head:7d81a87bd040, key_head:7d81ad1f98b0, mt_flag_:1
-getaddr:7d818e3bd040
+nums:3, head_key_ptr:73307113d339
+nums:3, key1:72057594037927936
+nums:3, next_key_ptr:7330709b50c9
+nums:3, key2:144115188075855872
+mt_buf_head:73306c08d040, key_head:73307113d330, mt_flag_:1
+getaddr:733051c8d040
 core id: 4
-nums:4, key1:1297036692682702848
-nums:4, next_key_ptr:7d81b5203af1
-nums:4, key2:1441151880758558720
-mt_buf_head:7d81b13bd040, key_head:7d81b5089c20, mt_flag_:1
-getaddr:7d8196fbd040
+nums:4, head_key_ptr:73307c8b8981
+nums:4, key1:648518346341351424
+nums:4, next_key_ptr:733077d6da19
+nums:4, key2:1008806316530991104
+mt_buf_head:733074c8d040, key_head:73307c8b8978, mt_flag_:1
+getaddr:73305a88d040
 core id: 5
-nums:5, key1:648518346341351424
-nums:5, next_key_ptr:7d8193b16f71
-nums:5, key2:1369094286720630784
-mt_buf_head:7d818e3bd040, key_head:7d8195b0f368, mt_flag_:1
-getaddr:7d81b9fbd040, last_alloc_idx:5
+nums:5, head_key_ptr:733058105d51
+nums:5, key1:72057594037927936
+nums:5, next_key_ptr:7330563570e1
+nums:5, key2:432345564227567616
+mt_buf_head:733051c8d040, key_head:733058105d48, mt_flag_:1
+getaddr:73307d88d040, last_alloc_idx:5
 core id: 6
-nums:6, key1:432345564227567616
-nums:6, next_key_ptr:7d819a7c21a9
-nums:6, key2:1224979098644774912
-mt_buf_head:7d8196fbd040, key_head:7d819a0369e8, mt_flag_:1
-getaddr:7d819fbbd040
+nums:6, head_key_ptr:73305d130761
+nums:6, key1:504403158265495552
+nums:6, next_key_ptr:733060e8de61
+nums:6, key2:648518346341351424
+mt_buf_head:73305a88d040, key_head:73305d130758, mt_flag_:1
+getaddr:73306348d040
 core id: 7
+nums:7, head_key_ptr:73307e512611
 nums:7, key1:0
-nums:7, next_key_ptr:7d81c17b3d39
-nums:7, key2:2161727821137838080
-mt_buf_head:7d81b9fbd040, key_head:7d81be594518, mt_flag_:1
-getaddr:7d81c2bbd040, last_alloc_idx:6
+nums:7, next_key_ptr:733083604599
+nums:7, key2:576460752303423488
+mt_buf_head:73307d88d040, key_head:73307e512608, mt_flag_:1
+getaddr:73308648d040, last_alloc_idx:6
 core id: 8
-nums:8, key1:864691128455135232
-nums:8, next_key_ptr:7d81a7910529
-nums:8, key2:936748722493063168
-mt_buf_head:7d819fbbd040, key_head:7d81a6251a70, mt_flag_:1
+nums:8, head_key_ptr:73306729cd79
+nums:8, key1:720575940379279360
+nums:8, next_key_ptr:73306ada0e81
+nums:8, key2:1008806316530991104
+mt_buf_head:73306348d040, key_head:73306729cd70, mt_flag_:1
 core id: 0
 core id: 1
 core id: 2
 core id: 3
-getaddr:7d81a87bd040
+getaddr:73306c08d040
 core id: 9
-nums:9, key1:216172782113783808
-nums:9, next_key_ptr:7d81c2d02249
-nums:9, key2:504403158265495552
-mt_buf_head:7d81c2bbd040, key_head:7d81c9e6c018, mt_flag_:1
-getaddr:7d81b13bd040
+nums:9, head_key_ptr:733089c30a19
+nums:9, key1:792633534417207296
+nums:9, next_key_ptr:73308d4b4581
+nums:9, key2:1945555039024054272
+mt_buf_head:73308648d040, key_head:733089c30a10, mt_flag_:1
+getaddr:733074c8d040
 core id: 10
-nums:10, key1:648518346341351424
-nums:10, next_key_ptr:7d81ae1f05f1
-nums:10, key2:1152921504606846976
-mt_buf_head:7d81a87bd040, key_head:7d81aa2a89d0, mt_flag_:1
-getaddr:7d81cb7bd040, last_alloc_idx:7
+nums:10, head_key_ptr:733071c9f441
+nums:10, key1:0
+nums:10, next_key_ptr:733072ef5659
+nums:10, key2:72057594037927936
+mt_buf_head:73306c08d040, key_head:733071c9f438, mt_flag_:1
+getaddr:73308f08d040, last_alloc_idx:7
 core id: 11
-nums:11, key1:72057594037927936
-nums:11, next_key_ptr:7d81b6327c71
-nums:11, key2:144115188075855872
-mt_buf_head:7d81b13bd040, key_head:7d81b46dbea8, mt_flag_:1
-getaddr:7d818e3bd040
+nums:11, head_key_ptr:73307902b391
+nums:11, key1:216172782113783808
+nums:11, next_key_ptr:733076e741e9
+nums:11, key2:864691128455135232
+mt_buf_head:733074c8d040, key_head:73307902b388, mt_flag_:1
+getaddr:733051c8d040
 core id: 12
-nums:12, key1:144115188075855872
-nums:12, next_key_ptr:7d81ce81d419
-nums:12, key2:144115188075855872
-mt_buf_head:7d81cb7bd040, key_head:7d81ce69c688, mt_flag_:1
-getaddr:7d8196fbd040
+nums:12, head_key_ptr:733094bd94f9
+nums:12, key1:216172782113783808
+nums:12, next_key_ptr:73308ff29fc9
+nums:12, key2:576460752303423488
+mt_buf_head:73308f08d040, key_head:733094bd94f0, mt_flag_:1
+getaddr:73305a88d040
 core id: 13
-nums:13, key1:216172782113783808
-nums:13, next_key_ptr:7d81907b8ae9
-nums:13, key2:1297036692682702848
-mt_buf_head:7d818e3bd040, key_head:7d8194366690, mt_flag_:1
+nums:13, head_key_ptr:733052aa1c19
+nums:13, key1:144115188075855872
+nums:13, next_key_ptr:73305691acd1
+nums:13, key2:1513209474796486656
+mt_buf_head:733051c8d040, key_head:733052aa1c10, mt_flag_:1
 core id: 4
 core id: 5
 core id: 6
@@ -113,125 +127,141 @@ core id: 7
 core id: 8
 core id: 9
 core id: 10
-getaddr:7d81b9fbd040
+getaddr:73307d88d040
 core id: 14
-nums:14, key1:0
-nums:14, next_key_ptr:7d819717ae61
-nums:14, key2:216172782113783808
-mt_buf_head:7d8196fbd040, key_head:7d819d203638, mt_flag_:1
-getaddr:7d819fbbd040
+nums:14, head_key_ptr:7330610a2249
+nums:14, key1:576460752303423488
+nums:14, next_key_ptr:733061bfd1a1
+nums:14, key2:2017612633061982208
+mt_buf_head:73305a88d040, key_head:7330610a2240, mt_flag_:1
+getaddr:73306348d040
 core id: 15
-nums:15, key1:1152921504606846976
-nums:15, next_key_ptr:7d81bd37dc51
-nums:15, key2:2305843009213693952
-mt_buf_head:7d81b9fbd040, key_head:7d81baab8230, mt_flag_:1
-getaddr:7d81c2bbd040
+nums:15, head_key_ptr:73307eb86809
+nums:15, key1:936748722493063168
+nums:15, next_key_ptr:73307e231d91
+nums:15, key2:1080863910568919040
+mt_buf_head:73307d88d040, key_head:73307eb86800, mt_flag_:1
+getaddr:73308648d040
 core id: 16
-nums:16, key1:144115188075855872
-nums:16, next_key_ptr:7d81a78e3199
-nums:16, key2:360287970189639680
-mt_buf_head:7d819fbbd040, key_head:7d81a2382678, mt_flag_:1
-getaddr:7d81a87bd040
+nums:16, head_key_ptr:733066ce2069
+nums:16, key1:360287970189639680
+nums:16, next_key_ptr:7330663e2441
+nums:16, key2:1224979098644774912
+mt_buf_head:73306348d040, key_head:733066ce2060, mt_flag_:1
+getaddr:73306c08d040
 core id: 17
-nums:17, key1:648518346341351424
-nums:17, next_key_ptr:7d81c84f4f19
-nums:17, key2:792633534417207296
-mt_buf_head:7d81c2bbd040, key_head:7d81c3d9adc0, mt_flag_:1
+nums:17, head_key_ptr:73308c4f1859
+nums:17, key1:144115188075855872
+nums:17, next_key_ptr:733087d6e8f1
+nums:17, key2:144115188075855872
+mt_buf_head:73308648d040, key_head:73308c4f1850, mt_flag_:1
 core id: 11
 core id: 12
 core id: 13
 core id: 14
 core id: 15
 core id: 16
-getaddr:7d81b13bd040
+getaddr:733074c8d040
 core id: 18
-nums:18, key1:0
-nums:18, next_key_ptr:7d81aaca30d1
-nums:18, key2:576460752303423488
-mt_buf_head:7d81a87bd040, key_head:7d81ac2003f8, mt_flag_:1
-getaddr:7d81cb7bd040
+nums:18, head_key_ptr:73306eac5cd9
+nums:18, key1:360287970189639680
+nums:18, next_key_ptr:73307053f0a9
+nums:18, key2:2449958197289549824
+mt_buf_head:73306c08d040, key_head:73306eac5cd0, mt_flag_:1
+getaddr:73308f08d040
 core id: 19
-nums:19, key1:144115188075855872
-nums:19, next_key_ptr:7d81b8d78149
-nums:19, key2:288230376151711744
-mt_buf_head:7d81b13bd040, key_head:7d81b1763848, mt_flag_:1
-getaddr:7d818e3bd040
+nums:19, head_key_ptr:733079974d41
+nums:19, key1:0
+nums:19, next_key_ptr:7330752472e1
+nums:19, key2:2666130979403333632
+mt_buf_head:733074c8d040, key_head:733079974d38, mt_flag_:1
+getaddr:733051c8d040
 core id: 0
-nums:20, key1:360287970189639680
-nums:20, next_key_ptr:7d81d014f331
+nums:20, head_key_ptr:733094b76af9
+nums:20, key1:144115188075855872
+nums:20, next_key_ptr:7330906219c9
 nums:20, key2:504403158265495552
-mt_buf_head:7d81cb7bd040, key_head:7d81d007aa50, mt_flag_:1
-getaddr:7d8196fbd040
+mt_buf_head:73308f08d040, key_head:733094b76af0, mt_flag_:1
+getaddr:73305a88d040
 core id: 1
+nums:21, head_key_ptr:733057c5de49
 nums:21, key1:432345564227567616
-nums:21, next_key_ptr:7d8195bd76a9
-nums:21, key2:936748722493063168
-mt_buf_head:7d818e3bd040, key_head:7d8193e67070, mt_flag_:1
+nums:21, next_key_ptr:7330538a5c11
+nums:21, key2:1080863910568919040
+mt_buf_head:733051c8d040, key_head:733057c5de40, mt_flag_:1
 core id: 17
 core id: 18
 core id: 19
-core id: 0
 core id: 1
+core id: 0
 core id: 2
 core id: 3
 core id: 4
-getaddr:7d81b9fbd040
+getaddr:73307d88d040
 core id: 2
-nums:22, key1:72057594037927936
-nums:22, next_key_ptr:7d819e1d8409
-nums:22, key2:936748722493063168
-mt_buf_head:7d8196fbd040, key_head:7d819dbd08c8, mt_flag_:1
-getaddr:7d819fbbd040
+nums:22, head_key_ptr:73305e929301
+nums:22, key1:288230376151711744
+nums:22, next_key_ptr:73305ae36d21
+nums:22, key2:288230376151711744
+mt_buf_head:73305a88d040, key_head:73305e9292f8, mt_flag_:1
+getaddr:73306348d040
 core id: 3
-nums:23, key1:72057594037927936
-nums:23, next_key_ptr:7d81bfb29f29
-nums:23, key2:216172782113783808
-mt_buf_head:7d81b9fbd040, key_head:7d81c1cf4ef8, mt_flag_:1
-getaddr:7d81c2bbd040
+nums:23, head_key_ptr:73307e3d97e9
+nums:23, key1:432345564227567616
+nums:23, next_key_ptr:73307ebac8a1
+nums:23, key2:1513209474796486656
+mt_buf_head:73307d88d040, key_head:73307e3d97e0, mt_flag_:1
+getaddr:73308648d040
 core id: 4
-nums:24, key1:216172782113783808
-nums:24, next_key_ptr:7d81a30cfea1
-nums:24, key2:288230376151711744
-mt_buf_head:7d819fbbd040, key_head:7d81a79d8a68, mt_flag_:1
-getaddr:7d81a87bd040
+nums:24, head_key_ptr:73306486fa51
+nums:24, key1:0
+nums:24, next_key_ptr:7330647cc819
+nums:24, key2:648518346341351424
+mt_buf_head:73306348d040, key_head:73306486fa48, mt_flag_:1
+getaddr:73306c08d040
 core id: 5
-nums:25, key1:144115188075855872
-nums:25, next_key_ptr:7d81c4c9ed79
-nums:25, key2:216172782113783808
-mt_buf_head:7d81c2bbd040, key_head:7d81ca886388, mt_flag_:1
+nums:25, head_key_ptr:733087800fe1
+nums:25, key1:72057594037927936
+nums:25, next_key_ptr:7330898fb849
+nums:25, key2:504403158265495552
+mt_buf_head:73308648d040, key_head:733087800fd8, mt_flag_:1
 core id: 5
 core id: 6
-core id: 7
 core id: 8
+core id: 7
 core id: 9
 core id: 10
 core id: 11
-core id: 12
-getaddr:7d81b13bd040
+getaddr:733074c8d040
 core id: 6
-nums:26, key1:936748722493063168
-nums:26, next_key_ptr:7d81aa05bb61
-nums:26, key2:936748722493063168
-mt_buf_head:7d81a87bd040, key_head:7d81af6eaf98, mt_flag_:1
-core id: 13
-getaddr:7d81cb7bd040
+nums:26, head_key_ptr:73306f5f9481
+nums:26, key1:2017612633061982208
+nums:26, next_key_ptr:733073b01189
+nums:26, key2:2522015791327477760
+mt_buf_head:73306c08d040, key_head:73306f5f9478, mt_flag_:1
+core id: 12
+getaddr:73308f08d040
 core id: 7
-nums:27, key1:72057594037927936
-nums:27, next_key_ptr:7d81b8f62959
-nums:27, key2:720575940379279360
-mt_buf_head:7d81b13bd040, key_head:7d81b715bb50, mt_flag_:1
-getaddr:7d818e3bd040
+nums:27, head_key_ptr:73307b96acc9
+nums:27, key1:144115188075855872
+nums:27, next_key_ptr:733079e3f421
+nums:27, key2:1729382256910270464
+core id: 13
+mt_buf_head:733074c8d040, key_head:73307b96acc0, mt_flag_:1
+getaddr:733051c8d040
 core id: 8
-nums:28, key1:72057594037927936
-nums:28, next_key_ptr:7d81cd9aebe1
-nums:28, key2:288230376151711744
-mt_buf_head:7d81cb7bd040, key_head:7d81cc9dff18, mt_flag_:1
-getaddr:7d8196fbd040
+nums:28, head_key_ptr:733091a12ce1
+nums:28, key1:216172782113783808
+nums:28, next_key_ptr:733093f22d71
+nums:28, key2:864691128455135232
+mt_buf_head:73308f08d040, key_head:733091a12cd8, mt_flag_:1
+getaddr:73305a88d040
 core id: 9
-nums:29, key1:432345564227567616
-nums:29, next_key_ptr:7d8191e09519
-nums:29, key2:504403158265495552
-mt_buf_head:7d818e3bd040, key_head:7d818f66cd38, mt_flag_:1
+nums:29, head_key_ptr:7330535b85b9
+nums:29, key1:648518346341351424
+nums:29, next_key_ptr:733056714359
+nums:29, key2:936748722493063168
+mt_buf_head:733051c8d040, key_head:7330535b85b0, mt_flag_:1
 core id: 14
 core id: 15
 core id: 16
@@ -240,47 +270,8 @@ core id: 18
 core id: 19
 core id: 0
 core id: 1
-getaddr:7d81b9fbd040
+getaddr:73307d88d040
 core id: 10
-nums:30, key1:72057594037927936
-nums:30, next_key_ptr:7d819d078cc9
-nums:30, key2:864691128455135232
-mt_buf_head:7d8196fbd040, key_head:7d81982e9410, mt_flag_:1
-core id: 2
-getaddr:7d819fbbd040
-core id: 11
-nums:31, key1:72057594037927936
-nums:31, next_key_ptr:7d81bf2759c9
-nums:31, key2:288230376151711744
-core id: 3
-mt_buf_head:7d81b9fbd040, key_head:7d81c189ee60, mt_flag_:1
-getaddr:7d81c2bbd040
-core id: 12
-nums:32, key1:576460752303423488
-nums:32, next_key_ptr:7d81a18aa9b1
-nums:32, key2:720575940379279360
-mt_buf_head:7d819fbbd040, key_head:7d81a59b54f8, mt_flag_:1
-getaddr:7d81a87bd040
-core id: 13
-nums:33, key1:504403158265495552
-nums:33, next_key_ptr:7d81c95ab431
-nums:33, key2:576460752303423488
-mt_buf_head:7d81c2bbd040, key_head:7d81c8bc3440, mt_flag_:1
-core id: 4
-core id: 5
-core id: 6
-core id: 7
-core id: 8
-core id: 9
-core id: 10
-core id: 11
-getaddr:7d81b13bd040
-core id: 14
-nums:34, key1:936748722493063168
-nums:34, next_key_ptr:7d81aa6cfd19
-nums:34, key2:2233785415175766016
-mt_buf_head:7d81a87bd040, key_head:7d81b062fa20, mt_flag_:1
-core id: 12
-getaddr:7d81cb7bd040
-core id: 15
-nums:35, key1
+nums:30, head_key_ptr:73305e9e7ac9
+nums:30, key1:0
+nums:30, next_key_ptr:733061fe
