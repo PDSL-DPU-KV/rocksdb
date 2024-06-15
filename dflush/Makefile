@@ -31,7 +31,6 @@ DEVCC_DEV_INC_DIR:=$(shell pkg-config --cflags-only-I doca-common doca-dpa doca-
 DEVCC_CFLAGS:=--hostcc=$(CC) --hostcc-options="$(DEVCC_HOST_CFLAGS)" --devicecc-options="$(DEVCC_DEV_CFLAGS)" $(DEVCC_DEV_INC_DIR) -flto
 DEVCC_LDFLAGS:=--device-libs="$(DEVCC_DEV_LD_DIR)" -ldpa
 
-HOST_APP_NAMES:= $(patsubst %.cpp,%.exe,$(HOST_APP_SRCS))
 HOST_APP_OBJS:= $(addprefix $(BUILD_DIR)/,$(patsubst %.cpp,%.o,$(HOST_APP_SRCS)))
 
 KERNEL_DIRS:=$(shell ls -d $(KERNELS_DIR)/*/ 2>/dev/null | sed -e 's/\/$$//g')
@@ -42,15 +41,13 @@ KERNEL_LIBS:=$(addprefix $(BUILD_DIR)/,$(addsuffix .a,$(KERNEL_DIRS)))
 BUILD_DIRS:=$(BUILD_DIR) $(KERNEL_BUILD_DIRS)
 ASMS:= $(addsuffix .asm,$(KERNEL_NAMES))
 
-all: create_dirs $(HOST_APP_NAMES) $(ASMS)
+all: create_dirs $(ASMS)
 
 %.asm: $(BUILD_DIR)/$(KERNELS_DIR)/%.elf
 	dpa-objdump -sSdxl --mcpu=nv-dpa-bf3 $< > $@
 
 %.elf: %.a
 	dpacc-extract $< -o $@
-
-.PRECIOUS: $(HOST_APP_OBJS) $(HOST_APP_NAMES)
 
 define KERNEL_RULE
 KERNEL_DIR:=$(KERNELS_DIR)/$1
