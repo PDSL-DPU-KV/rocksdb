@@ -219,6 +219,8 @@ class SkipListRep : public MemTableRep {
     // Final state of iterator is Valid() iff list is not empty.
     void SeekToLast() override { iter_.SeekToLast(); }
 
+    void* Current() override { return iter_.Current(); }
+
    protected:
     std::string tmp_;  // For passing to EncodeKey
   };

@@ -39,8 +39,8 @@ class Arena : public Allocator {
   // huge_page_size: if 0, don't use huge page TLB. If > 0 (should set to the
   // supported hugepage size of the system), block allocation will try huge
   // page TLB first. If allocation fails, will fall back to normal case.
-  explicit Arena(size_t block_size = kMinBlockSize,
-                 AllocTracker* tracker = nullptr, size_t huge_page_size = 0);
+  explicit Arena(size_t block_size = kMinBlockSize, AllocTracker* tracker = nullptr,
+                 size_t huge_page_size = 0, bool MTFlag = false);
   ~Arena();
 
   char* Allocate(size_t bytes) override;
@@ -64,8 +64,7 @@ class Arena : public Allocator {
   // by the arena (exclude the space allocated but not yet used for future
   // allocations).
   size_t ApproximateMemoryUsage() const {
-    return blocks_memory_ + blocks_.size() * sizeof(char*) -
-           alloc_bytes_remaining_;
+      return blocks_memory_ + blocks_.size() * sizeof(char*) - alloc_bytes_remaining_;
   }
 
   size_t MemoryAllocatedBytes() const { return blocks_memory_; }
@@ -79,7 +78,7 @@ class Arena : public Allocator {
   size_t BlockSize() const override { return kBlockSize; }
 
   bool IsInInlineBlock() const {
-    return blocks_.empty() && huge_blocks_.empty();
+      return blocks_.empty() && huge_blocks_.empty();
   }
 
   // check and adjust the block_size so that the return value is
@@ -87,15 +86,31 @@ class Arena : public Allocator {
   //  2. the multiple of align unit.
   static size_t OptimizeBlockSize(size_t block_size);
 
+  char* get_mt_buf_() const {
+    return mt_buf_;
+  }
+
+  bool get_mt_flag_() const{
+    return mt_flag_;
+  }
+
  private:
   alignas(std::max_align_t) char inline_block_[kInlineSize];
   // Number of bytes allocated in one block
   const size_t kBlockSize;
   // Allocated memory blocks
-  std::deque<std::unique_ptr<char[]>> blocks_;
+  // std::deque<std::unique_ptr<char[]>> blocks_;
+  typedef std::vector<char*> Blocks;
+  Blocks blocks_;
   // Huge page allocations
   std::deque<MemMapping> huge_blocks_;
   size_t irregular_block_num = 0;
+
+  // typedef std::vector<char*> Blocks;
+  // Blocks blocks_mt;
+  char* mt_buf_;
+  bool mt_flag_ = false;
+  size_t alloc_idx_ = 0;
 
   // Stats for current active block.
   // For each block, we allocate aligned memory chucks from one end and

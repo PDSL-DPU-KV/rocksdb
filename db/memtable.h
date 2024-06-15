@@ -532,6 +532,14 @@ class MemTable {
                                     uint32_t protection_bytes_per_key,
                                     bool allow_data_in_errors = false);
 
+  char* get_mt_buf_() {
+    return arena_.get_mt_buf_();
+  }
+
+  bool get_mt_flag_() {
+    return arena_.get_mt_flag_();
+  }
+
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 

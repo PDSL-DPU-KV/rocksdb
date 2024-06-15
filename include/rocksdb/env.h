@@ -24,6 +24,12 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <queue>
+
+#include <doca_dev.h>
+#include <doca_dpa.h>
+#include <doca_mmap.h>
+#include <doca_sync_event.h>
 
 #include "rocksdb/customizable.h"
 #include "rocksdb/functor_wrapper.h"
@@ -69,6 +75,38 @@ class SystemClock;
 struct ConfigOptions;
 
 const size_t kDefaultPageSize = 4 * 1024;
+
+typedef struct {
+  uintptr_t ptr;
+  uint32_t flag;
+  uint32_t handle;
+} region_t;
+
+constexpr const uint32_t access_mask =
+DOCA_ACCESS_FLAG_LOCAL_READ_WRITE | DOCA_ACCESS_FLAG_PCI_READ_WRITE;
+
+#ifndef NDEBUG
+#include <cstdio>
+#include <cstdlib>
+#include <doca_error.h>
+#define doca_check(expr)                                                       \
+  do {                                                                         \
+    doca_error_t __doca_check_result__ = expr;                                 \
+    if (__doca_check_result__ != DOCA_SUCCESS) {                               \
+      fprintf(stderr, "%s:%d:%s:" #expr ": %s\n", __FILE__, __LINE__,          \
+              __func__, doca_error_get_descr(__doca_check_result__));          \
+      if (dpa != nullptr) {                                                    \
+        doca_error_t __doca_dpa_last_error__ =                                 \
+            doca_dpa_peek_at_last_error(dpa);                                  \
+        fprintf(stderr, "DPA ERROR: %s\n",                                     \
+                doca_error_get_descr(__doca_dpa_last_error__));                \
+      }                                                                        \
+      std::abort();                                                            \
+    }                                                                          \
+  } while (0);
+#else
+#define doca_check(expr) (void)(expr)
+#endif
 
 // Options while opening a file to read/write
 struct EnvOptions {
@@ -675,6 +713,21 @@ class Env : public Customizable {
       Env::Priority /*priority*/) {
     return nullptr;
   }
+
+  virtual char* AllocateMT(size_t mt_bytes) {
+    return nullptr;
+  };
+
+  virtual void deAllocateMT(char* mt_addr) {
+    return;
+  };
+
+  std::string mmap_export_desc;
+  doca_mmap* mmap_;
+
+  char* mt_buf;
+  std::queue<char*> free_chunks_;
+  size_t last_alloc_idx_ = 0;
 
  protected:
   // The pointer to an internal structure that will update the
@@ -1887,5 +1940,10 @@ Status NewEnvLogger(const std::string& fname, Env* env,
 // Creates a new Env based on Env::Default() but modified to use the specified
 // FileSystem.
 std::unique_ptr<Env> NewCompositeEnv(const std::shared_ptr<FileSystem>& fs);
+
+extern Env* FLAGS_env;
+extern doca_dev* dev;
+extern doca_dpa* dpa;
+
 
 }  // namespace ROCKSDB_NAMESPACE

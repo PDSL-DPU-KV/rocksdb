@@ -190,6 +190,8 @@ class InlineSkipList {
     // Final state of iterator is Valid() iff list is not empty.
     void SeekToLast();
 
+    void* Current();
+
    private:
     const InlineSkipList* list_;
     Node* node_;
@@ -436,6 +438,11 @@ inline void InlineSkipList<Comparator>::Iterator::SeekToLast() {
   if (node_ == list_->head_) {
     node_ = nullptr;
   }
+}
+
+template <class Comparator>
+inline void* InlineSkipList<Comparator>::Iterator::Current() {
+  return node_;
 }
 
 template <class Comparator>

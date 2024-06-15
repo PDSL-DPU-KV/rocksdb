@@ -255,6 +255,10 @@ class MemTableRep {
     // Position at the last entry in collection.
     // Final state of iterator is Valid() iff collection is not empty.
     virtual void SeekToLast() = 0;
+
+    virtual void* Current() {
+      return nullptr;
+    }
   };
 
   // Return an iterator over the keys in this representation.

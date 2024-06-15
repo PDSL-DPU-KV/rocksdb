@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors
 
+#include <doca_mmap.h>
 #include "port/lang.h"
 #if !defined(OS_WIN)
 
@@ -97,6 +98,53 @@ static const std::string kSharedLibExt = ".dylib";
 static const std::string kSharedLibExt = ".so";
 #endif
 #endif
+
+Env* FLAGS_env = nullptr;
+doca_dev* dev;
+doca_dpa* dpa;
+
+void open_device() {
+  doca_devinfo** dev_list;
+  doca_devinfo* dev_info = NULL;
+  uint32_t nb_devs;
+  doca_check(doca_devinfo_create_list(&dev_list, &nb_devs));
+  char ibdev_name_buf[DOCA_DEVINFO_IBDEV_NAME_SIZE];
+  doca_error_t result = DOCA_SUCCESS;
+  for (uint32_t i = 0; i < nb_devs; i++) {
+    result = doca_devinfo_get_ibdev_name(dev_list[i], ibdev_name_buf,
+                                         DOCA_DEVINFO_IBDEV_NAME_SIZE);
+    if (result == DOCA_SUCCESS &&
+        strncmp("mlx5_1", ibdev_name_buf, strlen("mlx5_1")) == 0) {
+      dev_info = dev_list[i];
+      break;
+    }
+  }
+  if (!dev_info) {
+    std::abort();
+  }
+  doca_check(doca_dev_open(dev_info, &dev));
+  doca_check(doca_devinfo_destroy_list(dev_list));
+}
+
+void close_device() {
+  doca_check(doca_dev_close(dev));
+}
+
+doca_mmap* alloc_mem(uint64_t len, uintptr_t ptr) {
+  doca_mmap* mmap;
+  doca_check(doca_mmap_create(&mmap));
+  doca_check(doca_mmap_add_dev(mmap, dev));
+  doca_check(doca_mmap_set_memrange(mmap, (void*)ptr, len));
+  doca_check(doca_mmap_set_permissions(mmap, access_mask));
+  doca_check(doca_mmap_start(mmap));
+  return mmap;
+}
+
+void free_mem(doca_mmap* mmap, uintptr_t ptr) {
+  doca_check(doca_mmap_stop(mmap));
+  free((void*)ptr);
+  doca_check(doca_mmap_destroy(mmap));
+}
 
 namespace {
 
@@ -429,11 +477,40 @@ class PosixEnv : public CompositeEnv {
     return thread_pools_[priority].GetThreadWaitingTime();
   }
 
+  char* AllocateMT(size_t mt_bytes) override {
+    assert(mt_bytes == 140 * (1U << 20));
+    // if (mt_bytes != 140 * (1U << 20)) {
+    //   printf("mt_bytes is not 140MB!\n");
+    //   std::abort();
+    // }
+    char* result = nullptr;
+    if (!free_chunks_.empty()) {
+      result = free_chunks_.front();
+      free_chunks_.pop();
+      printf("getaddr:%lx\n", (uintptr_t)result);
+    }
+    else {
+      // if (last_alloc_idx_ >= 10) {
+      //   printf("last_alloc_idx_ exceed!\n");
+      //   std::abort();
+      // }
+      assert(last_alloc_idx_ < 10);
+      result = mt_buf + last_alloc_idx_ * mt_bytes;
+      printf("getaddr:%lx, last_alloc_idx:%ld\n",(uintptr_t)result,last_alloc_idx_);
+      last_alloc_idx_++;
+    }
+    return result;
+  }
+
+  void deAllocateMT(char* mt_addr) override {
+    free_chunks_.push(mt_addr);
+  }
+
  private:
   friend Env* Env::Default();
   // Constructs the default Env, a singleton
   PosixEnv();
-
+  ~PosixEnv();
   // The below 4 members are only used by the default PosixEnv instance.
   // Non-default instances simply maintain references to the backing
   // members in te default instance
@@ -473,6 +550,21 @@ PosixEnv::PosixEnv()
     thread_pools_[pool_id].SetHostEnv(this);
   }
   thread_status_updater_ = CreateThreadStatusUpdater();
+
+  open_device();
+  size_t buf_size = 10 * 140 * (1U << 20); // 10个 140M 空间
+  mt_buf = (char*)aligned_alloc(64, buf_size);
+  mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
+  const void* addr;
+  size_t size;
+  doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
+  mmap_export_desc = std::string((const char*)addr, size);
+  //printf("env init\n");
+}
+
+PosixEnv::~PosixEnv() {
+  free_mem(mmap_, (uintptr_t)mt_buf);
+  close_device();
 }
 
 void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,

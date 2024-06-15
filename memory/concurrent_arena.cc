@@ -27,10 +27,10 @@ const size_t kMaxShardBlockSize = size_t{128 * 1024};
 }  // namespace
 
 ConcurrentArena::ConcurrentArena(size_t block_size, AllocTracker* tracker,
-                                 size_t huge_page_size)
+                                 size_t huge_page_size, bool MTFlag)
     : shard_block_size_(std::min(kMaxShardBlockSize, block_size / 8)),
       shards_(),
-      arena_(block_size, tracker, huge_page_size) {
+      arena_(block_size, tracker, huge_page_size, MTFlag) {
   Fixup();
 }
 

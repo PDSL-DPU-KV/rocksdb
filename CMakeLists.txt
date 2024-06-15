@@ -34,7 +34,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/dc/grpc/build")
+set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/zqy2023/lib/grpc")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 include(ReadVersion)
 include(GoogleTest)
@@ -622,7 +622,7 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
-set(ENV{PKG_CONFIG_PATH} "/home/dc/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/")
+set(ENV{PKG_CONFIG_PATH} "/home/zqy2023/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/doca/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/flexio/lib/pkgconfig/:/opt/mellanox/dpdk/lib/x86_64-linux-gnu/pkgconfig/")
 option(WITH_MERCURY "Build with mercury" ON)
 if(WITH_MERCURY)
   find_package(PkgConfig REQUIRED)
@@ -632,6 +632,7 @@ if(WITH_MERCURY)
     message(FATAL_ERROR "pkg-config not found")
   endif()
   pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
+  pkg_check_modules(doca REQUIRED IMPORTED_TARGET doca-common doca-rdma doca-erasure-coding doca-dpa libflexio)
 endif()
 
 # Proto file
@@ -1174,11 +1175,15 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
   ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
+target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::doca)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
     ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::mercury)
+  target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} PkgConfig::doca)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1209,6 +1214,7 @@ option(WITH_JNI "build with JNI" OFF)
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
  "CMAKE_BUILD_TYPE STREQUAL Debug" ON)
 option(WITH_NAS_SERVER "build with nas server" ON)
+option(WITH_DPU_SERVER "build with dpu server" ON)
 option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
@@ -1605,6 +1611,18 @@ if (WITH_NAS_SERVER)
     plugin/nas/nas_server.cc)
   target_link_libraries(nas_server${ARTIFACT_SUFFIX} 
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+  target_link_libraries(nas_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::doca)
+endif()
+
+if (WITH_DPU_SERVER)
+  add_executable(dpu_server${ARTIFACT_SUFFIX}
+    dflush/dflush.cpp)
+  target_link_libraries(dpu_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+  target_link_libraries(dpu_server${ARTIFACT_SUFFIX} 
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::doca)
+  target_link_libraries(dpu_server /home/zqy2023/rocksdb/dflush/build/kernels/dflush_app.a)
 endif()
 
 if(WITH_BENCHMARK_TOOLS)
@@ -1614,6 +1632,8 @@ if(WITH_BENCHMARK_TOOLS)
     tools/db_bench_tool.cc)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX}
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
+  target_link_libraries(db_bench${ARTIFACT_SUFFIX}
+    ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::doca)
 
   add_executable(cache_bench${ARTIFACT_SUFFIX}
     cache/cache_bench.cc

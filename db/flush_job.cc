@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <cinttypes>
 #include <vector>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -823,6 +826,29 @@ bool FlushJob::MemPurgeDecider(double threshold) {
           threshold);
 }
 
+int ConnectToServer() {
+  auto client_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (client_fd < 0) {
+    printf("\n Socket creation error \n");
+    return -1;
+  }
+
+  struct sockaddr_in serv_addr;
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_port = htons(10086);
+  if (inet_pton(AF_INET, "192.168.2.21", &serv_addr.sin_addr) <= 0) {
+    printf("\nInvalid address/ Address not supported \n");
+    return -1;
+  }
+
+  if ((connect(client_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) <
+      0) {
+    printf("\nConnection Failed \n");
+    return -1;
+  }
+  return client_fd;
+}
+
 Status FlushJob::WriteLevel0Table() {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_FLUSH_WRITE_L0);
@@ -867,12 +893,26 @@ Status FlushJob::WriteLevel0Table() {
     TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
                              &mems_size);
     assert(job_context_);
+    assert(mems_size == 1); // 我自己打印出来是一直等于 1 的
+    uintptr_t mt_buf_head;
+    uintptr_t Node_head;
+    bool mt_flag_;
+    static uint64_t nums = 0;
     for (MemTable* m : mems_) {
       ROCKS_LOG_INFO(
           db_options_.info_log,
           "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 "\n",
           cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber());
       memtables.push_back(m->NewIterator(ro, &arena));
+      memtables[memtables.size() - 1]->SeekToFirst();
+      Node_head = (uintptr_t)memtables[memtables.size() - 1]->Current();
+      printf("nums:%ld, head_key_ptr:%lx\n", nums, (uintptr_t)memtables[memtables.size() - 1]->key().data());
+      printf("nums:%ld, key1:%ld\n", nums, *(uint64_t*)memtables[memtables.size() - 1]->key().data());
+      memtables[memtables.size() - 1]->Next();
+      printf("nums:%ld, next_key_ptr:%lx\n", nums, (uintptr_t)memtables[memtables.size() - 1]->key().data());
+      printf("nums:%ld, key2:%ld\n", nums++, *(uint64_t*)memtables[memtables.size() - 1]->key().data());
+      mt_buf_head = (uintptr_t)m->get_mt_buf_();
+      mt_flag_ = m->get_mt_flag_();
       auto* range_del_iter = m->NewRangeTombstoneIterator(
           ro, kMaxSequenceNumber, true /* immutable_memtable */);
       if (range_del_iter != nullptr) {
@@ -883,6 +923,24 @@ Status FlushJob::WriteLevel0Table() {
       total_data_size += m->get_data_size();
       total_memory_usage += m->ApproximateMemoryUsage();
     }
+
+    // 把必要信息传到 DPU 端
+    char buffer[1024];
+    char* ptr = buffer;
+    *(uintptr_t*)ptr = Node_head;
+    ptr += sizeof(uintptr_t);
+    *(uintptr_t*)ptr = mt_buf_head;
+    ptr += sizeof(uintptr_t);
+    *(uint64_t*)ptr = FLAGS_env->mmap_export_desc.size();
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, FLAGS_env->mmap_export_desc.data(), FLAGS_env->mmap_export_desc.size());
+    uint64_t total_size = 2 * sizeof(uintptr_t) + sizeof(uint64_t) + FLAGS_env->mmap_export_desc.size();
+    auto client_fd = ConnectToServer();
+    printf("mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n", mt_buf_head, Node_head,mt_flag_);
+    send(client_fd, buffer, total_size, 0);
+
+    read(client_fd, buffer, 1024); //通过 read 阻塞
+
 
     event_logger_->Log() << "job" << job_context_->job_id << "event"
                          << "flush_started"

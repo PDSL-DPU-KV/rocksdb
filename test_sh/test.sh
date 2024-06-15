@@ -11,9 +11,9 @@ t_array=("16")
 db_array=("1")
 
 ### Benchmark parameters
-db="/mnt/ssd0/test"
+db="/home/lsc/hadoop/zqy2023/rocksdb_test"
 num_multi_db="1"
-wal_dir="/mnt/ssd0/test"
+wal_dir="/home/lsc/hadoop/zqy2023/rocksdb_test"
 use_existing_db="true"
 threads="32"
 benchmarks="fillrandom,stats,wait,stats"
@@ -63,8 +63,8 @@ bloom_bits=10
 # blob_compression_type="snappy"
 
 ### Env paramemters
-use_nas="true"
-fs_svr_addr="ofi+verbs://192.168.200.11:12345"
+use_nas="false"
+fs_svr_addr="ofi+verbs://192.168.2.21:12345"
 
 ### Statistics parameters
 #target_io="nvme3c3n1"
@@ -348,7 +348,7 @@ RUN_ONE_TEST() {
     #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params | tee -a out.out"
     if [ "$1" == "numa" ];then
         #cmd="sudo numactl -N 1 $bench_file_path $const_params"
-        cmd="numactl -C 0-8 $bench_file_path $const_params | tee -a out.out"
+        cmd=" $bench_file_path $const_params | tee -a out.out"
         #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params"
     fi
     echo $cmd >>out.out
@@ -358,18 +358,18 @@ RUN_ONE_TEST() {
 
 CLEAN_CACHE() {
     if [ -n "$db" ];then
-       sudo rm -f $db/*
+       rm -f $db/*
     fi
     sleep 2
     sync
-    echo 3 | sudo tee -a /proc/sys/vm/drop_caches > /dev/null
+    # echo 3 | tee -a /proc/sys/vm/drop_caches > /dev/null
     sleep 2
 }
 
 REMOUNT_SSD() {
-    sudo umount /mnt/ssd
-    sudo mkfs.ext4 /dev/nvme3n1
-    sudo mount /dev/nvme3n1 /mnt/ssd
+    umount /mnt/ssd
+    mkfs.ext4 /dev/nvme3n1
+    mount /dev/nvme3n1 /mnt/ssd
 }
 
 COPY_OUT_FILE() {

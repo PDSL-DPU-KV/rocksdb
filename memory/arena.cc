@@ -33,15 +33,24 @@ size_t Arena::OptimizeBlockSize(size_t block_size) {
   return block_size;
 }
 
-Arena::Arena(size_t block_size, AllocTracker* tracker, size_t huge_page_size)
-    : kBlockSize(OptimizeBlockSize(block_size)), tracker_(tracker) {
+Arena::Arena(size_t block_size, AllocTracker* tracker, size_t huge_page_size, bool MTFlag)
+    : kBlockSize(OptimizeBlockSize(block_size)), tracker_(tracker), mt_flag_(MTFlag) {
   assert(kBlockSize >= kMinBlockSize && kBlockSize <= kMaxBlockSize &&
          kBlockSize % kAlignUnit == 0);
   TEST_SYNC_POINT_CALLBACK("Arena::Arena:0", const_cast<size_t*>(&kBlockSize));
-  alloc_bytes_remaining_ = sizeof(inline_block_);
-  blocks_memory_ += alloc_bytes_remaining_;
-  aligned_alloc_ptr_ = inline_block_;
-  unaligned_alloc_ptr_ = inline_block_ + alloc_bytes_remaining_;
+  if (mt_flag_) {
+    mt_buf_ = FLAGS_env->AllocateMT(140 * kBlockSize);
+    alloc_bytes_remaining_ = kBlockSize;
+    blocks_memory_ += alloc_bytes_remaining_;
+    aligned_alloc_ptr_ = mt_buf_;
+    unaligned_alloc_ptr_ = mt_buf_ + alloc_bytes_remaining_;
+    alloc_idx_++;
+  } else {
+    alloc_bytes_remaining_ = sizeof(inline_block_);
+    blocks_memory_ += alloc_bytes_remaining_;
+    aligned_alloc_ptr_ = inline_block_;
+    unaligned_alloc_ptr_ = inline_block_ + alloc_bytes_remaining_;
+  }
   if (MemMapping::kHugePageSupported) {
     hugetlb_size_ = huge_page_size;
     if (hugetlb_size_ && kBlockSize > hugetlb_size_) {
@@ -58,6 +67,13 @@ Arena::~Arena() {
     assert(tracker_->is_freed());
     tracker_->FreeMem();
   }
+  if (mt_flag_) {
+    FLAGS_env->deAllocateMT(mt_buf_);
+  } else {
+    for (const auto& block : blocks_) {
+      delete[] block;
+    }
+  }
 }
 
 char* Arena::AllocateFallback(size_t bytes, bool aligned) {
@@ -65,6 +81,7 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
     ++irregular_block_num;
     // Object is more than a quarter of our block size.  Allocate it separately
     // to avoid wasting too much space in leftover bytes.
+    //printf("AllocateFrombytes, mtflag:%d\n", mt_flag_);
     return AllocateNewBlock(bytes);
   }
 
@@ -73,6 +90,7 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
   char* block_head = nullptr;
   if (MemMapping::kHugePageSupported && hugetlb_size_ > 0) {
     size = hugetlb_size_;
+    //printf("AllocateFromHugePage, mtflag:%d\n",mt_flag_);
     block_head = AllocateFromHugePage(size);
   }
   if (!block_head) {
@@ -145,12 +163,26 @@ char* Arena::AllocateAligned(size_t bytes, size_t huge_page_size,
 char* Arena::AllocateNewBlock(size_t block_bytes) {
   // NOTE: std::make_unique zero-initializes the block so is not appropriate
   // here
-  char* block = new char[block_bytes];
-  blocks_.push_back(std::unique_ptr<char[]>(block));
+  char* block = nullptr;
+  if (mt_flag_) {
+    // if (alloc_idx_ >= 140) {
+    //   printf("kBlock nums exceed!\n");
+    //   std::abort();
+    // }
+    block = mt_buf_ + alloc_idx_ * kBlockSize;
+    //printf("blockaddr:%lx, alloc_idx:%ld\n",(uintptr_t)block,alloc_idx_);
+    alloc_idx_++;
+    blocks_.push_back(block);
+  }
+  else {
+    block = new char[block_bytes];
+    blocks_.push_back(block);
+  }
 
   size_t allocated_size;
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
-  allocated_size = malloc_usable_size(block);
+  // allocated_size = malloc_usable_size(block);
+  allocated_size = block_bytes;
 #ifndef NDEBUG
   // It's hard to predict what malloc_usable_size() returns.
   // A callback can allow users to change the costed size.

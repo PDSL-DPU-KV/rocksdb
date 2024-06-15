@@ -47,7 +47,8 @@ class ConcurrentArena : public Allocator {
   // that varies according to the hardware concurrency level.
   explicit ConcurrentArena(size_t block_size = Arena::kMinBlockSize,
                            AllocTracker* tracker = nullptr,
-                           size_t huge_page_size = 0);
+                           size_t huge_page_size = 0,
+                           bool MTFlag = false);
 
   char* Allocate(size_t bytes) override {
     return AllocateImpl(bytes, false /*force_arena*/,
@@ -87,6 +88,14 @@ class ConcurrentArena : public Allocator {
   }
 
   size_t BlockSize() const override { return arena_.BlockSize(); }
+
+  char* get_mt_buf_() const {
+    return arena_.get_mt_buf_();
+  }
+
+  bool get_mt_flag_() const {
+    return arena_.get_mt_flag_();
+  }
 
  private:
   struct Shard {
