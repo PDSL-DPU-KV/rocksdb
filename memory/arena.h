@@ -108,9 +108,6 @@ class Arena : public Allocator {
 
   // typedef std::vector<char*> Blocks;
   // Blocks blocks_mt;
-  char* mt_buf_;
-  bool mt_flag_ = false;
-  size_t alloc_idx_ = 0;
 
   // Stats for current active block.
   // For each block, we allocate aligned memory chucks from one end and
@@ -132,6 +129,10 @@ class Arena : public Allocator {
   size_t blocks_memory_ = 0;
   // Non-owned
   AllocTracker* tracker_;
+
+  char* mt_buf_;
+  bool mt_flag_ = false;
+  size_t alloc_idx_ = 0;
 };
 
 inline char* Arena::Allocate(size_t bytes) {

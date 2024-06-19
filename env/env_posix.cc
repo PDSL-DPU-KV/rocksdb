@@ -88,447 +88,453 @@
 
 namespace ROCKSDB_NAMESPACE {
 #if defined(OS_WIN)
-static const std::string kSharedLibExt = ".dll";
-static const char kPathSeparator = ';';
+  static const std::string kSharedLibExt = ".dll";
+  static const char kPathSeparator = ';';
 #else
-static const char kPathSeparator = ':';
+  static const char kPathSeparator = ':';
 #if defined(OS_MACOSX)
-static const std::string kSharedLibExt = ".dylib";
+  static const std::string kSharedLibExt = ".dylib";
 #else
-static const std::string kSharedLibExt = ".so";
+  static const std::string kSharedLibExt = ".so";
 #endif
 #endif
 
-Env* FLAGS_env = nullptr;
-doca_dev* dev;
-doca_dpa* dpa;
+  Env* FLAGS_env = nullptr;
+  doca_dev* dev;
+  doca_dpa* dpa;
 
-void open_device() {
-  doca_devinfo** dev_list;
-  doca_devinfo* dev_info = NULL;
-  uint32_t nb_devs;
-  doca_check(doca_devinfo_create_list(&dev_list, &nb_devs));
-  char ibdev_name_buf[DOCA_DEVINFO_IBDEV_NAME_SIZE];
-  doca_error_t result = DOCA_SUCCESS;
-  for (uint32_t i = 0; i < nb_devs; i++) {
-    result = doca_devinfo_get_ibdev_name(dev_list[i], ibdev_name_buf,
-                                         DOCA_DEVINFO_IBDEV_NAME_SIZE);
-    if (result == DOCA_SUCCESS &&
-        strncmp("mlx5_1", ibdev_name_buf, strlen("mlx5_1")) == 0) {
-      dev_info = dev_list[i];
-      break;
+  void open_device() {
+    doca_devinfo** dev_list;
+    doca_devinfo* dev_info = NULL;
+    uint32_t nb_devs;
+    doca_check(doca_devinfo_create_list(&dev_list, &nb_devs));
+    char ibdev_name_buf[DOCA_DEVINFO_IBDEV_NAME_SIZE];
+    doca_error_t result = DOCA_SUCCESS;
+    for (uint32_t i = 0; i < nb_devs; i++) {
+      result = doca_devinfo_get_ibdev_name(dev_list[i], ibdev_name_buf,
+                                           DOCA_DEVINFO_IBDEV_NAME_SIZE);
+      if (result == DOCA_SUCCESS &&
+          strncmp("mlx5_1", ibdev_name_buf, strlen("mlx5_1")) == 0) {
+        dev_info = dev_list[i];
+        break;
+      }
     }
+    if (!dev_info) {
+      std::abort();
+    }
+    doca_check(doca_dev_open(dev_info, &dev));
+    doca_check(doca_devinfo_destroy_list(dev_list));
   }
-  if (!dev_info) {
-    std::abort();
+
+  void close_device() {
+    doca_check(doca_dev_close(dev));
   }
-  doca_check(doca_dev_open(dev_info, &dev));
-  doca_check(doca_devinfo_destroy_list(dev_list));
-}
 
-void close_device() {
-  doca_check(doca_dev_close(dev));
-}
+  doca_mmap* alloc_mem(uint64_t len, uintptr_t ptr) {
+    doca_mmap* mmap;
+    doca_check(doca_mmap_create(&mmap));
+    doca_check(doca_mmap_add_dev(mmap, dev));
+    doca_check(doca_mmap_set_memrange(mmap, (void*)ptr, len));
+    doca_check(doca_mmap_set_permissions(mmap, access_mask));
+    doca_check(doca_mmap_start(mmap));
+    return mmap;
+  }
 
-doca_mmap* alloc_mem(uint64_t len, uintptr_t ptr) {
-  doca_mmap* mmap;
-  doca_check(doca_mmap_create(&mmap));
-  doca_check(doca_mmap_add_dev(mmap, dev));
-  doca_check(doca_mmap_set_memrange(mmap, (void*)ptr, len));
-  doca_check(doca_mmap_set_permissions(mmap, access_mask));
-  doca_check(doca_mmap_start(mmap));
-  return mmap;
-}
+  void free_mem(doca_mmap* mmap, uintptr_t ptr) {
+    doca_check(doca_mmap_stop(mmap));
+    free((void*)ptr);
+    doca_check(doca_mmap_destroy(mmap));
+  }
 
-void free_mem(doca_mmap* mmap, uintptr_t ptr) {
-  doca_check(doca_mmap_stop(mmap));
-  free((void*)ptr);
-  doca_check(doca_mmap_destroy(mmap));
-}
+  namespace {
 
-namespace {
-
-ThreadStatusUpdater* CreateThreadStatusUpdater() {
-  return new ThreadStatusUpdater();
-}
+    ThreadStatusUpdater* CreateThreadStatusUpdater() {
+      return new ThreadStatusUpdater();
+    }
 
 #ifndef ROCKSDB_NO_DYNAMIC_EXTENSION
-class PosixDynamicLibrary : public DynamicLibrary {
- public:
-  PosixDynamicLibrary(const std::string& name, void* handle)
-      : name_(name), handle_(handle) {}
-  ~PosixDynamicLibrary() override { dlclose(handle_); }
+    class PosixDynamicLibrary : public DynamicLibrary {
+    public:
+      PosixDynamicLibrary(const std::string& name, void* handle)
+        : name_(name), handle_(handle) {}
+      ~PosixDynamicLibrary() override { dlclose(handle_); }
 
-  Status LoadSymbol(const std::string& sym_name, void** func) override {
-    assert(nullptr != func);
-    dlerror();  // Clear any old error
-    *func = dlsym(handle_, sym_name.c_str());
-    if (*func != nullptr) {
-      return Status::OK();
-    } else {
-      char* err = dlerror();
-      return Status::NotFound("Error finding symbol: " + sym_name, err);
-    }
-  }
-
-  const char* Name() const override { return name_.c_str(); }
-
- private:
-  std::string name_;
-  void* handle_;
-};
-#endif  // !ROCKSDB_NO_DYNAMIC_EXTENSION
-
-class PosixClock : public SystemClock {
- public:
-  static const char* kClassName() { return "PosixClock"; }
-  const char* Name() const override { return kDefaultName(); }
-  const char* NickName() const override { return kClassName(); }
-
-  uint64_t NowMicros() override {
-    port::TimeVal tv;
-    port::GetTimeOfDay(&tv, nullptr);
-    return static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
-  }
-
-  uint64_t NowNanos() override {
-#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
-    defined(OS_AIX)
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
-#elif defined(OS_SOLARIS)
-    return gethrtime();
-#elif defined(__MACH__)
-    clock_serv_t cclock;
-    mach_timespec_t ts;
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-    clock_get_time(cclock, &ts);
-    mach_port_deallocate(mach_task_self(), cclock);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
-#else
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-               std::chrono::steady_clock::now().time_since_epoch())
-        .count();
-#endif
-  }
-
-  uint64_t CPUMicros() override {
-#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
-    defined(OS_AIX) || (defined(__MACH__) && defined(__MAC_10_12))
-    struct timespec ts;
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
-    return (static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec) / 1000;
-#endif
-    return 0;
-  }
-
-  uint64_t CPUNanos() override {
-#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
-    defined(OS_AIX) || (defined(__MACH__) && defined(__MAC_10_12))
-    struct timespec ts;
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
-#endif
-    return 0;
-  }
-
-  void SleepForMicroseconds(int micros) override { usleep(micros); }
-
-  Status GetCurrentTime(int64_t* unix_time) override {
-    time_t ret = time(nullptr);
-    if (ret == (time_t)-1) {
-      return IOError("GetCurrentTime", "", errno);
-    }
-    *unix_time = (int64_t)ret;
-    return Status::OK();
-  }
-
-  std::string TimeToString(uint64_t secondsSince1970) override {
-    const time_t seconds = (time_t)secondsSince1970;
-    struct tm t;
-    int maxsize = 64;
-    std::string dummy;
-    dummy.reserve(maxsize);
-    dummy.resize(maxsize);
-    char* p = &dummy[0];
-    port::LocalTimeR(&seconds, &t);
-    snprintf(p, maxsize, "%04d/%02d/%02d-%02d:%02d:%02d ", t.tm_year + 1900,
-             t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
-    return dummy;
-  }
-};
-
-class PosixEnv : public CompositeEnv {
- public:
-  static const char* kClassName() { return "PosixEnv"; }
-  const char* Name() const override { return kClassName(); }
-  const char* NickName() const override { return kDefaultName(); }
-
-  struct JoinThreadsOnExit {
-    explicit JoinThreadsOnExit(PosixEnv& _deflt) : deflt(_deflt) {}
-    ~JoinThreadsOnExit() {
-      for (const auto tid : deflt.threads_to_join_) {
-        pthread_join(tid, nullptr);
-      }
-      for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
-        deflt.thread_pools_[pool_id].JoinAllThreads();
-      }
-      // Do not delete the thread_status_updater_ in order to avoid the
-      // free after use when Env::Default() is destructed while some other
-      // child threads are still trying to update thread status. All
-      // PosixEnv instances use the same thread_status_updater_, so never
-      // explicitly delete it.
-    }
-    PosixEnv& deflt;
-  };
-
-  void SetFD_CLOEXEC(int fd, const EnvOptions* options) {
-    if ((options == nullptr || options->set_fd_cloexec) && fd > 0) {
-      fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
-    }
-  }
-
-#ifndef ROCKSDB_NO_DYNAMIC_EXTENSION
-  // Loads the named library into the result.
-  // If the input name is empty, the current executable is loaded
-  // On *nix systems, a "lib" prefix is added to the name if one is not supplied
-  // Comparably, the appropriate shared library extension is added to the name
-  // if not supplied. If search_path is not specified, the shared library will
-  // be loaded using the default path (LD_LIBRARY_PATH) If search_path is
-  // specified, the shared library will be searched for in the directories
-  // provided by the search path
-  Status LoadLibrary(const std::string& name, const std::string& path,
-                     std::shared_ptr<DynamicLibrary>* result) override {
-    assert(result != nullptr);
-    if (name.empty()) {
-      void* hndl = dlopen(NULL, RTLD_NOW);
-      if (hndl != nullptr) {
-        result->reset(new PosixDynamicLibrary(name, hndl));
-        return Status::OK();
-      }
-    } else {
-      std::string library_name = name;
-      if (library_name.find(kSharedLibExt) == std::string::npos) {
-        library_name = library_name + kSharedLibExt;
-      }
-#if !defined(OS_WIN)
-      if (library_name.find('/') == std::string::npos &&
-          library_name.compare(0, 3, "lib") != 0) {
-        library_name = "lib" + library_name;
-      }
-#endif
-      if (path.empty()) {
-        void* hndl = dlopen(library_name.c_str(), RTLD_NOW);
-        if (hndl != nullptr) {
-          result->reset(new PosixDynamicLibrary(library_name, hndl));
+      Status LoadSymbol(const std::string& sym_name, void** func) override {
+        assert(nullptr != func);
+        dlerror();  // Clear any old error
+        *func = dlsym(handle_, sym_name.c_str());
+        if (*func != nullptr) {
           return Status::OK();
         }
-      } else {
-        std::string local_path;
-        std::stringstream ss(path);
-        while (getline(ss, local_path, kPathSeparator)) {
-          if (!path.empty()) {
-            std::string full_name = local_path + "/" + library_name;
-            void* hndl = dlopen(full_name.c_str(), RTLD_NOW);
+        else {
+          char* err = dlerror();
+          return Status::NotFound("Error finding symbol: " + sym_name, err);
+        }
+      }
+
+      const char* Name() const override { return name_.c_str(); }
+
+    private:
+      std::string name_;
+      void* handle_;
+    };
+#endif  // !ROCKSDB_NO_DYNAMIC_EXTENSION
+
+    class PosixClock : public SystemClock {
+    public:
+      static const char* kClassName() { return "PosixClock"; }
+      const char* Name() const override { return kDefaultName(); }
+      const char* NickName() const override { return kClassName(); }
+
+      uint64_t NowMicros() override {
+        port::TimeVal tv;
+        port::GetTimeOfDay(&tv, nullptr);
+        return static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
+      }
+
+      uint64_t NowNanos() override {
+#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
+    defined(OS_AIX)
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
+#elif defined(OS_SOLARIS)
+        return gethrtime();
+#elif defined(__MACH__)
+        clock_serv_t cclock;
+        mach_timespec_t ts;
+        host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+        clock_get_time(cclock, &ts);
+        mach_port_deallocate(mach_task_self(), cclock);
+        return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
+#else
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+#endif
+      }
+
+      uint64_t CPUMicros() override {
+#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
+    defined(OS_AIX) || (defined(__MACH__) && defined(__MAC_10_12))
+        struct timespec ts;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+        return (static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec) / 1000;
+#endif
+        return 0;
+      }
+
+      uint64_t CPUNanos() override {
+#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_GNU_KFREEBSD) || \
+    defined(OS_AIX) || (defined(__MACH__) && defined(__MAC_10_12))
+        struct timespec ts;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+        return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
+#endif
+        return 0;
+      }
+
+      void SleepForMicroseconds(int micros) override { usleep(micros); }
+
+      Status GetCurrentTime(int64_t* unix_time) override {
+        time_t ret = time(nullptr);
+        if (ret == (time_t)-1) {
+          return IOError("GetCurrentTime", "", errno);
+        }
+        *unix_time = (int64_t)ret;
+        return Status::OK();
+      }
+
+      std::string TimeToString(uint64_t secondsSince1970) override {
+        const time_t seconds = (time_t)secondsSince1970;
+        struct tm t;
+        int maxsize = 64;
+        std::string dummy;
+        dummy.reserve(maxsize);
+        dummy.resize(maxsize);
+        char* p = &dummy[0];
+        port::LocalTimeR(&seconds, &t);
+        snprintf(p, maxsize, "%04d/%02d/%02d-%02d:%02d:%02d ", t.tm_year + 1900,
+                 t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+        return dummy;
+      }
+    };
+
+    class PosixEnv : public CompositeEnv {
+    public:
+      static const char* kClassName() { return "PosixEnv"; }
+      const char* Name() const override { return kClassName(); }
+      const char* NickName() const override { return kDefaultName(); }
+
+      struct JoinThreadsOnExit {
+        explicit JoinThreadsOnExit(PosixEnv& _deflt) : deflt(_deflt) {}
+        ~JoinThreadsOnExit() {
+          for (const auto tid : deflt.threads_to_join_) {
+            pthread_join(tid, nullptr);
+          }
+          for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
+            deflt.thread_pools_[pool_id].JoinAllThreads();
+          }
+          // Do not delete the thread_status_updater_ in order to avoid the
+          // free after use when Env::Default() is destructed while some other
+          // child threads are still trying to update thread status. All
+          // PosixEnv instances use the same thread_status_updater_, so never
+          // explicitly delete it.
+        }
+        PosixEnv& deflt;
+      };
+
+      void SetFD_CLOEXEC(int fd, const EnvOptions* options) {
+        if ((options == nullptr || options->set_fd_cloexec) && fd > 0) {
+          fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
+        }
+      }
+
+#ifndef ROCKSDB_NO_DYNAMIC_EXTENSION
+      // Loads the named library into the result.
+      // If the input name is empty, the current executable is loaded
+      // On *nix systems, a "lib" prefix is added to the name if one is not supplied
+      // Comparably, the appropriate shared library extension is added to the name
+      // if not supplied. If search_path is not specified, the shared library will
+      // be loaded using the default path (LD_LIBRARY_PATH) If search_path is
+      // specified, the shared library will be searched for in the directories
+      // provided by the search path
+      Status LoadLibrary(const std::string& name, const std::string& path,
+                         std::shared_ptr<DynamicLibrary>* result) override {
+        assert(result != nullptr);
+        if (name.empty()) {
+          void* hndl = dlopen(NULL, RTLD_NOW);
+          if (hndl != nullptr) {
+            result->reset(new PosixDynamicLibrary(name, hndl));
+            return Status::OK();
+          }
+        }
+        else {
+          std::string library_name = name;
+          if (library_name.find(kSharedLibExt) == std::string::npos) {
+            library_name = library_name + kSharedLibExt;
+          }
+#if !defined(OS_WIN)
+          if (library_name.find('/') == std::string::npos &&
+              library_name.compare(0, 3, "lib") != 0) {
+            library_name = "lib" + library_name;
+          }
+#endif
+          if (path.empty()) {
+            void* hndl = dlopen(library_name.c_str(), RTLD_NOW);
             if (hndl != nullptr) {
-              result->reset(new PosixDynamicLibrary(full_name, hndl));
+              result->reset(new PosixDynamicLibrary(library_name, hndl));
               return Status::OK();
             }
           }
+          else {
+            std::string local_path;
+            std::stringstream ss(path);
+            while (getline(ss, local_path, kPathSeparator)) {
+              if (!path.empty()) {
+                std::string full_name = local_path + "/" + library_name;
+                void* hndl = dlopen(full_name.c_str(), RTLD_NOW);
+                if (hndl != nullptr) {
+                  result->reset(new PosixDynamicLibrary(full_name, hndl));
+                  return Status::OK();
+                }
+              }
+            }
+          }
         }
+        return Status::IOError(
+            IOErrorMsg("Failed to open shared library: xs", name), dlerror());
       }
-    }
-    return Status::IOError(
-        IOErrorMsg("Failed to open shared library: xs", name), dlerror());
-  }
 #endif  // !ROCKSDB_NO_DYNAMIC_EXTENSION
 
-  void Schedule(void (*function)(void* arg1), void* arg, Priority pri = LOW,
-                void* tag = nullptr,
-                void (*unschedFunction)(void* arg) = nullptr) override;
+      void Schedule(void (*function)(void* arg1), void* arg, Priority pri = LOW,
+                    void* tag = nullptr,
+                    void (*unschedFunction)(void* arg) = nullptr) override;
 
-  int UnSchedule(void* arg, Priority pri) override;
+      int UnSchedule(void* arg, Priority pri) override;
 
-  void StartThread(void (*function)(void* arg), void* arg) override;
+      void StartThread(void (*function)(void* arg), void* arg) override;
 
-  void WaitForJoin() override;
+      void WaitForJoin() override;
 
-  unsigned int GetThreadPoolQueueLen(Priority pri = LOW) const override;
+      unsigned int GetThreadPoolQueueLen(Priority pri = LOW) const override;
 
-  int ReserveThreads(int threads_to_be_reserved, Priority pri) override;
+      int ReserveThreads(int threads_to_be_reserved, Priority pri) override;
 
-  int ReleaseThreads(int threads_to_be_released, Priority pri) override;
+      int ReleaseThreads(int threads_to_be_released, Priority pri) override;
 
-  Status GetThreadList(std::vector<ThreadStatus>* thread_list) override {
-    assert(thread_status_updater_);
-    return thread_status_updater_->GetThreadList(thread_list);
-  }
+      Status GetThreadList(std::vector<ThreadStatus>* thread_list) override {
+        assert(thread_status_updater_);
+        return thread_status_updater_->GetThreadList(thread_list);
+      }
 
-  uint64_t GetThreadID() const override {
-    uint64_t thread_id = 0;
+      uint64_t GetThreadID() const override {
+        uint64_t thread_id = 0;
 #if defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ)
 #if __GLIBC_PREREQ(2, 30)
-    thread_id = ::gettid();
+        thread_id = ::gettid();
 #else   // __GLIBC_PREREQ(2, 30)
-    pthread_t tid = pthread_self();
-    memcpy(&thread_id, &tid, std::min(sizeof(thread_id), sizeof(tid)));
+        pthread_t tid = pthread_self();
+        memcpy(&thread_id, &tid, std::min(sizeof(thread_id), sizeof(tid)));
 #endif  // __GLIBC_PREREQ(2, 30)
 #else   // defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ)
-    pthread_t tid = pthread_self();
-    memcpy(&thread_id, &tid, std::min(sizeof(thread_id), sizeof(tid)));
+        pthread_t tid = pthread_self();
+        memcpy(&thread_id, &tid, std::min(sizeof(thread_id), sizeof(tid)));
 #endif  // defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ)
-    return thread_id;
-  }
-
-  Status GetHostName(char* name, uint64_t len) override {
-    int ret = gethostname(name, static_cast<size_t>(len));
-    if (ret < 0) {
-      if (errno == EFAULT || errno == EINVAL) {
-        return Status::InvalidArgument(errnoStr(errno).c_str());
-      } else {
-        return IOError("GetHostName", name, errno);
+        return thread_id;
       }
-    }
-    return Status::OK();
-  }
 
-  ThreadStatusUpdater* GetThreadStatusUpdater() const override {
-    return Env::GetThreadStatusUpdater();
-  }
+      Status GetHostName(char* name, uint64_t len) override {
+        int ret = gethostname(name, static_cast<size_t>(len));
+        if (ret < 0) {
+          if (errno == EFAULT || errno == EINVAL) {
+            return Status::InvalidArgument(errnoStr(errno).c_str());
+          }
+          else {
+            return IOError("GetHostName", name, errno);
+          }
+        }
+        return Status::OK();
+      }
 
-  std::string GenerateUniqueId() override { return Env::GenerateUniqueId(); }
+      ThreadStatusUpdater* GetThreadStatusUpdater() const override {
+        return Env::GetThreadStatusUpdater();
+      }
 
-  // Allow increasing the number of worker threads.
-  void SetBackgroundThreads(int num, Priority pri) override {
-    assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-    thread_pools_[pri].SetBackgroundThreads(num);
-  }
+      std::string GenerateUniqueId() override { return Env::GenerateUniqueId(); }
 
-  int GetBackgroundThreads(Priority pri) override {
-    assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-    return thread_pools_[pri].GetBackgroundThreads();
-  }
+      // Allow increasing the number of worker threads.
+      void SetBackgroundThreads(int num, Priority pri) override {
+        assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+        thread_pools_[pri].SetBackgroundThreads(num);
+      }
 
-  Status SetAllowNonOwnerAccess(bool allow_non_owner_access) override {
-    allow_non_owner_access_ = allow_non_owner_access;
-    return Status::OK();
-  }
+      int GetBackgroundThreads(Priority pri) override {
+        assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+        return thread_pools_[pri].GetBackgroundThreads();
+      }
 
-  // Allow increasing the number of worker threads.
-  void IncBackgroundThreadsIfNeeded(int num, Priority pri) override {
-    assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-    thread_pools_[pri].IncBackgroundThreadsIfNeeded(num);
-  }
+      Status SetAllowNonOwnerAccess(bool allow_non_owner_access) override {
+        allow_non_owner_access_ = allow_non_owner_access;
+        return Status::OK();
+      }
 
-  void LowerThreadPoolIOPriority(Priority pool) override {
-    assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
+      // Allow increasing the number of worker threads.
+      void IncBackgroundThreadsIfNeeded(int num, Priority pri) override {
+        assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+        thread_pools_[pri].IncBackgroundThreadsIfNeeded(num);
+      }
+
+      void LowerThreadPoolIOPriority(Priority pool) override {
+        assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
 #ifdef OS_LINUX
-    thread_pools_[pool].LowerIOPriority();
+        thread_pools_[pool].LowerIOPriority();
 #else
-    (void)pool;
+        (void)pool;
 #endif
-  }
+      }
 
-  void LowerThreadPoolCPUPriority(Priority pool) override {
-    assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
-    thread_pools_[pool].LowerCPUPriority(CpuPriority::kLow);
-  }
+      void LowerThreadPoolCPUPriority(Priority pool) override {
+        assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
+        thread_pools_[pool].LowerCPUPriority(CpuPriority::kLow);
+      }
 
-  Status LowerThreadPoolCPUPriority(Priority pool, CpuPriority pri) override {
-    assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
-    thread_pools_[pool].LowerCPUPriority(pri);
-    return Status::OK();
-  }
+      Status LowerThreadPoolCPUPriority(Priority pool, CpuPriority pri) override {
+        assert(pool >= Priority::BOTTOM && pool <= Priority::HIGH);
+        thread_pools_[pool].LowerCPUPriority(pri);
+        return Status::OK();
+      }
 
-  // for FEAT usage
-  //
+      // for FEAT usage
+      //
 
-  std::vector<std::pair<size_t, uint64_t>> GetThreadWaitingTime() {
-    std::vector<std::pair<size_t, uint64_t>> results;
-    for (uint64_t i = 0; i < thread_pools_.size(); i++) {
-      auto waiting_time_list = thread_pools_[i].GetThreadWaitingTime();
-      results.insert(results.end(), waiting_time_list->begin(),
-                     waiting_time_list->end());
-    }
-    return results;
-  }
-  std::vector<std::pair<std::string, uint64_t>> GetThreadCreatingTime() {
-    std::vector<std::pair<std::string, uint64_t>> results;
-    for (uint64_t i = 0; i < thread_pools_.size(); i++) {
-      auto create_time_list = thread_pools_[i].GetThreadCreatingTime();
-      results.insert(results.end(), create_time_list->begin(),
-                     create_time_list->end());
-    }
-    return results;
-  }
-  std::string GetThreadPoolTimeStateString() override {
-    std::stringstream ss;
-    for (uint64_t i = 0; i < thread_pools_.size(); i++) {
-      ss << "Thread States for Pool Priority: "
-         << Env::PriorityToString(thread_pools_[i].GetThreadPriority()) << "\n";
-      ss << thread_pools_[i].GetThreadTimingString();
-    }
-    return ss.str();
-  }
-  std::vector<std::pair<size_t, uint64_t>>* GetThreadPoolWaitingTime(
-      Env::Priority priority) override {
-    assert(priority >= Priority::BOTTOM && priority <= Priority::HIGH);
-    return thread_pools_[priority].GetThreadWaitingTime();
-  }
+      std::vector<std::pair<size_t, uint64_t>> GetThreadWaitingTime() {
+        std::vector<std::pair<size_t, uint64_t>> results;
+        for (uint64_t i = 0; i < thread_pools_.size(); i++) {
+          auto waiting_time_list = thread_pools_[i].GetThreadWaitingTime();
+          results.insert(results.end(), waiting_time_list->begin(),
+                         waiting_time_list->end());
+        }
+        return results;
+      }
+      std::vector<std::pair<std::string, uint64_t>> GetThreadCreatingTime() {
+        std::vector<std::pair<std::string, uint64_t>> results;
+        for (uint64_t i = 0; i < thread_pools_.size(); i++) {
+          auto create_time_list = thread_pools_[i].GetThreadCreatingTime();
+          results.insert(results.end(), create_time_list->begin(),
+                         create_time_list->end());
+        }
+        return results;
+      }
+      std::string GetThreadPoolTimeStateString() override {
+        std::stringstream ss;
+        for (uint64_t i = 0; i < thread_pools_.size(); i++) {
+          ss << "Thread States for Pool Priority: "
+            << Env::PriorityToString(thread_pools_[i].GetThreadPriority()) << "\n";
+          ss << thread_pools_[i].GetThreadTimingString();
+        }
+        return ss.str();
+      }
+      std::vector<std::pair<size_t, uint64_t>>* GetThreadPoolWaitingTime(
+          Env::Priority priority) override {
+        assert(priority >= Priority::BOTTOM && priority <= Priority::HIGH);
+        return thread_pools_[priority].GetThreadWaitingTime();
+      }
 
-  char* AllocateMT(size_t mt_bytes) override {
-    assert(mt_bytes == 140 * (1U << 20));
-    // if (mt_bytes != 140 * (1U << 20)) {
-    //   printf("mt_bytes is not 140MB!\n");
-    //   std::abort();
-    // }
-    char* result = nullptr;
-    if (!free_chunks_.empty()) {
-      result = free_chunks_.front();
-      free_chunks_.pop();
-      printf("getaddr:%lx\n", (uintptr_t)result);
-    }
-    else {
-      // if (last_alloc_idx_ >= 10) {
-      //   printf("last_alloc_idx_ exceed!\n");
-      //   std::abort();
-      // }
-      assert(last_alloc_idx_ < 10);
-      result = mt_buf + last_alloc_idx_ * mt_bytes;
-      printf("getaddr:%lx, last_alloc_idx:%ld\n",(uintptr_t)result,last_alloc_idx_);
-      last_alloc_idx_++;
-    }
-    return result;
-  }
+#ifdef DFLUSH
+      char* AllocateMT(size_t mt_bytes) override {
+        assert(mt_bytes == 140 * (1U << 20));
+        // if (mt_bytes != 140 * (1U << 20)) {
+        //   printf("mt_bytes is not 140MB!\n");
+        //   std::abort();
+        // }
+        char* result = nullptr;
+        if (!free_chunks_.empty()) {
+          result = free_chunks_.front();
+          free_chunks_.pop();
+          printf("getaddr:%lx\n", (uintptr_t)result);
+        }
+        else {
+          // if (last_alloc_idx_ >= 10) {
+          //   printf("last_alloc_idx_ exceed!\n");
+          //   std::abort();
+          // }
+          assert(last_alloc_idx_ < 10);
+          result = mt_buf + last_alloc_idx_ * mt_bytes;
+          printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result, last_alloc_idx_);
+          last_alloc_idx_++;
+        }
+        return result;
+      }
 
-  void deAllocateMT(char* mt_addr) override {
-    free_chunks_.push(mt_addr);
-  }
+      void deAllocateMT(char* mt_addr) override {
+        free_chunks_.push(mt_addr);
+      }
+#endif
 
- private:
-  friend Env* Env::Default();
-  // Constructs the default Env, a singleton
-  PosixEnv();
-  ~PosixEnv();
-  // The below 4 members are only used by the default PosixEnv instance.
-  // Non-default instances simply maintain references to the backing
-  // members in te default instance
-  std::vector<ThreadPoolImpl> thread_pools_storage_;
-  pthread_mutex_t mu_storage_;
-  std::vector<pthread_t> threads_to_join_storage_;
-  bool allow_non_owner_access_storage_;
+    private:
+      friend Env* Env::Default();
+      // Constructs the default Env, a singleton
+      PosixEnv();
+      ~PosixEnv();
+      // The below 4 members are only used by the default PosixEnv instance.
+      // Non-default instances simply maintain references to the backing
+      // members in te default instance
+      std::vector<ThreadPoolImpl> thread_pools_storage_;
+      pthread_mutex_t mu_storage_;
+      std::vector<pthread_t> threads_to_join_storage_;
+      bool allow_non_owner_access_storage_;
 
-  std::vector<ThreadPoolImpl>& thread_pools_;
-  pthread_mutex_t& mu_;
-  std::vector<pthread_t>& threads_to_join_;
-  // If true, allow non owner read access for db files. Otherwise, non-owner
-  //  has no access to db files.
-  bool& allow_non_owner_access_;
-};
+      std::vector<ThreadPoolImpl>& thread_pools_;
+      pthread_mutex_t& mu_;
+      std::vector<pthread_t>& threads_to_join_;
+      // If true, allow non owner read access for db files. Otherwise, non-owner
+      //  has no access to db files.
+      bool& allow_non_owner_access_;
+    };
 
-PosixEnv::PosixEnv()
-    : CompositeEnv(FileSystem::Default(), SystemClock::Default()),
+    PosixEnv::PosixEnv()
+      : CompositeEnv(FileSystem::Default(), SystemClock::Default()),
       thread_pools_storage_(Priority::TOTAL),
       allow_non_owner_access_storage_(true),
       thread_pools_(thread_pools_storage_),
@@ -536,128 +542,131 @@ PosixEnv::PosixEnv()
       threads_to_join_(threads_to_join_storage_),
       allow_non_owner_access_(allow_non_owner_access_storage_) {
 #ifdef HDFS
-  OpenAndCompactOptions options;
-  std::shared_ptr<FileSystem> fs;
-  Status s = NewHdfsFileSystem(options.hdfs_address, &fs);
-  assert(s.ok());
-  file_system_ = std::move(fs);
+      OpenAndCompactOptions options;
+      std::shared_ptr<FileSystem> fs;
+      Status s = NewHdfsFileSystem(options.hdfs_address, &fs);
+      assert(s.ok());
+      file_system_ = std::move(fs);
 #endif
-  ThreadPoolImpl::PthreadCall("mutex_init", pthread_mutex_init(&mu_, nullptr));
-  for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
-    thread_pools_[pool_id].SetThreadPriority(
-        static_cast<Env::Priority>(pool_id));
-    // This allows later initializing the thread-local-env of each thread.
-    thread_pools_[pool_id].SetHostEnv(this);
-  }
-  thread_status_updater_ = CreateThreadStatusUpdater();
+      ThreadPoolImpl::PthreadCall("mutex_init", pthread_mutex_init(&mu_, nullptr));
+      for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
+        thread_pools_[pool_id].SetThreadPriority(
+            static_cast<Env::Priority>(pool_id));
+        // This allows later initializing the thread-local-env of each thread.
+        thread_pools_[pool_id].SetHostEnv(this);
+      }
+      thread_status_updater_ = CreateThreadStatusUpdater();
+#ifdef DFLUSH
+      open_device();
+      size_t buf_size = 10 * 140 * (1U << 20); // 10个 140M 空间
+      mt_buf = (char*)aligned_alloc(64, buf_size);
+      mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
+      const void* addr;
+      size_t size;
+      doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
+      mmap_export_desc = std::string((const char*)addr, size);
+      //printf("env init\n");
+#endif
+    }
 
-  open_device();
-  size_t buf_size = 10 * 140 * (1U << 20); // 10个 140M 空间
-  mt_buf = (char*)aligned_alloc(64, buf_size);
-  mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
-  const void* addr;
-  size_t size;
-  doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
-  mmap_export_desc = std::string((const char*)addr, size);
-  //printf("env init\n");
-}
+    PosixEnv::~PosixEnv() {
+#ifdef DFLUSH
+      free_mem(mmap_, (uintptr_t)mt_buf);
+      close_device();
+#endif
+    }
 
-PosixEnv::~PosixEnv() {
-  free_mem(mmap_, (uintptr_t)mt_buf);
-  close_device();
-}
+    void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
+                            void* tag, void (*unschedFunction)(void* arg)) {
+      assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+      thread_pools_[pri].Schedule(function, arg, tag, unschedFunction);
+    }
 
-void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
-                        void* tag, void (*unschedFunction)(void* arg)) {
-  assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-  thread_pools_[pri].Schedule(function, arg, tag, unschedFunction);
-}
+    int PosixEnv::UnSchedule(void* arg, Priority pri) {
+      return thread_pools_[pri].UnSchedule(arg);
+    }
 
-int PosixEnv::UnSchedule(void* arg, Priority pri) {
-  return thread_pools_[pri].UnSchedule(arg);
-}
+    unsigned int PosixEnv::GetThreadPoolQueueLen(Priority pri) const {
+      assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+      return thread_pools_[pri].GetQueueLen();
+    }
 
-unsigned int PosixEnv::GetThreadPoolQueueLen(Priority pri) const {
-  assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-  return thread_pools_[pri].GetQueueLen();
-}
+    int PosixEnv::ReserveThreads(int threads_to_reserved, Priority pri) {
+      assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+      return thread_pools_[pri].ReserveThreads(threads_to_reserved);
+    }
 
-int PosixEnv::ReserveThreads(int threads_to_reserved, Priority pri) {
-  assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-  return thread_pools_[pri].ReserveThreads(threads_to_reserved);
-}
+    int PosixEnv::ReleaseThreads(int threads_to_released, Priority pri) {
+      assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+      return thread_pools_[pri].ReleaseThreads(threads_to_released);
+    }
 
-int PosixEnv::ReleaseThreads(int threads_to_released, Priority pri) {
-  assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-  return thread_pools_[pri].ReleaseThreads(threads_to_released);
-}
+    struct StartThreadState {
+      void (*user_function)(void*);
+      void* arg;
+    };
 
-struct StartThreadState {
-  void (*user_function)(void*);
-  void* arg;
-};
+    static void* StartThreadWrapper(void* arg) {
+      StartThreadState* state = reinterpret_cast<StartThreadState*>(arg);
+      state->user_function(state->arg);
+      delete state;
+      return nullptr;
+    }
 
-static void* StartThreadWrapper(void* arg) {
-  StartThreadState* state = reinterpret_cast<StartThreadState*>(arg);
-  state->user_function(state->arg);
-  delete state;
-  return nullptr;
-}
+    void PosixEnv::StartThread(void (*function)(void* arg), void* arg) {
+      pthread_t t;
+      StartThreadState* state = new StartThreadState;
+      state->user_function = function;
+      state->arg = arg;
+      ThreadPoolImpl::PthreadCall(
+          "start thread", pthread_create(&t, nullptr, &StartThreadWrapper, state));
+      ThreadPoolImpl::PthreadCall("lock", pthread_mutex_lock(&mu_));
+      threads_to_join_.push_back(t);
+      ThreadPoolImpl::PthreadCall("unlock", pthread_mutex_unlock(&mu_));
+    }
 
-void PosixEnv::StartThread(void (*function)(void* arg), void* arg) {
-  pthread_t t;
-  StartThreadState* state = new StartThreadState;
-  state->user_function = function;
-  state->arg = arg;
-  ThreadPoolImpl::PthreadCall(
-      "start thread", pthread_create(&t, nullptr, &StartThreadWrapper, state));
-  ThreadPoolImpl::PthreadCall("lock", pthread_mutex_lock(&mu_));
-  threads_to_join_.push_back(t);
-  ThreadPoolImpl::PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-}
+    void PosixEnv::WaitForJoin() {
+      for (const auto tid : threads_to_join_) {
+        pthread_join(tid, nullptr);
+      }
+      threads_to_join_.clear();
+    }
 
-void PosixEnv::WaitForJoin() {
-  for (const auto tid : threads_to_join_) {
-    pthread_join(tid, nullptr);
-  }
-  threads_to_join_.clear();
-}
+  }  // namespace
 
-}  // namespace
-
-//
-// Default Posix Env
-//
-Env* Env::Default() {
-  // The following function call initializes the singletons of ThreadLocalPtr
-  // right before the static default_env.  This guarantees default_env will
-  // always being destructed before the ThreadLocalPtr singletons get
-  // destructed as C++ guarantees that the destructions of static variables
-  // is in the reverse order of their constructions.
   //
-  // Since static members are destructed in the reverse order
-  // of their construction, having this call here guarantees that
-  // the destructor of static PosixEnv will go first, then the
-  // the singletons of ThreadLocalPtr.
-  ThreadLocalPtr::InitSingletons();
-  CompressionContextCache::InitSingleton();
-  INIT_SYNC_POINT_SINGLETONS();
-  // Avoid problems with accessing most members of Env::Default() during
-  // static destruction.
-  STATIC_AVOID_DESTRUCTION(PosixEnv, default_env);
-  // This destructor must be called on exit
-  static PosixEnv::JoinThreadsOnExit thread_joiner(default_env);
-  return &default_env;
-}
+  // Default Posix Env
+  //
+  Env* Env::Default() {
+    // The following function call initializes the singletons of ThreadLocalPtr
+    // right before the static default_env.  This guarantees default_env will
+    // always being destructed before the ThreadLocalPtr singletons get
+    // destructed as C++ guarantees that the destructions of static variables
+    // is in the reverse order of their constructions.
+    //
+    // Since static members are destructed in the reverse order
+    // of their construction, having this call here guarantees that
+    // the destructor of static PosixEnv will go first, then the
+    // the singletons of ThreadLocalPtr.
+    ThreadLocalPtr::InitSingletons();
+    CompressionContextCache::InitSingleton();
+    INIT_SYNC_POINT_SINGLETONS();
+    // Avoid problems with accessing most members of Env::Default() during
+    // static destruction.
+    STATIC_AVOID_DESTRUCTION(PosixEnv, default_env);
+    // This destructor must be called on exit
+    static PosixEnv::JoinThreadsOnExit thread_joiner(default_env);
+    return &default_env;
+  }
 
-//
-// Default Posix SystemClock
-//
-const std::shared_ptr<SystemClock>& SystemClock::Default() {
-  STATIC_AVOID_DESTRUCTION(std::shared_ptr<SystemClock>, instance)
-  (std::make_shared<PosixClock>());
-  return instance;
-}
+  //
+  // Default Posix SystemClock
+  //
+  const std::shared_ptr<SystemClock>& SystemClock::Default() {
+    STATIC_AVOID_DESTRUCTION(std::shared_ptr<SystemClock>, instance)
+      (std::make_shared<PosixClock>());
+    return instance;
+  }
 }  // namespace ROCKSDB_NAMESPACE
 
 #endif
