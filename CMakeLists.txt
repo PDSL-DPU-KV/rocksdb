@@ -1563,7 +1563,8 @@ if(WITH_TESTS)
             ${_REFLECTION}
             ${_GRPC_GRPCPP}
             ${_PROTOBUF_LIBPROTOBUF}
-            ${ROCKSDB_LIB})
+            ${ROCKSDB_LIB}
+            PkgConfig::doca)
   endforeach()
 
   if(MSVC)
