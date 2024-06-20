@@ -11,9 +11,9 @@ t_array=("16")
 db_array=("1")
 
 ### Benchmark parameters
-db="/home/lsc/hadoop/zqy2023/rocksdb_test"
+db="/zqy"
 num_multi_db="1"
-wal_dir="/home/lsc/hadoop/zqy2023/rocksdb_test"
+wal_dir="/zqy"
 use_existing_db="true"
 threads="32"
 benchmarks="fillrandom,stats,wait,stats"
@@ -36,7 +36,7 @@ compression_type="none" #"none,zlib,lz4,dpu"
 #checksum_type="1"
 
 ### Compaction parameters
-allow_remote_compaction="false"
+allow_remote_compaction="true"
 #max_background_jobs="2"
 max_background_flushes="8"
 max_background_compactions="16"

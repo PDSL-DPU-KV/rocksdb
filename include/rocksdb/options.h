@@ -2107,17 +2107,17 @@ struct OpenAndCompactOptions {
 #ifdef HDFS
   std::string hdfs_address = "hdfs://192.168.200.11:8020/";
 
-  std::string csa_address = "192.168.202.14:8010";
+  std::string csa_address = "192.168.200.21:18010";
 
-  std::string pro_cp_address = "192.168.202.14:8020";
+  std::string pro_cp_address = "192.168.200.21:18020";
 
   int32_t check_time_interval = 1;
 
-  int64_t csa_max_concurrent_tasks = 32;
+  int64_t csa_max_concurrent_tasks = 16;
 
-  uint64_t max_accumulation_in_procp = 8;
+  uint64_t max_accumulation_in_procp = 16;
 
-  uint64_t max_reschedule = 5;
+  uint64_t max_reschedule = 16;
 #else
   std::string csa_address = "192.168.202.14:8010";
 

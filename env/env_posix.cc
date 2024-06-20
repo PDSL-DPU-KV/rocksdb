@@ -102,6 +102,7 @@ namespace ROCKSDB_NAMESPACE {
   Env* FLAGS_env = nullptr;
   doca_dev* dev;
   doca_dpa* dpa;
+  std::mutex dpa_mut;
 
   void open_device() {
     doca_devinfo** dev_list;
@@ -489,12 +490,15 @@ namespace ROCKSDB_NAMESPACE {
         //   std::abort();
         // }
         char* result = nullptr;
+        dpa_mut.lock();
         if (!free_chunks_.empty()) {
           result = free_chunks_.front();
           free_chunks_.pop();
           printf("getaddr:%lx\n", (uintptr_t)result);
+          dpa_mut.unlock();
         }
         else {
+          dpa_mut.unlock();
           // if (last_alloc_idx_ >= 10) {
           //   printf("last_alloc_idx_ exceed!\n");
           //   std::abort();
@@ -508,7 +512,9 @@ namespace ROCKSDB_NAMESPACE {
       }
 
       void deAllocateMT(char* mt_addr) override {
+        dpa_mut.lock();
         free_chunks_.push(mt_addr);
+        dpa_mut.unlock();
       }
 #endif
 
