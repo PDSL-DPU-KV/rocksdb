@@ -1031,14 +1031,6 @@ void CompactionJob::NotifyOnSubcompactionCompleted(
 }
 
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  static std::atomic_uint32_t current_ = 0;
-  auto core_id = (current_++) % 20;
-  printf("core id: %d\n", core_id);
-  CPU_SET(core_id + 60, &cpuset);
-  pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-
   assert(sub_compact);
   assert(sub_compact->compaction);
   if (db_options_.compaction_service) {
