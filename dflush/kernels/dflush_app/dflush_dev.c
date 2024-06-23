@@ -37,15 +37,17 @@ static uint64_t run_async(ctx_t* t, uint64_t rank) {
     uint32_t counter = 0;
     doca_dpa_dev_completion_element_t e;
 
-    TICK0;
+    // TICK0;
+    // LOG_DBG("rank:%u run memcpy\n", rank);
     for (uint32_t i = 0; i < t->params.copy_n; i++) {
         // LOG_DBG("%d\n", i);
         doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, dst_ptr,
-                                 t->params.src.handle, src_ptr, t->params.copy_size,
-                                 1);
+                     t->params.src.handle, src_ptr, t->params.copy_size,
+                     1);
         dst_ptr += t->params.copy_size;
         src_ptr += t->params.copy_size;
         while (1) {
+            // LOG_DBG("rank:%u circle!\n", rank);
             int got = doca_dpa_dev_get_completion(t->comp_handle, &e);
             if (got == 1) {
                 doca_dpa_dev_completion_type_t et = doca_dpa_dev_get_completion_type(e);
@@ -54,7 +56,8 @@ static uint64_t run_async(ctx_t* t, uint64_t rank) {
                 if (et != 0) {
                     UNREACHABLE_CRIT;
                 }
-                // LOG_DBG("%d poll %d\n", et, counter);
+                break;
+                // LOG_DBG("et:%d poll %d\n", et, counter);
             }
             else {
                 break;
@@ -62,6 +65,7 @@ static uint64_t run_async(ctx_t* t, uint64_t rank) {
         }
     }
     while (counter < t->params.copy_n) {
+        // LOG_DBG("rank:%u circle!\n", rank);
         int got = doca_dpa_dev_get_completion(t->comp_handle, &e);
         if (got == 1) {
             doca_dpa_dev_completion_type_t et = doca_dpa_dev_get_completion_type(e);
@@ -73,14 +77,16 @@ static uint64_t run_async(ctx_t* t, uint64_t rank) {
             // LOG_DBG("%d poll %d\n", et, counter);
         }
     }
-    TICK1;
+    // LOG_DBG("rank:%u end memcpy\n", rank);
+    // TICK1;
     // PRINT_TICK(1);
-    return t1 - t0;
+    return 0;
 }
 
 __dpa_global__ static void dflush_func(uintptr_t ctx_ptr) {
     ctx_t* t = (ctx_t*)ctx_ptr;
     uint32_t rank = doca_dpa_dev_thread_rank();
+    // LOG_DBG("rank:%u start\n", rank);
     if (t->use_atomic) {
         uint64_t cycle = 0;
         cycle = run_async(t, rank);
@@ -101,22 +107,23 @@ __dpa_global__ static void dflush_func(uintptr_t ctx_ptr) {
     if (got == 1) {
         doca_dpa_dev_completion_ack(t->comp_handle, 1);
 
-        // LOG_DBG("%d %d %lx %lu %lu %lu %d %d %lx %d %d %lx %lx %lx\n", rank, et,
+        // LOG_DBG("%d %lx %lu %lu %lu %d %d %lx %d %d %lx %lx %lx\n", rank,
         //         (uintptr_t)t, t->params.region_size, t->params.piece_size,
         //         t->params.copy_size, t->params.dst.handle, t->params.dst.flag,
         //         t->params.dst.ptr, t->params.src.handle, t->params.src.flag,
         //         t->params.src.ptr, t->w_handle, t->s_handle);
 
-        uint64_t cycle = 0;
-        cycle = run_async(t, rank);
+        // uint64_t cycle = 0;
+        run_async(t, rank);
 
         // LOG_TRACE("write back\n");
 
-        uint64_t* cycles = (uint64_t*)get_base_ptr_of_region(&t->result);
-        cycles[rank] = cycle;
+        // uint64_t* cycles = (uint64_t*)get_base_ptr_of_region(&t->result);
+        // cycles[rank] = cycle;
         __dpa_thread_window_writeback();
-
+        // LOG_DBG("rank:%u before add", rank);
         doca_dpa_dev_sync_event_update_add(t->w_handle, 1);
+        // LOG_DBG("rank:%u add\n", rank);
         doca_dpa_dev_completion_request_notification(t->comp_handle);
     }
 
@@ -125,11 +132,11 @@ __dpa_global__ static void dflush_func(uintptr_t ctx_ptr) {
         doca_dpa_dev_sync_event_post_wait_gt(t->aops_handle, t->s_handle,
                                              t->call_counter);
         ++t->call_counter;
-        // LOG_TRACE("reschedule\n");
+        // LOG_DBG("rank:%u, reschedule\n", rank);
         doca_dpa_dev_thread_reschedule();
     }
     else {
-        // LOG_TRACE("finish\n");
+        // LOG_DBG("rank:%u, finish\n", rank);
         doca_dpa_dev_thread_finish();
     }
 }

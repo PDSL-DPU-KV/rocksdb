@@ -485,29 +485,44 @@ namespace ROCKSDB_NAMESPACE {
 #ifdef DFLUSH
       char* AllocateMT(size_t mt_bytes) override {
         assert(mt_bytes == 140 * (1U << 20));
-        // if (mt_bytes != 140 * (1U << 20)) {
-        //   printf("mt_bytes is not 140MB!\n");
-        //   std::abort();
-        // }
+        if (mt_bytes != 140 * (1U << 20)) {
+          printf("mt_bytes is not 140MB!\n");
+          std::abort();
+        }
         char* result = nullptr;
-        dpa_mut.lock();
-        if (!free_chunks_.empty()) {
-          result = free_chunks_.front();
-          free_chunks_.pop();
-          printf("getaddr:%lx\n", (uintptr_t)result);
-          dpa_mut.unlock();
-        }
-        else {
-          dpa_mut.unlock();
-          // if (last_alloc_idx_ >= 10) {
-          //   printf("last_alloc_idx_ exceed!\n");
-          //   std::abort();
-          // }
-          assert(last_alloc_idx_ < 10);
+        static int nums =0;
+        // if (!free_chunks_.empty()) {
+        //   result = free_chunks_.front();
+        //   free_chunks_.pop();
+        //   printf("getaddr:%lx\n", (uintptr_t)result);
+        //   dpa_mut.unlock();
+        // }
+        // else {
+        //   dpa_mut.unlock();
+        //   if (last_alloc_idx_ >= 20) {
+        //     printf("last_alloc_idx_ exceed!\n");
+        //     std::abort();
+        //   }
+        //   assert(last_alloc_idx_ < 20);
+        //   result = mt_buf + last_alloc_idx_ * mt_bytes;
+        //   printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result,
+        //   last_alloc_idx_); last_alloc_idx_++;
+        // }
+        if (last_alloc_idx_ < 20) {
           result = mt_buf + last_alloc_idx_ * mt_bytes;
-          printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result, last_alloc_idx_);
-          last_alloc_idx_++;
+          printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result,last_alloc_idx_++);
+        } else {
+          dpa_mut.lock();
+          if (!free_chunks_.empty()) {
+            result = free_chunks_.front();
+            free_chunks_.pop();
+            printf("getaddr:%lx\n", (uintptr_t)result);
+          } else {
+            std::abort();
+          }
+          dpa_mut.unlock();
         }
+        printf("nums:%d allocate a MemTable\n",nums++);
         return result;
       }
 
@@ -515,6 +530,8 @@ namespace ROCKSDB_NAMESPACE {
         dpa_mut.lock();
         free_chunks_.push(mt_addr);
         dpa_mut.unlock();
+        static int nums=0;
+        printf("nums:%d deallocate a MemTable, addr:%lx\n", nums++,(uintptr_t)mt_addr);
       }
 #endif
 
@@ -564,14 +581,14 @@ namespace ROCKSDB_NAMESPACE {
       thread_status_updater_ = CreateThreadStatusUpdater();
 #ifdef DFLUSH
       open_device();
-      size_t buf_size = 10 * 140 * (1U << 20); // 10个 140M 空间
+      size_t buf_size = 20 * 140 * (1U << 20); // 20个 140M 空间
       mt_buf = (char*)aligned_alloc(64, buf_size);
       mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
       const void* addr;
       size_t size;
       doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
       mmap_export_desc = std::string((const char*)addr, size);
-      //printf("env init\n");
+      printf("env init\n");
 #endif
     }
 
