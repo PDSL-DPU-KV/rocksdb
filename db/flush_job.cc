@@ -51,7 +51,247 @@
 #include "util/stop_watch.h"
 
 namespace ROCKSDB_NAMESPACE {
+struct DbPath_struct {
+  char path[128];
+  uint64_t target_size;
+};
+int send_meta(FileMetaData* meta,char* ptr) {
+  int send_size = 0;
 
+  std::string send_small_str = (meta->smallest).get_InternalKey();
+  *(uint32_t*)ptr = (uint32_t)(send_small_str).size();
+  ptr += sizeof(uint32_t);
+  send_size += sizeof(uint32_t);
+  if ((uint32_t)(send_small_str).size() > 0) {
+    memcpy(ptr, (send_small_str).c_str(), (uint32_t)(send_small_str).size());
+    // strncpy(ptr,(send_small_str).c_str(),(uint32_t)(send_small_str).size());
+    ptr += (send_small_str).size();
+    send_size += (send_small_str).size();
+  }
+
+  std::string send_large_str = (meta->largest).get_InternalKey();
+  *(uint32_t*)ptr = (uint32_t)(send_large_str).size();
+  ptr += sizeof(uint32_t);
+  send_size += sizeof(uint32_t);
+  if ((uint32_t)(send_large_str).size() > 0) {
+    memcpy(ptr, (send_large_str).c_str(), (uint32_t)(send_large_str).size());
+    // strncpy(ptr,(send_large_str).c_str(),(uint32_t)(send_large_str).size());
+    ptr += (send_large_str).size();
+    send_size += (send_large_str).size();
+  }
+
+  *(uint64_t*)ptr = meta->compensated_file_size;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->num_entries;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->num_deletions;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->raw_key_size;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->raw_value_size;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->num_range_deletions;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->compensated_range_deletion_size;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(int*)ptr = meta->refs;
+  ptr += sizeof(int);
+  send_size += sizeof(int);
+
+  *(bool*)ptr = meta->being_compacted;
+  ptr += sizeof(bool);
+  send_size += sizeof(bool);
+
+  *(bool*)ptr = meta->init_stats_from_file;
+  ptr += sizeof(bool);
+  send_size += sizeof(bool);
+
+  *(bool*)ptr = meta->marked_for_compaction;
+  ptr += sizeof(bool);
+  send_size += sizeof(bool);
+
+  *(uint64_t*)ptr = meta->oldest_blob_file_number;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->oldest_ancester_time;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->file_creation_time;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint64_t*)ptr = meta->epoch_number;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  *(uint32_t*)ptr = (uint32_t)(meta->file_checksum).size();
+  ptr += sizeof(uint32_t);
+  send_size += sizeof(uint32_t);
+  strncpy(ptr,(meta->file_checksum).c_str(),(uint32_t)(meta->file_checksum).size());
+  ptr += (meta->file_checksum).size();
+  send_size += (meta->file_checksum).size();
+
+  *(uint32_t*)ptr = (uint32_t)(meta->file_checksum_func_name).size();
+  ptr += sizeof(uint32_t);
+  send_size += sizeof(uint32_t);
+  strncpy(ptr,(meta->file_checksum_func_name).c_str(),(uint32_t)(meta->file_checksum_func_name).size());
+  ptr += (meta->file_checksum_func_name).size();
+  send_size += (meta->file_checksum_func_name).size();
+
+  *(uint64_t*)ptr = meta->tail_size;
+  ptr += sizeof(uint64_t);
+  send_size += sizeof(uint64_t);
+
+  return send_size;
+}
+
+int recv_meta(FileMetaData* meta, char* ptr) {
+  int recv_size=0;
+
+  uint32_t n = *(uint32_t*)ptr;
+  ptr += sizeof(uint32_t);
+  recv_size += sizeof(uint32_t);
+  printf("recv n = %d\n",n);
+  if (n > 0) {
+    std::string str(ptr, n);
+    // str.push_back('\0');
+    meta->smallest.set_InternalKey(str);
+    ptr += n;
+    recv_size += n;
+    for (int i = 0; i < 24; i++) {
+      printf("%d ",str.c_str()[i]);
+    }
+  } else {
+    meta->smallest.set_InternalKey(std::string());
+  }
+  printf("meta.smallest.DebugString:%s\n",
+         meta->smallest.DebugString(true).c_str());
+  
+  n = *(uint32_t*)ptr;
+  ptr += sizeof(uint32_t);
+  recv_size += sizeof(uint32_t);
+  if (n > 0) {
+    std::string str(ptr, n);
+    // str.push_back('\0');
+    meta->largest.set_InternalKey(str);
+    ptr += n;
+    recv_size +=n;
+  } else {
+    meta->largest.set_InternalKey(std::string());
+  }
+  printf("meta.largest.DebugString:%s\n",
+         meta->largest.DebugString(true).c_str());
+  
+// printf("RECV: total_size after str: %d\n", recv_size);
+  meta->compensated_file_size = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->num_entries = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->num_deletions = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->raw_key_size = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->raw_value_size = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->num_range_deletions = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->compensated_range_deletion_size = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->refs = *(int*)ptr;
+  ptr += sizeof(int);
+  recv_size += sizeof(int);
+
+  meta->being_compacted = *(bool*)ptr;
+  ptr += sizeof(bool);
+  recv_size += sizeof(bool);
+
+  meta->init_stats_from_file = *(bool*)ptr;
+  ptr += sizeof(bool);
+  recv_size += sizeof(bool);
+
+  meta->marked_for_compaction = *(bool*)ptr;
+  ptr += sizeof(bool);
+  recv_size += sizeof(bool);
+
+  meta->oldest_blob_file_number = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->oldest_ancester_time = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->file_creation_time = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  meta->epoch_number = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+
+  n = *(uint32_t*)ptr;
+  ptr += sizeof(uint32_t);
+  recv_size +=sizeof(uint32_t);
+  if (n > 0) {
+    std::string str(ptr, n);
+    str.push_back('\0');
+    meta->file_checksum = str;
+    ptr += n;
+    recv_size +=n;
+  } else {
+    meta->file_checksum = std::string();
+  }
+
+  n = *(uint32_t*)ptr;
+  ptr += sizeof(uint32_t);
+  recv_size +=sizeof(uint32_t);
+  if (n > 0) {
+    std::string str(ptr, n);
+    str.push_back('\0');
+    meta->file_checksum_func_name = str;
+    ptr += n;
+    recv_size +=n;
+  } else {
+    meta->file_checksum_func_name = std::string();
+  }
+
+  meta->tail_size = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  recv_size += sizeof(uint64_t);
+
+  return recv_size;
+}
   const char* GetFlushReasonString(FlushReason flush_reason) {
     switch (flush_reason) {
       case FlushReason::kOthers:
@@ -838,7 +1078,7 @@ namespace ROCKSDB_NAMESPACE {
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(10086);
-    if (inet_pton(AF_INET, "192.168.2.20", &serv_addr.sin_addr) <= 0) {
+  if (inet_pton(AF_INET, "192.168.2.21", &serv_addr.sin_addr) <= 0) {
       printf("\nInvalid address/ Address not supported \n");
       return -1;
     }
@@ -895,11 +1135,13 @@ namespace ROCKSDB_NAMESPACE {
       TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
                                &mems_size);
       assert(job_context_);
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
       assert(mems_size == 1); // 我自己打印出来是一直等于 1 的
 #ifdef DFLUSH
-      uintptr_t mt_buf_head;
-      uintptr_t Node_head;
-      bool mt_flag_;
+    uintptr_t mt_buf_head=0;
+    uintptr_t Node_head=0;
+    bool mt_flag_=false;
       static uint64_t nums = 0;
 #endif
       for (MemTable* m : mems_) {
@@ -932,21 +1174,21 @@ namespace ROCKSDB_NAMESPACE {
 
 #ifdef DFLUSH
       // 把必要信息传到 DPU 端
-      char buffer[1024];
-      char* ptr = buffer;
-      *(uintptr_t*)ptr = Node_head;
-      ptr += sizeof(uintptr_t);
-      *(uintptr_t*)ptr = mt_buf_head;
-      ptr += sizeof(uintptr_t);
-      *(uint64_t*)ptr = FLAGS_env->mmap_export_desc.size();
-      ptr += sizeof(uint64_t);
-      memcpy(ptr, FLAGS_env->mmap_export_desc.data(), FLAGS_env->mmap_export_desc.size());
-      uint64_t total_size = 2 * sizeof(uintptr_t) + sizeof(uint64_t) + FLAGS_env->mmap_export_desc.size();
-      auto client_fd = ConnectToServer();
-      printf("mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n", mt_buf_head, Node_head, mt_flag_);
-      send(client_fd, buffer, total_size, 0);
+      // char buffer[1024];
+      // char* ptr = buffer;
+      // *(uintptr_t*)ptr = Node_head;
+      // ptr += sizeof(uintptr_t);
+      // *(uintptr_t*)ptr = mt_buf_head;
+      // ptr += sizeof(uintptr_t);
+      // *(uint64_t*)ptr = FLAGS_env->mmap_export_desc.size();
+      // ptr += sizeof(uint64_t);
+      // memcpy(ptr, FLAGS_env->mmap_export_desc.data(), FLAGS_env->mmap_export_desc.size());
+      // uint64_t total_size = 2 * sizeof(uintptr_t) + sizeof(uint64_t) + FLAGS_env->mmap_export_desc.size();
+      // auto client_fd = ConnectToServer();
+      // printf("mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n", mt_buf_head, Node_head, mt_flag_);
+      // send(client_fd, buffer, total_size, 0);
 
-      read(client_fd, buffer, 1024); //通过 read 阻塞
+      // read(client_fd, buffer, 1024); //通过 read 阻塞
 #endif
 
       event_logger_->Log() << "job" << job_context_->job_id << "event"
@@ -1011,18 +1253,238 @@ namespace ROCKSDB_NAMESPACE {
         const SequenceNumber job_snapshot_seq =
           job_context_->GetJobSnapshotSequence();
         const ReadOptions read_options(Env::IOActivity::kFlush);
-        s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
-                       read_options, cfd_->table_cache(), iter.get(),
-                       std::move(range_del_iters), &meta_, &blob_file_additions,
-                       existing_snapshots_, earliest_write_conflict_snapshot_,
-                       job_snapshot_seq, snapshot_checker_,
-                       mutable_cf_options_.paranoid_file_checks,
-                       cfd_->internal_stats(), &io_s, io_tracer_,
-                       BlobFileCreationReason::kFlush, seqno_to_time_mapping_,
-                       event_logger_, job_context_->job_id, io_priority,
-                       &table_properties_, write_hint, full_history_ts_low,
-                       blob_callback_, base_, &num_input_entries,
-                       &memtable_payload_bytes, &memtable_garbage_bytes);
+
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
+#ifdef DFLUSH
+    // 把必要信息传到 DPU 端
+    char buffer[1024];
+    char* ptr = buffer;
+    uint64_t total_size = 0;
+
+    // mems
+    *(uintptr_t*)ptr = Node_head;
+    ptr += sizeof(uintptr_t);
+    *(uintptr_t*)ptr = mt_buf_head; 
+    ptr += sizeof(uintptr_t);
+    total_size += 2 * sizeof(uintptr_t);
+    printf("total_size after mems: %ld\n", total_size);
+    // printf("check check mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n",
+    //        mt_buf_head, Node_head, mt_flag_);
+
+    // meta_
+    int meta_size = send_meta(&meta_, ptr);    // memcpy((FileMetaData*)ptr,&meta_,  sizeof(FileMetaData));
+    ptr += meta_size;
+    total_size += meta_size;
+    printf("total_size after meta: %ld\n", total_size);
+    
+    // new_versions_NewFileNumber
+    *(uint64_t*)ptr = versions_->NewFileNumber();
+    ptr += sizeof(uint64_t);
+    total_size += sizeof(uint64_t);
+    
+    // seqno_to_time_mapping_
+    memcpy((SeqnoToTimeMapping*)ptr, &seqno_to_time_mapping_, sizeof(SeqnoToTimeMapping));
+    ptr += sizeof(SeqnoToTimeMapping);
+    total_size += sizeof(SeqnoToTimeMapping);
+
+    // // kUnknownColumnFamily
+    *(uint32_t*)ptr =
+        TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
+    ptr += sizeof(uint32_t);
+    total_size += sizeof(uint32_t);
+
+    // full_history_ts_low
+    if(full_history_ts_low!=nullptr){
+      *(uint32_t*)ptr = (uint32_t)(*full_history_ts_low).size();
+      ptr += sizeof(uint32_t);
+      total_size += sizeof(uint32_t);
+    if((uint32_t)(*full_history_ts_low).size()>0){
+      memcpy(ptr,full_history_ts_low,(uint32_t)(*full_history_ts_low).size());
+      ptr += (*full_history_ts_low).size();
+      total_size += (*full_history_ts_low).size();
+    }
+    }else
+    {
+       *(uint32_t*)ptr = (uint32_t)0;
+       ptr += sizeof(uint32_t);
+       total_size += sizeof(uint32_t);
+    }
+    
+
+    // io_priority
+    *(Env::IOPriority*)ptr =io_priority;
+    ptr += sizeof(Env::IOPriority);
+    total_size += sizeof(Env::IOPriority);
+
+    // paranoid_file_checks
+    *(bool*)ptr =mutable_cf_options_.paranoid_file_checks;
+    ptr += sizeof(bool);
+    total_size += sizeof(bool);
+
+    // job_id
+    *(int*)ptr =job_context_->job_id;
+    ptr += sizeof(int);
+    total_size += sizeof(int);
+
+    // snapshots
+    *(uint32_t*)ptr = (uint32_t)existing_snapshots_.size();
+    ptr += sizeof(uint32_t);
+    total_size += sizeof(uint32_t);
+    if((uint32_t)existing_snapshots_.size()>0){
+      std::copy(existing_snapshots_.begin(), existing_snapshots_.end(), (SequenceNumber*)ptr);
+      ptr += sizeof(SequenceNumber)*existing_snapshots_.size();
+      total_size += sizeof(SequenceNumber) * existing_snapshots_.size();
+    }
+
+    // earliest_write_conflict_snapshot
+    *(SequenceNumber*)ptr = earliest_write_conflict_snapshot_;
+    ptr += sizeof(SequenceNumber);
+    total_size += sizeof(SequenceNumber);
+
+    // job_snapshot
+    *(SequenceNumber*)ptr = job_context_->GetJobSnapshotSequence();
+    ptr += sizeof(SequenceNumber);
+    total_size += sizeof(SequenceNumber);
+
+    // timestamp_size
+    size_t timestamp_size=tboptions.internal_comparator.user_comparator()->timestamp_size();
+    *(size_t*)ptr = timestamp_size;
+    ptr += sizeof(size_t);
+    total_size += sizeof(size_t);
+
+    // tboptions_ioptions_cf_paths
+    *(uint32_t*)ptr = (uint32_t)tboptions.ioptions.cf_paths.size();
+    ptr += sizeof(uint32_t);
+    total_size += sizeof(uint32_t);
+
+    if ((uint32_t)tboptions.ioptions.cf_paths.size() > 0) {
+      DbPath_struct send_tboptions_ioptions_cf_paths
+          [(uint32_t)tboptions.ioptions.cf_paths.size()];
+      for (int i = 0; i < tboptions.ioptions.cf_paths.size(); i++) {
+        std::strcpy(send_tboptions_ioptions_cf_paths[i].path,tboptions.ioptions.cf_paths[i].path.c_str());
+        send_tboptions_ioptions_cf_paths[i].target_size =
+            tboptions.ioptions.cf_paths[i].target_size;
+        
+        *(DbPath_struct*)ptr = send_tboptions_ioptions_cf_paths[i];
+        ptr += sizeof(DbPath_struct);
+        total_size += sizeof(DbPath_struct);
+      }
+    }
+
+    // meta_.fd.smallest_seqno
+    *(SequenceNumber*)ptr = meta_.fd.smallest_seqno;
+    ptr += sizeof(SequenceNumber);
+    total_size += sizeof(SequenceNumber);
+    *(SequenceNumber*)ptr = meta_.fd.largest_seqno;
+    ptr += sizeof(SequenceNumber);
+    total_size += sizeof(SequenceNumber);
+    
+    // cfd_GetName
+    *(uint32_t*)ptr = (uint32_t)(cfd_->GetName()).size();
+    ptr += sizeof(uint32_t);
+    total_size += sizeof(uint32_t);
+    strncpy(ptr,(cfd_->GetName()).c_str(),(uint32_t)(cfd_->GetName()).size());
+    ptr += (cfd_->GetName()).size();
+    total_size += (cfd_->GetName()).size();
+
+    // dbname
+    *(uint32_t*)ptr = (uint32_t)(dbname_).size();
+    ptr += sizeof(uint32_t);
+    total_size += sizeof(uint32_t);
+    strncpy(ptr,(dbname_).c_str(),(uint32_t)(dbname_).size());
+    ptr += (dbname_).size();
+    total_size += (dbname_).size();
+    printf("total_size after dbname: %ld %ld\n", total_size, ptr - buffer);
+
+    
+    // FLAGS_env->mmap_export_desc
+    *(uint64_t*)ptr = FLAGS_env->mmap_export_desc.size();
+    ptr += sizeof(uint64_t);
+    total_size += sizeof(uint64_t) + FLAGS_env->mmap_export_desc.size();
+    printf("total_size: %ld %ld\n",total_size,ptr - buffer);
+    
+    memcpy(ptr, FLAGS_env->mmap_export_desc.data(), FLAGS_env->mmap_export_desc.size());
+    auto client_fd = ConnectToServer();
+    printf("mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n", mt_buf_head, Node_head,mt_flag_);
+    send(client_fd, buffer, total_size, 0);
+    read(client_fd, buffer, 1024);  // 通过 read 阻塞
+    ptr = buffer;
+
+    meta_size = recv_meta(&meta_, ptr);
+    ptr += meta_size;
+    printf("RECV: total_size after meta_: %ld\n", ptr - buffer);
+
+    s = *(rocksdb::Status*)ptr;
+    ptr += sizeof(rocksdb::Status);
+
+    num_input_entries = *(uint64_t*)ptr;
+    ptr += sizeof(uint64_t);
+
+    memtable_payload_bytes = *(uint64_t*)ptr;
+    ptr += sizeof(uint64_t);
+
+    memtable_garbage_bytes = *(uint64_t*)ptr;
+    ptr += sizeof(uint64_t);
+
+    meta_.fd.packed_number_and_path_id = *(uint64_t*)ptr;
+    ptr += sizeof(uint64_t);
+
+    meta_.fd.file_size = *(uint64_t*)ptr;
+    ptr += sizeof(uint64_t);
+
+    meta_.fd.smallest_seqno = *(rocksdb::SequenceNumber*)ptr;
+    ptr += sizeof(rocksdb::SequenceNumber);
+            
+    meta_.fd.largest_seqno = *(rocksdb::SequenceNumber*)ptr;
+    ptr += sizeof(rocksdb::SequenceNumber);
+
+#endif
+
+  printf("meta.smallest.DebugString:%s\n", meta_.smallest.DebugString(true).c_str());
+  printf("meta.largest.DebugString:%s\n",meta_.largest.DebugString(true).c_str());
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
+    // s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
+    //            read_options, cfd_->table_cache(), iter.get(),
+    //            std::move(range_del_iters), &meta_, &blob_file_additions,
+    //            existing_snapshots_, earliest_write_conflict_snapshot_,
+    //            job_snapshot_seq, snapshot_checker_,
+    //            mutable_cf_options_.paranoid_file_checks,
+    //            cfd_->internal_stats(), &io_s, io_tracer_,
+    //            BlobFileCreationReason::kFlush, seqno_to_time_mapping_,
+    //            event_logger_, job_context_->job_id, io_priority,
+    //            &table_properties_, write_hint, full_history_ts_low,
+    //            blob_callback_, base_, &num_input_entries,
+    //            &memtable_payload_bytes, &memtable_garbage_bytes);
+    /****************************************************************************************** */
+    //   Status return_status;
+    //   BuildTable_new(  // versions_->current_next_file_number()
+    //       mems_, &meta_, versions_->NewFileNumber(), seqno_to_time_mapping_,
+    //       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
+    //       mutable_cf_options_.paranoid_file_checks, job_context_->job_id,
+    //      earliest_write_conflict_snapshot_,
+    //       job_snapshot_seq, timestamp_size, tboptions.ioptions.cf_paths,
+    //       cfd_->GetName(), dbname_,  
+    //       // 在实际情况中，以下参数需要回传
+    //       &return_status, &num_input_entries, &memtable_payload_bytes,
+    //       &memtable_garbage_bytes, &meta_.fd.packed_number_and_path_id,
+    //       &meta_.fd.file_size,&meta_.fd.smallest_seqno,&meta_.fd.largest_seqno);
+    //   s = return_status;
+    // /****************************************************************************************** */
+
+
+    //   printf(
+    //   "Flush_result:   num_input_entries:%ld memtable_payload_bytes:%ld "
+    //   "memtable_garbage_bytes:%ld packed_number_and_path_id:%ld file_size:%ld "
+    //   "largest_seqno:%ld smallest_seqno:%ld\n",
+    //   num_input_entries, memtable_payload_bytes, memtable_garbage_bytes,
+    //   meta_.fd.packed_number_and_path_id, meta_.fd.file_size, meta_.fd.largest_seqno, meta_.fd.smallest_seqno);
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
+/******************************************************************************************************************************* */
         // TODO: Cleanup io_status in BuildTable and table builders
         assert(!s.ok() || io_s.ok());
         io_s.PermitUncheckedError();
@@ -1070,7 +1532,7 @@ namespace ROCKSDB_NAMESPACE {
     const bool has_output = meta_.fd.GetFileSize() > 0;
 
     if (s.ok() && has_output) {
-      TEST_SYNC_POINT("DBImpl::FlushJob:SSTFileCreated");
+      // TEST_SYNC_POINT("DBImpl::FlushJob:SSTFileCreated");
       // if we have more than 1 background thread, then we cannot
       // insert files directly into higher levels because some other
       // threads could be concurrently producing compacted files for
@@ -1085,7 +1547,8 @@ namespace ROCKSDB_NAMESPACE {
                      meta_.file_checksum, meta_.file_checksum_func_name,
                      meta_.unique_id, meta_.compensated_range_deletion_size,
                      meta_.tail_size);
-      edit_->SetBlobFileAdditions(std::move(blob_file_additions));
+      
+      // edit_->SetBlobFileAdditions(std::move(blob_file_additions));
     }
     // Piggyback FlushJobInfo on the first first flushed memtable.
     mems_[0]->SetFlushJobInfo(GetFlushJobInfo());

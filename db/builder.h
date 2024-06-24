@@ -7,23 +7,19 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "db/range_tombstone_fragmenter.h"
 #include "db/seqno_to_time_mapping.h"
-#include "db/table_properties_collector.h"
 #include "db/version_set.h"
+#include "db/version_edit.h"
 #include "logging/event_logger.h"
-#include "options/cf_options.h"
-#include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 #include "rocksdb/types.h"
-#include "table/scoped_arena_iterator.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -75,4 +71,32 @@ extern Status BuildTable(
     uint64_t* memtable_payload_bytes = nullptr,
     uint64_t* memtable_garbage_bytes = nullptr);
 
+void BuildTable_new(
+    uintptr_t Node_head,
+    uint64_t offset,
+    FileMetaData* meta, 
+    uint64_t new_versions_NewFileNumber,  
+    
+    SeqnoToTimeMapping seqno_to_time_mapping,
+    uint32_t kUnknownColumnFamily,  
+    bool paranoid_file_checks,  
+    int job_id,    
+    SequenceNumber earliest_write_conflict_snapshot, 
+    SequenceNumber job_snapshot,  
+    size_t timestamp_size,     
+    std::vector<DbPath> tboptions_ioptions_cf_paths,  
+    std::string cfd_GetName,  
+    std::string dbname,    
+
+    /* Ouput List */
+    Status* return_status,
+    uint64_t* num_input_entries,  // output 在程序中定义，局部变量
+    uint64_t* memtable_payload_bytes,  // output 在程序中定义，局部变量
+    uint64_t* memtable_garbage_bytes,  // output 在程序中定义，局部变量
+    uint64_t* packed_number_and_path_id,
+    uint64_t* file_size,
+    SequenceNumber* smallest_seqno,  // The smallest seqno in this file
+    SequenceNumber* largest_seqno
+
+) ;
 }  // namespace ROCKSDB_NAMESPACE

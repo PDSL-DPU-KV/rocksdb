@@ -14,21 +14,8 @@
 #include "test_util/testutil.h"
 
 namespace ROCKSDB_NAMESPACE {
-class DBBasicTestWithTimestampBase : public DBTestBase {
- public:
-  explicit DBBasicTestWithTimestampBase(const std::string& dbname)
-      : DBTestBase(dbname, /*env_do_fsync=*/true) {}
-
- protected:
-  static std::string Key1(uint64_t k);
-
-  static std::string KeyWithPrefix(std::string prefix, uint64_t k);
-
-  static std::vector<Slice> ConvertStrToSlice(
-      std::vector<std::string>& strings);
-
-  class TestComparator : public Comparator {
-   private:
+class TestComparator : public Comparator {
+   public:
     const Comparator* cmp_without_ts_;
 
    public:
@@ -106,6 +93,20 @@ class DBBasicTestWithTimestampBase : public DBTestBase {
       return 0;
     }
   };
+class DBBasicTestWithTimestampBase : public DBTestBase {
+ public:
+  explicit DBBasicTestWithTimestampBase(const std::string& dbname)
+      : DBTestBase(dbname, /*env_do_fsync=*/true) {}
+
+ public:
+  static std::string Key1(uint64_t k);
+
+  static std::string KeyWithPrefix(std::string prefix, uint64_t k);
+
+  static std::vector<Slice> ConvertStrToSlice(
+      std::vector<std::string>& strings);
+
+  
 
   std::string Timestamp(uint64_t low, uint64_t high);
 

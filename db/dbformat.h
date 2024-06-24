@@ -321,7 +321,8 @@ class InternalKey {
     AppendInternalKeyWithDifferentTimestamp(
         &rep_, ParsedInternalKey(_user_key, s, t), ts);
   }
-
+  std::string get_InternalKey() { return rep_; }
+  void set_InternalKey(std::string str){rep_=str;}
   // sets the internal key to be bigger or equal to all internal keys with this
   // user key
   void SetMaxPossibleForUserKey(const Slice& _user_key) {

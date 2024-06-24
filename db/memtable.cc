@@ -84,7 +84,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
                write_buffer_manager->cost_to_cache()))
                  ? &mem_tracker_
                  : nullptr,
-             mutable_cf_options.memtable_huge_page_size, true),
+             mutable_cf_options.memtable_huge_page_size, false),
       table_(ioptions.memtable_factory->CreateMemTableRep(
           comparator_, &arena_, mutable_cf_options.prefix_extractor.get(),
           ioptions.logger, column_family_id)),
@@ -114,7 +114,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
           ioptions.memtable_insert_with_hint_prefix_extractor.get()),
       oldest_key_time_(std::numeric_limits<uint64_t>::max()),
       atomic_flush_seqno_(kMaxSequenceNumber),
-  approximate_memory_usage_(0) {
+      approximate_memory_usage_(0) {
   UpdateFlushState();
   // something went wrong if we need to flush before inserting anything
   assert(!ShouldScheduleFlush());
@@ -455,9 +455,7 @@ class MemTableIterator : public InternalIterator {
     VerifyEntryChecksum();
   }
 
-  void* Current() override {
-    return iter_->Current();
-  }
+  void* Current() override { return iter_->Current(); }
 
   void Next() override {
     PERF_COUNTER_ADD(next_on_memtable_count, 1);
