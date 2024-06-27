@@ -728,7 +728,6 @@ namespace ROCKSDB_NAMESPACE {
 
     char* mt_buf;
     std::queue<char*> free_chunks_;
-    size_t last_alloc_idx_ = 0;
 #endif
 
   protected:

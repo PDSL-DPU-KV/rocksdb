@@ -490,7 +490,7 @@ namespace ROCKSDB_NAMESPACE {
           std::abort();
         }
         char* result = nullptr;
-        static int nums =0;
+        static int nums = 0;
         // if (!free_chunks_.empty()) {
         //   result = free_chunks_.front();
         //   free_chunks_.pop();
@@ -508,21 +508,17 @@ namespace ROCKSDB_NAMESPACE {
         //   printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result,
         //   last_alloc_idx_); last_alloc_idx_++;
         // }
-        if (last_alloc_idx_ < 20) {
-          result = mt_buf + last_alloc_idx_ * mt_bytes;
-          printf("getaddr:%lx, last_alloc_idx:%ld\n", (uintptr_t)result,last_alloc_idx_++);
+        dpa_mut.lock();
+        if (!free_chunks_.empty()) {
+          result = free_chunks_.front();
+          free_chunks_.pop();
+          printf("getaddr:%lx\n", (uintptr_t)result);
         } else {
-          dpa_mut.lock();
-          if (!free_chunks_.empty()) {
-            result = free_chunks_.front();
-            free_chunks_.pop();
-            printf("getaddr:%lx\n", (uintptr_t)result);
-          } else {
-            std::abort();
-          }
-          dpa_mut.unlock();
+          printf("free_chunks is empty!\n");
+          std::abort();
         }
-        printf("nums:%d allocate a MemTable\n",nums++);
+        dpa_mut.unlock();
+        printf("nums:%d allocate a MemTable\n", nums++);
         return result;
       }
 
@@ -530,8 +526,8 @@ namespace ROCKSDB_NAMESPACE {
         dpa_mut.lock();
         free_chunks_.push(mt_addr);
         dpa_mut.unlock();
-        static int nums=0;
-        printf("nums:%d deallocate a MemTable, addr:%lx\n", nums++,(uintptr_t)mt_addr);
+        static int nums = 0;
+        printf("nums:%d deallocate a MemTable, addr:%lx\n", nums++, (uintptr_t)mt_addr);
       }
 #endif
 
@@ -588,6 +584,10 @@ namespace ROCKSDB_NAMESPACE {
       size_t size;
       doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
       mmap_export_desc = std::string((const char*)addr, size);
+      uint64_t mt_bytes = 140*(1U<<20);
+      for (int i = 0; i < 20; ++i) {
+        free_chunks_.push(mt_buf + i * mt_bytes);
+      }
       printf("env init\n");
 #endif
     }
