@@ -60,10 +60,10 @@ extern "C" doca_dpa_func_t trigger;
 
 constexpr const uint32_t access_mask =
 DOCA_ACCESS_FLAG_LOCAL_READ_WRITE | DOCA_ACCESS_FLAG_PCI_READ_WRITE;
-
+std::mutex mtx;
 const uint32_t nthreads_task = 8;
 const uint32_t nthreads_memcpy = 1;
-
+int flush_num = 0;
 enum class Location : uint32_t {
     Host = HOST,
     Device = DEVICE,
@@ -402,7 +402,7 @@ struct DPAThread {
         doca_check(doca_dpa_thread_group_set_thread(tg, t, rank));
         doca_check(doca_dpa_thread_start(t));
 
-        doca_check(doca_dpa_completion_create(dpa, 1023, &comp));
+        doca_check(doca_dpa_completion_create(dpa, 4096, &comp));
         doca_check(doca_dpa_completion_set_thread(comp, t));
         doca_check(doca_dpa_completion_start(comp));
         doca_check(doca_dpa_completion_get_dpa_handle(comp, &c.comp_handle));
@@ -412,7 +412,7 @@ struct DPAThread {
         doca_check(doca_dpa_notification_completion_get_dpa_handle(
             notify, &c.notify_handle));
 
-        doca_check(doca_dpa_async_ops_create(dpa, 1023, 114514, &aops));
+        doca_check(doca_dpa_async_ops_create(dpa, 4096, 0, &aops));
         doca_check(doca_dpa_async_ops_attach(aops, comp));
         doca_check(doca_dpa_async_ops_start(aops));
         doca_check(doca_dpa_async_ops_get_dpa_handle(aops, &c.aops_handle));
@@ -589,7 +589,8 @@ void run_memcpy(const params_memcpy_t& params) {
 
 void RunJob(int client_fd, int task_id) {
     // 从 tcp 中解析数据
-    printf("RunJob\n");
+    flush_num++;
+    printf("RunJob %d\n", flush_num);
     std::string mmap_desc;
     uintptr_t Node_head;
     uintptr_t mt_buf;
@@ -746,7 +747,9 @@ void RunJob(int client_fd, int task_id) {
     std::tie(src_m, params.src) = alloc_mem_from_export(Location::Host, params.region_size, mmap_desc);
     params.src.ptr = mt_buf;
     offset = params.dst.ptr - params.src.ptr;
+    mtx.lock();
     run_memcpy(params);
+    mtx.unlock();
 
 
 
@@ -875,7 +878,7 @@ void RunJob(int client_fd, int task_id) {
     *(rocksdb::SequenceNumber*)ptr = largest_seqno;
     ptr += sizeof(rocksdb::SequenceNumber);
     result_size += sizeof(rocksdb::SequenceNumber);
-    
+
     send(client_fd, result_buffer, result_size, 0);
     free_mem(params.dst, dst_m);
 }
