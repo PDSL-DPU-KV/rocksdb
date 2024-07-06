@@ -27,6 +27,9 @@
 #include <queue>
 #include <chrono>
 
+#include <doca_pe.h>
+#include <doca_dma.h>
+#include <doca_ctx.h>
 #include <doca_dev.h>
 #include <doca_dpa.h>
 #include <doca_mmap.h>

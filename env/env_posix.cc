@@ -104,7 +104,14 @@ namespace ROCKSDB_NAMESPACE {
   doca_dpa* dpa;
   std::mutex dpa_mut;
 
-  void open_device() {
+  typedef doca_error_t(*tasks_check)(struct doca_devinfo*);
+  constexpr const inline char* ibdev_name = "mlx5_1";
+
+  doca_error_t dma_task_is_supported(struct doca_devinfo* devinfo) {
+    return doca_dma_cap_task_memcpy_is_supported(devinfo);
+  }
+
+  void open_device(tasks_check func) {
     doca_devinfo** dev_list;
     doca_devinfo* dev_info = NULL;
     uint32_t nb_devs;
@@ -115,7 +122,8 @@ namespace ROCKSDB_NAMESPACE {
       result = doca_devinfo_get_ibdev_name(dev_list[i], ibdev_name_buf,
                                            DOCA_DEVINFO_IBDEV_NAME_SIZE);
       if (result == DOCA_SUCCESS &&
-          strncmp("mlx5_1", ibdev_name_buf, strlen("mlx5_1")) == 0) {
+          strncmp(ibdev_name, ibdev_name_buf, strlen(ibdev_name)) == 0) {
+        if (func != NULL && func(dev_list[i]) != DOCA_SUCCESS) continue;
         dev_info = dev_list[i];
         break;
       }
@@ -576,7 +584,7 @@ namespace ROCKSDB_NAMESPACE {
       }
       thread_status_updater_ = CreateThreadStatusUpdater();
 #ifdef DFLUSH
-      open_device();
+      open_device(&dma_task_is_supported);
       size_t buf_size = 20 * 140 * (1U << 20); // 20个 140M 空间
       mt_buf = (char*)aligned_alloc(64, buf_size);
       mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
