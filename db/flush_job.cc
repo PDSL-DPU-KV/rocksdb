@@ -1496,53 +1496,32 @@ int recv_meta(FileMetaData* meta, char* ptr) {
 /******************************************************************************************************************************* */
 /******************************************************************************************************************************* */
 /******************************************************************************************************************************* */
-    /*******************************************************************************************************************************
-    //  */
-    // std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    // s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
-    //            read_options, cfd_->table_cache(), iter.get(),
-    //            std::move(range_del_iters), &meta_, &blob_file_additions,
-    //            existing_snapshots_, earliest_write_conflict_snapshot_,
-    //            job_snapshot_seq, snapshot_checker_,
-    //            mutable_cf_options_.paranoid_file_checks,
-    //            cfd_->internal_stats(), &io_s, io_tracer_,
-    //            BlobFileCreationReason::kFlush, seqno_to_time_mapping_,
-    //            event_logger_, job_context_->job_id, io_priority,
-    //            &table_properties_, write_hint, full_history_ts_low,
-    //            blob_callback_, base_, &num_input_entries,
-    //            &memtable_payload_bytes, &memtable_garbage_bytes);
-    // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    // std::chrono::milliseconds duration =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    // time_sum += duration;
-    // Build_Table_num++;
-    // double averageDuration =
-    //     static_cast<double>(time_sum.count()) / Build_Table_num;
-    // std::cout << "次数：" << Build_Table_num << "    BuildTable平均时间间隔: " << averageDuration << " 毫秒" << std::endl;
-    /******************************************************************************************/
-        
-    // std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-      // Status return_status;
-      // BuildTable_new(  // versions_->current_next_file_number()
-      //     mems_, &meta_, versions_->NewFileNumber(), seqno_to_time_mapping_,
-      //     TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
-      //     mutable_cf_options_.paranoid_file_checks, job_context_->job_id,
-      //    earliest_write_conflict_snapshot_,
-      //     job_snapshot_seq, timestamp_size, tboptions.ioptions.cf_paths,
-      //     cfd_->GetName(), dbname_,
-      //     // 在实际情况中，以下参数需要回传
-      //     &return_status, &num_input_entries, &memtable_payload_bytes,
-      //     &memtable_garbage_bytes, &meta_.fd.packed_number_and_path_id,
-      //     &meta_.fd.file_size,&meta_.fd.smallest_seqno,&meta_.fd.largest_seqno);
-      // s = return_status;
-    // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    // std::chrono::milliseconds duration =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    // time_sum += duration;
-    // Build_Table_num++;
-    // double averageDuration =
-    //     static_cast<double>(time_sum.count()) / Build_Table_num;
-    // std::cout << "次数：" << Build_Table_num << "    平均时间间隔: " << averageDuration << " 毫秒" << std::endl;
+    s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
+               read_options, cfd_->table_cache(), iter.get(),
+               std::move(range_del_iters), &meta_, &blob_file_additions,
+               existing_snapshots_, earliest_write_conflict_snapshot_,
+               job_snapshot_seq, snapshot_checker_,
+               mutable_cf_options_.paranoid_file_checks,
+               cfd_->internal_stats(), &io_s, io_tracer_,
+               BlobFileCreationReason::kFlush, seqno_to_time_mapping_,
+               event_logger_, job_context_->job_id, io_priority,
+               &table_properties_, write_hint, full_history_ts_low,
+               blob_callback_, base_, &num_input_entries,
+               &memtable_payload_bytes, &memtable_garbage_bytes);
+    /****************************************************************************************** */
+    //   Status return_status;
+    //   BuildTable_new(  // versions_->current_next_file_number()
+    //       mems_, &meta_, versions_->NewFileNumber(), seqno_to_time_mapping_,
+    //       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
+    //       mutable_cf_options_.paranoid_file_checks, job_context_->job_id,
+    //      earliest_write_conflict_snapshot_,
+    //       job_snapshot_seq, timestamp_size, tboptions.ioptions.cf_paths,
+    //       cfd_->GetName(), dbname_,  
+    //       // 在实际情况中，以下参数需要回传
+    //       &return_status, &num_input_entries, &memtable_payload_bytes,
+    //       &memtable_garbage_bytes, &meta_.fd.packed_number_and_path_id,
+    //       &meta_.fd.file_size,&meta_.fd.smallest_seqno,&meta_.fd.largest_seqno);
+    //   s = return_status;
     // /****************************************************************************************** */
 
 

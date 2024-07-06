@@ -28,182 +28,194 @@
 
 namespace ROCKSDB_NAMESPACE {
 
-class BlockBuilder;
-class BlockHandle;
-class WritableFile;
-struct BlockBasedTableOptions;
+  class BlockBuilder;
+  class BlockHandle;
+  class WritableFile;
+  struct BlockBasedTableOptions;
 
-extern const uint64_t kBlockBasedTableMagicNumber;
-extern const uint64_t kLegacyBlockBasedTableMagicNumber;
+  extern const uint64_t kBlockBasedTableMagicNumber;
+  extern const uint64_t kLegacyBlockBasedTableMagicNumber;
 
-class BlockBasedTableBuilder : public TableBuilder {
- public:
-  // Create a builder that will store the contents of the table it is
-  // building in *file.  Does not close the file.  It is up to the
-  // caller to close the file after calling Finish().
-  BlockBasedTableBuilder(const BlockBasedTableOptions& table_options,
-                         const TableBuilderOptions& table_builder_options,
-                         WritableFileWriter* file);
+  class BlockBasedTableBuilder : public TableBuilder {
+  public:
+    // Create a builder that will store the contents of the table it is
+    // building in *file.  Does not close the file.  It is up to the
+    // caller to close the file after calling Finish().
+    BlockBasedTableBuilder(const BlockBasedTableOptions& table_options,
+                           const TableBuilderOptions& table_builder_options,
+                           WritableFileWriter* file);
 
-  // No copying allowed
-  BlockBasedTableBuilder(const BlockBasedTableBuilder&) = delete;
-  BlockBasedTableBuilder& operator=(const BlockBasedTableBuilder&) = delete;
+    // No copying allowed
+    BlockBasedTableBuilder(const BlockBasedTableBuilder&) = delete;
+    BlockBasedTableBuilder& operator=(const BlockBasedTableBuilder&) = delete;
 
-  // REQUIRES: Either Finish() or Abandon() has been called.
-  ~BlockBasedTableBuilder();
+    // REQUIRES: Either Finish() or Abandon() has been called.
+    ~BlockBasedTableBuilder();
 
-  // Add key,value to the table being constructed.
-  // REQUIRES: Unless key has type kTypeRangeDeletion, key is after any
-  //           previously added non-kTypeRangeDeletion key according to
-  //           comparator.
-  // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const Slice& value) override;
+    // Add key,value to the table being constructed.
+    // REQUIRES: Unless key has type kTypeRangeDeletion, key is after any
+    //           previously added non-kTypeRangeDeletion key according to
+    //           comparator.
+    // REQUIRES: Finish(), Abandon() have not been called
+    void Add(const Slice& key, const Slice& value) override;
 
-  // Return non-ok iff some error has been detected.
-  Status status() const override;
+    void Add_parallel(const Slice& key, const Slice& value, uint64_t index) override;
 
-  // Return non-ok iff some error happens during IO.
-  IOStatus io_status() const override;
+    void EmitRemainOpts(uint64_t index) override;
 
-  // Finish building the table.  Stops using the file passed to the
-  // constructor after this function returns.
-  // REQUIRES: Finish(), Abandon() have not been called
-  Status Finish() override;
+    void Flush_parallel(uint64_t index) override;
 
-  // Indicate that the contents of this builder should be abandoned.  Stops
-  // using the file passed to the constructor after this function returns.
-  // If the caller is not going to call Finish(), it must call Abandon()
-  // before destroying this builder.
-  // REQUIRES: Finish(), Abandon() have not been called
-  void Abandon() override;
+    void Flush_parallel(uint64_t index, const Slice& key) override;
 
-  // Number of calls to Add() so far.
-  uint64_t NumEntries() const override;
+    void merge_prop() override;
 
-  bool IsEmpty() const override;
+    // Return non-ok iff some error has been detected.
+    Status status() const override;
 
-  // Size of the file generated so far.  If invoked after a successful
-  // Finish() call, returns the size of the final generated file.
-  uint64_t FileSize() const override;
+    // Return non-ok iff some error happens during IO.
+    IOStatus io_status() const override;
 
-  // Estimated size of the file generated so far. This is used when
-  // FileSize() cannot estimate final SST size, e.g. parallel compression
-  // is enabled.
-  uint64_t EstimatedFileSize() const override;
+    // Finish building the table.  Stops using the file passed to the
+    // constructor after this function returns.
+    // REQUIRES: Finish(), Abandon() have not been called
+    Status Finish() override;
 
-  // Get the size of the "tail" part of a SST file. "Tail" refers to
-  // all blocks after data blocks till the end of the SST file.
-  uint64_t GetTailSize() const override;
+    //   Status Finish_parallel() override;
 
-  bool NeedCompact() const override;
+      // Indicate that the contents of this builder should be abandoned.  Stops
+      // using the file passed to the constructor after this function returns.
+      // If the caller is not going to call Finish(), it must call Abandon()
+      // before destroying this builder.
+      // REQUIRES: Finish(), Abandon() have not been called
+    void Abandon() override;
 
-  // Get table properties
-  TableProperties GetTableProperties() const override;
+    // Number of calls to Add() so far.
+    uint64_t NumEntries() const override;
 
-  // Get file checksum
-  std::string GetFileChecksum() const override;
+    bool IsEmpty() const override;
 
-  // Get file checksum function name
-  const char* GetFileChecksumFuncName() const override;
+    // Size of the file generated so far.  If invoked after a successful
+    // Finish() call, returns the size of the final generated file.
+    uint64_t FileSize() const override;
 
-  void SetSeqnoTimeTableProperties(
-      const std::string& encoded_seqno_to_time_mapping,
-      uint64_t oldest_ancestor_time) override;
+    // Estimated size of the file generated so far. This is used when
+    // FileSize() cannot estimate final SST size, e.g. parallel compression
+    // is enabled.
+    uint64_t EstimatedFileSize() const override;
 
- private:
-  bool ok() const { return status().ok(); }
+    // Get the size of the "tail" part of a SST file. "Tail" refers to
+    // all blocks after data blocks till the end of the SST file.
+    uint64_t GetTailSize() const override;
 
-  // Transition state from buffered to unbuffered. See `Rep::State` API comment
-  // for details of the states.
-  // REQUIRES: `rep_->state == kBuffered`
-  void EnterUnbuffered();
+    bool NeedCompact() const override;
 
-  // Call block's Finish() method and then
-  // - in buffered mode, buffer the uncompressed block contents.
-  // - in unbuffered mode, write the compressed block contents to file.
-  void WriteBlock(BlockBuilder* block, BlockHandle* handle,
-                  BlockType blocktype);
+    // Get table properties
+    TableProperties GetTableProperties() const override;
 
-  // Compress and write block content to the file.
-  void WriteBlock(const Slice& block_contents, BlockHandle* handle,
-                  BlockType block_type);
-  // Directly write data to the file.
-  void WriteMaybeCompressedBlock(
-      const Slice& block_contents, CompressionType, BlockHandle* handle,
-      BlockType block_type, const Slice* uncompressed_block_data = nullptr);
+    // Get file checksum
+    std::string GetFileChecksum() const override;
 
-  void SetupCacheKeyPrefix(const TableBuilderOptions& tbo);
+    // Get file checksum function name
+    const char* GetFileChecksumFuncName() const override;
 
-  template <typename TBlocklike>
-  Status InsertBlockInCache(const Slice& block_contents,
-                            const BlockHandle* handle, BlockType block_type);
+    void SetSeqnoTimeTableProperties(
+        const std::string& encoded_seqno_to_time_mapping,
+        uint64_t oldest_ancestor_time) override;
 
-  Status InsertBlockInCacheHelper(const Slice& block_contents,
-                                  const BlockHandle* handle,
-                                  BlockType block_type);
+  private:
+    bool ok() const { return status().ok(); }
 
-  Status InsertBlockInCompressedCache(const Slice& block_contents,
-                                      const CompressionType type,
-                                      const BlockHandle* handle);
+    // Transition state from buffered to unbuffered. See `Rep::State` API comment
+    // for details of the states.
+    // REQUIRES: `rep_->state == kBuffered`
+    void EnterUnbuffered();
 
-  void WriteFilterBlock(MetaIndexBuilder* meta_index_builder);
-  void WriteIndexBlock(MetaIndexBuilder* meta_index_builder,
-                       BlockHandle* index_block_handle);
-  void WritePropertiesBlock(MetaIndexBuilder* meta_index_builder);
-  void WriteCompressionDictBlock(MetaIndexBuilder* meta_index_builder);
-  void WriteRangeDelBlock(MetaIndexBuilder* meta_index_builder);
-  void WriteFooter(BlockHandle& metaindex_block_handle,
-                   BlockHandle& index_block_handle);
+    // Call block's Finish() method and then
+    // - in buffered mode, buffer the uncompressed block contents.
+    // - in unbuffered mode, write the compressed block contents to file.
+    void WriteBlock(BlockBuilder* block, BlockHandle* handle,
+                    BlockType blocktype);
 
-  struct Rep;
-  class BlockBasedTablePropertiesCollectorFactory;
-  class BlockBasedTablePropertiesCollector;
-  Rep* rep_;
+    // Compress and write block content to the file.
+    void WriteBlock(const Slice& block_contents, BlockHandle* handle,
+                    BlockType block_type);
+    // Directly write data to the file.
+    void WriteMaybeCompressedBlock(
+        const Slice& block_contents, CompressionType, BlockHandle* handle,
+        BlockType block_type, const Slice* uncompressed_block_data = nullptr);
 
-  struct ParallelCompressionRep;
+    void SetupCacheKeyPrefix(const TableBuilderOptions& tbo);
 
-  // Advanced operation: flush any buffered key/value pairs to file.
-  // Can be used to ensure that two adjacent entries never live in
-  // the same data block.  Most clients should not need to use this method.
-  // REQUIRES: Finish(), Abandon() have not been called
-  void Flush();
+    template <typename TBlocklike>
+    Status InsertBlockInCache(const Slice& block_contents,
+                              const BlockHandle* handle, BlockType block_type);
 
-  // Some compression libraries fail when the uncompressed size is bigger than
-  // int. If uncompressed size is bigger than kCompressionSizeLimit, don't
-  // compress it
-  const uint64_t kCompressionSizeLimit = std::numeric_limits<int>::max();
+    Status InsertBlockInCacheHelper(const Slice& block_contents,
+                                    const BlockHandle* handle,
+                                    BlockType block_type);
 
-  // Get blocks from mem-table walking thread, compress them and
-  // pass them to the write thread. Used in parallel compression mode only
-  void BGWorkCompression(const CompressionContext& compression_ctx,
-                         UncompressionContext* verify_ctx);
+    Status InsertBlockInCompressedCache(const Slice& block_contents,
+                                        const CompressionType type,
+                                        const BlockHandle* handle);
 
-  // Given uncompressed block content, try to compress it and return result and
-  // compression type
-  void CompressAndVerifyBlock(const Slice& uncompressed_block_data,
-                              bool is_data_block,
-                              const CompressionContext& compression_ctx,
-                              UncompressionContext* verify_ctx,
-                              std::string* compressed_output,
-                              Slice* result_block_contents,
-                              CompressionType* result_compression_type,
-                              Status* out_status);
+    void WriteFilterBlock(MetaIndexBuilder* meta_index_builder);
+    void WriteIndexBlock(MetaIndexBuilder* meta_index_builder,
+                         BlockHandle* index_block_handle);
+    void WritePropertiesBlock(MetaIndexBuilder* meta_index_builder);
+    void WriteCompressionDictBlock(MetaIndexBuilder* meta_index_builder);
+    void WriteRangeDelBlock(MetaIndexBuilder* meta_index_builder);
+    void WriteFooter(BlockHandle& metaindex_block_handle,
+                     BlockHandle& index_block_handle);
 
-  // Get compressed blocks from BGWorkCompression and write them into SST
-  void BGWorkWriteMaybeCompressedBlock();
+    struct Rep;
+    class BlockBasedTablePropertiesCollectorFactory;
+    class BlockBasedTablePropertiesCollector;
+    Rep* rep_;
 
-  // Initialize parallel compression context and
-  // start BGWorkCompression and BGWorkWriteMaybeCompressedBlock threads
-  void StartParallelCompression();
+    struct ParallelCompressionRep;
 
-  // Stop BGWorkCompression and BGWorkWriteMaybeCompressedBlock threads
-  void StopParallelCompression();
-};
+    // Advanced operation: flush any buffered key/value pairs to file.
+    // Can be used to ensure that two adjacent entries never live in
+    // the same data block.  Most clients should not need to use this method.
+    // REQUIRES: Finish(), Abandon() have not been called
+    void Flush();
 
-Slice CompressBlock(const Slice& uncompressed_data, const CompressionInfo& info,
-                    CompressionType* type, uint32_t format_version,
-                    bool do_sample, std::string* compressed_output,
-                    std::string* sampled_output_fast,
-                    std::string* sampled_output_slow);
+    // Some compression libraries fail when the uncompressed size is bigger than
+    // int. If uncompressed size is bigger than kCompressionSizeLimit, don't
+    // compress it
+    const uint64_t kCompressionSizeLimit = std::numeric_limits<int>::max();
+
+    // Get blocks from mem-table walking thread, compress them and
+    // pass them to the write thread. Used in parallel compression mode only
+    void BGWorkCompression(const CompressionContext& compression_ctx,
+                           UncompressionContext* verify_ctx);
+
+    // Given uncompressed block content, try to compress it and return result and
+    // compression type
+    void CompressAndVerifyBlock(const Slice& uncompressed_block_data,
+                                bool is_data_block,
+                                const CompressionContext& compression_ctx,
+                                UncompressionContext* verify_ctx,
+                                std::string* compressed_output,
+                                Slice* result_block_contents,
+                                CompressionType* result_compression_type,
+                                Status* out_status);
+
+    // Get compressed blocks from BGWorkCompression and write them into SST
+    void BGWorkWriteMaybeCompressedBlock();
+
+    // Initialize parallel compression context and
+    // start BGWorkCompression and BGWorkWriteMaybeCompressedBlock threads
+    void StartParallelCompression();
+
+    // Stop BGWorkCompression and BGWorkWriteMaybeCompressedBlock threads
+    void StopParallelCompression();
+  };
+
+  Slice CompressBlock(const Slice& uncompressed_data, const CompressionInfo& info,
+                      CompressionType* type, uint32_t format_version,
+                      bool do_sample, std::string* compressed_output,
+                      std::string* sampled_output_fast,
+                      std::string* sampled_output_slow);
 
 }  // namespace ROCKSDB_NAMESPACE

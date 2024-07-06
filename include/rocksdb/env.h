@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <chrono>
 
 #include <doca_dev.h>
 #include <doca_dpa.h>
@@ -75,6 +76,9 @@ namespace ROCKSDB_NAMESPACE {
   struct ConfigOptions;
 
   const size_t kDefaultPageSize = 4 * 1024;
+  
+  extern double iotime, blocktime, compresstime;
+  extern uint64_t c_iter_nexttime;
 
   typedef struct {
     uintptr_t ptr;

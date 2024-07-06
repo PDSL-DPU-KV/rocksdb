@@ -74,6 +74,7 @@ extern Status BuildTable(
 void BuildTable_new(
     uintptr_t Node_head,
     uint64_t offset,
+    uint64_t num_entries,
     FileMetaData* meta, 
     uint64_t new_versions_NewFileNumber,  
     

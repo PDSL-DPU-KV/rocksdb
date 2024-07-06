@@ -174,6 +174,16 @@ class TableBuilder {
   // REQUIRES: Finish(), Abandon() have not been called
   virtual void Add(const Slice& key, const Slice& value) = 0;
 
+  virtual void Add_parallel(const Slice& key, const Slice& value, uint64_t index) {}
+
+  virtual void EmitRemainOpts(uint64_t index) {}
+
+  virtual void Flush_parallel(uint64_t index) {}
+
+  virtual void Flush_parallel(uint64_t index, const Slice& key) {}
+
+  virtual void merge_prop() {}
+
   // Return non-ok iff some error has been detected.
   virtual Status status() const = 0;
 
@@ -183,6 +193,8 @@ class TableBuilder {
   // Finish building the table.
   // REQUIRES: Finish(), Abandon() have not been called
   virtual Status Finish() = 0;
+
+  // virtual Status Finish_parallel() { return Status::kOk; }
 
   // Indicate that the contents of this builder should be abandoned.
   // If the caller is not going to call Finish(), it must call Abandon()

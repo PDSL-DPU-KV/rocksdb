@@ -59,24 +59,24 @@ static uint64_t run_async(ctx_t* t, uint64_t rank) {
                 break;
                 // LOG_DBG("et:%d poll %d\n", et, counter);
             }
-            else {
-                break;
-            }
+            // else {
+            //     break;
+            // }
         }
     }
-    while (counter < t->params.copy_n) {
-        // LOG_DBG("rank:%u circle!\n", rank);
-        int got = doca_dpa_dev_get_completion(t->comp_handle, &e);
-        if (got == 1) {
-            doca_dpa_dev_completion_type_t et = doca_dpa_dev_get_completion_type(e);
-            doca_dpa_dev_completion_ack(t->comp_handle, 1);
-            counter++;
-            if (et != 0) {
-                UNREACHABLE_CRIT;
-            }
-            // LOG_DBG("%d poll %d\n", et, counter);
-        }
-    }
+    // while (counter < t->params.copy_n) {
+    //     // LOG_DBG("rank:%u circle!\n", rank);
+    //     int got = doca_dpa_dev_get_completion(t->comp_handle, &e);
+    //     if (got == 1) {
+    //         doca_dpa_dev_completion_type_t et = doca_dpa_dev_get_completion_type(e);
+    //         doca_dpa_dev_completion_ack(t->comp_handle, 1);
+    //         counter++;
+    //         if (et != 0) {
+    //             UNREACHABLE_CRIT;
+    //         }
+    //         // LOG_DBG("%d poll %d\n", et, counter);
+    //     }
+    // }
     // LOG_DBG("rank:%u end memcpy\n", rank);
     // TICK1;
     // PRINT_TICK(1);
@@ -88,11 +88,13 @@ __dpa_global__ static void dflush_func(uintptr_t ctx_ptr) {
     uint32_t rank = doca_dpa_dev_thread_rank();
     // LOG_DBG("rank:%u start\n", rank);
     if (t->use_atomic) {
-        uint64_t cycle = 0;
-        cycle = run_async(t, rank);
+        // uint64_t cycle = 0;
+        // cycle = run_async(t, rank);
+        run_async(t, rank);
 
-        uint64_t* cycles = (uint64_t*)get_base_ptr_of_region(&t->result);
-        cycles[rank] = cycle;
+        // uint64_t* cycles = (uint64_t*)get_base_ptr_of_region(&t->result);
+        get_base_ptr_of_region(&t->result);
+        // cycles[rank] = cycle;
         __dpa_thread_window_writeback();
 
         uint64_t* sync = (uint64_t*)get_base_ptr_of_region(&t->sync);

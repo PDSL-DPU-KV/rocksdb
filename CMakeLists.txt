@@ -623,7 +623,7 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
-set(ENV{PKG_CONFIG_PATH} "/home/zqy2023/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/doca/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/flexio/lib/pkgconfig/:/opt/mellanox/dpdk/lib/x86_64-linux-gnu/pkgconfig/")
+set(ENV{PKG_CONFIG_PATH} "/home/zqy2023/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig/:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig/:/opt/mellanox/flexio/lib/pkgconfig/:/opt/mellanox/dpdk/lib/aarch64-linux-gnu/pkgconfig/")
 option(WITH_MERCURY "Build with mercury" ON)
 if(WITH_MERCURY)
   find_package(PkgConfig REQUIRED)
