@@ -84,7 +84,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
                write_buffer_manager->cost_to_cache()))
                  ? &mem_tracker_
                  : nullptr,
-             mutable_cf_options.memtable_huge_page_size, false),
+             mutable_cf_options.memtable_huge_page_size, true),
       table_(ioptions.memtable_factory->CreateMemTableRep(
           comparator_, &arena_, mutable_cf_options.prefix_extractor.get(),
           ioptions.logger, column_family_id)),

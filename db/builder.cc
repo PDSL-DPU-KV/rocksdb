@@ -10,6 +10,7 @@
 #include "db/builder.h"
 
 
+#include <cstdint>
 #include <vector>
 
 #include "db/blob/blob_file_builder.h"
@@ -43,6 +44,8 @@
 #include "table/merging_iterator.h"
 
 namespace ROCKSDB_NAMESPACE {
+std::chrono::milliseconds meta_send_time_sum(0);
+int Build_Table_num = 0;
 
 class TableFactory;
 
@@ -300,6 +303,7 @@ Status BuildTable(
       if (memtable_payload_bytes != nullptr &&
           memtable_garbage_bytes != nullptr) {
         const CompactionIterationStats& ci_stats = c_iter.iter_stats();
+
         uint64_t total_payload_bytes = ci_stats.total_input_raw_key_bytes +
                                        ci_stats.total_input_raw_value_bytes +
                                        total_tombstone_payload_bytes;
@@ -585,27 +589,22 @@ InternalIterator* NewIterator(NewMemTable* mt,const ReadOptions& read_options, A
 // /**********************************************************************************************************************/
 
 void BuildTable_new(
-    uintptr_t Node_head,uint64_t offset,FileMetaData* meta, 
-    uint64_t new_versions_NewFileNumber,  
-    
-    SeqnoToTimeMapping seqno_to_time_mapping,
-    uint32_t kUnknownColumnFamily,  
-    bool paranoid_file_checks,  
-    int job_id,    
-    SequenceNumber earliest_write_conflict_snapshot, 
-    SequenceNumber job_snapshot,  
-    size_t timestamp_size,     
-    std::vector<DbPath> tboptions_ioptions_cf_paths,  
-    std::string cfd_GetName,  
-    std::string dbname,    
+    uintptr_t Node_head, uint64_t offset, FileMetaData* meta,
+    uint64_t new_versions_NewFileNumber,
+
+    SeqnoToTimeMapping seqno_to_time_mapping, uint32_t kUnknownColumnFamily,
+    bool paranoid_file_checks, int job_id,
+    SequenceNumber earliest_write_conflict_snapshot,
+    SequenceNumber job_snapshot, size_t timestamp_size,
+    std::vector<DbPath> tboptions_ioptions_cf_paths, std::string cfd_GetName,
+    std::string dbname,
 
     /* Ouput List */
     Status* return_status,
     uint64_t* num_input_entries,  // output 在程序中定义，局部变量
     uint64_t* memtable_payload_bytes,  // output 在程序中定义，局部变量
     uint64_t* memtable_garbage_bytes,  // output 在程序中定义，局部变量
-    uint64_t* packed_number_and_path_id,
-    uint64_t* file_size,
+    uint64_t* packed_number_and_path_id, uint64_t* file_size,
     SequenceNumber* smallest_seqno,  // The smallest seqno in this file
     SequenceNumber* largest_seqno
 
@@ -649,17 +648,17 @@ void BuildTable_new(
     NewMemTable new_m(Node_head, offset,cfd_internal_comparator);
     InternalIterator* iter = NewIterator(&new_m,ro, &arena,cfd_internal_comparator);
     /* test */
-    // iter->SeekToFirst();
-    // Slice key = iter->key();
-    // printf("key:%ld\n", *(uint64_t*)key.data());
-    // Slice value = iter->value();
-    // printf("value:%ld\n", *(uint64_t*)value.data());
-    // iter->Next();
-    // key = iter->key();
-    // value = iter->value();
-    // printf("key:%ld\n",*(uint64_t*)key.data());
-    // printf("value:%ld\n", *(uint64_t*)value.data());
-    // iter->SeekToFirst();
+    iter->SeekToFirst();
+    Slice key = iter->key();
+    printf("key:%ld\n", *(uint64_t*)key.data());
+    Slice value = iter->value();
+    printf("value:%ld\n", *(uint64_t*)value.data());
+    iter->Next();
+    key = iter->key();
+    value = iter->value();
+    printf("key:%ld\n",*(uint64_t*)key.data());
+    printf("value:%ld\n", *(uint64_t*)value.data());
+    iter->SeekToFirst();
     /* test */
     
     /*请求处理过程*/
@@ -820,16 +819,16 @@ void BuildTable_new(
             uint64_t total_payload_bytes =
                 ci_stats.total_input_raw_key_bytes +
                 ci_stats.total_input_raw_value_bytes;
-            uint64_t total_payload_bytes_written =
-                (tp.raw_key_size + tp.raw_value_size);
-            if (total_payload_bytes_written <= total_payload_bytes) {
-              *memtable_payload_bytes = total_payload_bytes;
-              *memtable_garbage_bytes =
-                  total_payload_bytes - total_payload_bytes_written;
-            } else {
-              memtable_payload_bytes = 0;
-              memtable_garbage_bytes = 0;
-            }
+          uint64_t total_payload_bytes_written =
+              (tp.raw_key_size + tp.raw_value_size);
+          if (total_payload_bytes_written <= total_payload_bytes) {
+            *memtable_payload_bytes = total_payload_bytes;
+            *memtable_garbage_bytes =
+                total_payload_bytes - total_payload_bytes_written;
+          } else {
+            memtable_payload_bytes = 0;
+            memtable_garbage_bytes = 0;
+          }
         }
         delete builder;
 

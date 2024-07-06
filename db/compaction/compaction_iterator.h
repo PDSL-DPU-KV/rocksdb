@@ -4,6 +4,9 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
+#include <algorithm>
+#include <cinttypes>
+#include <deque>
 #include <string>
 #include <unordered_set>
 #include <vector>
