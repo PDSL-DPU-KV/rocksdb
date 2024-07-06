@@ -45,8 +45,8 @@
 #include "util/work_queue.h"
 
 namespace ROCKSDB_NAMESPACE {
-std::chrono::milliseconds meta_send_time_sum(0);
-int Build_Table_num = 0;
+  std::chrono::milliseconds meta_send_time_sum(0);
+  int Build_Table_num = 0;
 
   class TableFactory;
 
@@ -614,8 +614,7 @@ int Build_Table_num = 0;
 
 
   void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
-                     std::mutex& meta_mtx, CompactionIterator* c_iter,
-                     uint64_t skip_nums, uint64_t need_nums, std::atomic<uint64_t>& counter) {
+                     CompactionIterator* c_iter, std::atomic<uint64_t>& counter) {
     // fprintf(stderr, "index:%lu, gethere, %d\n", index, __LINE__);
     // fprintf(stderr, "Node_head:%lx\n", c_iter->Node_head());
     // fflush(stderr);
@@ -747,19 +746,6 @@ int Build_Table_num = 0;
 
     NewMemTable new_m(Node_head, offset, offset, cfd_internal_comparator);
     InternalIterator* iter = NewIterator(&new_m, ro, &arena, cfd_internal_comparator);
-    /* test */
-    iter->SeekToFirst();
-    Slice key = iter->key();
-    printf("key:%ld\n", *(uint64_t*)key.data());
-    Slice value = iter->value();
-    printf("value:%ld\n", *(uint64_t*)value.data());
-    iter->Next();
-    key = iter->key();
-    value = iter->value();
-    printf("key:%ld\n",*(uint64_t*)key.data());
-    printf("value:%ld\n", *(uint64_t*)value.data());
-    iter->SeekToFirst();
-    /* test */
 
     /*请求处理过程*/
     // assert((tboptions_column_family_id == kUnknownColumnFamily) == tboptions_column_family_name.empty());
@@ -920,7 +906,6 @@ int Build_Table_num = 0;
       }
       auto c_point = std::chrono::high_resolution_clock::now();
 
-      uint64_t piece_nums = 300000;
       for (uint64_t i = 0;i < parallel_threads;i++) {
         // uint64_t index = i;
         // fprintf(stderr, "index:%lu, Node_head:%lx\n", index,
@@ -932,8 +917,7 @@ int Build_Table_num = 0;
         // if (i != 0) {
         //   flush_thread_pool[i - 1].join();
         // }
-        flush_thread_pool.emplace_back(iter_parallel, i, builder, meta,
-          std::ref(meta_mtx), c_iters[i], piece_nums * i, i + 1 == parallel_threads ? 10000000ul : piece_nums * (i + 1), std::ref(counter));
+        flush_thread_pool.emplace_back(iter_parallel, i, builder, meta, c_iters[i], std::ref(counter));
         //piece_nums * index, piece_nums * (index + 1));});
       }
       // flush_thread_pool[parallel_threads - 1].join();
@@ -989,15 +973,8 @@ int Build_Table_num = 0;
       // else if (!c_iter.status().ok()) {
       //   s = c_iter.status();
       // }
-      // fprintf(stderr, "before token_pools line:%d\n", __LINE__);
-      // fflush(stderr);
-      try {
-        for (int i = 0; i < flush_thread_pool.size(); i++) {
-          flush_thread_pool[i].join();
-        }
-      }
-      catch (const std::system_error& error) {
-        printf("join error!\n");
+      for (int i = 0; i < flush_thread_pool.size(); i++) {
+        flush_thread_pool[i].join();
       }
       auto b_point = std::chrono::high_resolution_clock::now();
       uint64_t iter_time = std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point).count();
@@ -1010,9 +987,6 @@ int Build_Table_num = 0;
 
       TEST_SYNC_POINT("BuildTable:BeforeFinishBuildTable");
       const bool empty = builder->IsEmpty();
-      // fprintf(stderr, "gethere:%d, empty:%d\n", __LINE__, empty);
-      // fflush(stderr);
-      // *num_input_entries = c_iters[parallel_threads - 1]->num_input_entry_scanned();
       *num_input_entries = 0;
       for (int i = 0;i < parallel_threads;++i) {
         *num_input_entries += c_iters[i]->num_input_entry_scanned();
@@ -1020,39 +994,25 @@ int Build_Table_num = 0;
       if (*num_input_entries != num_entries) {
         printf("nums error!\n");
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       // *num_input_entries = c_iter.num_input_entry_scanned();
       if (!s.ok() || empty) {
-        // fprintf(stderr, "gethere:%d\n", __LINE__);
-        // fflush(stderr);
         builder->Abandon();
       }
       else {
-        // fprintf(stderr, "gethere:%d\n", __LINE__);
-        // fflush(stderr);
-        // 这部分好像也是没什么用的，主要是一些统计信息
         std::string seqno_time_mapping_str;
-        // fprintf(stderr, "largest_seqno:%lx, smallest_seqno:%lx line:%d\n", DPU_fd.largest_seqno, DPU_fd.smallest_seqno, __LINE__);
         seqno_to_time_mapping.Encode(
             seqno_time_mapping_str, DPU_fd.smallest_seqno, DPU_fd.largest_seqno,
             meta->file_creation_time);
-        // fprintf(stderr, "largest_seqno:%lx, smallest_seqno:%lx line:%d\n", DPU_fd.largest_seqno, DPU_fd.smallest_seqno, __LINE__);
         builder->SetSeqnoTimeTableProperties(
             seqno_time_mapping_str,
         ioptions.compaction_style == CompactionStyle::kCompactionStyleFIFO
                 ? meta->file_creation_time
                 : meta->oldest_ancester_time);
-        // fprintf(stderr, "before Finish line:%d\n", __LINE__);
-        // fflush(stderr);
         s = builder->Finish();
-        // s = builder->Finish_parallel();
       }
       if (io_status.ok()) {
         io_status = builder->io_status();
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       if (s.ok() && !empty) {
         uint64_t file_size = builder->FileSize();
         DPU_fd.file_size = file_size;
@@ -1077,28 +1037,18 @@ int Build_Table_num = 0;
         //   memtable_garbage_bytes = 0;
         // }
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       delete builder;
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       TEST_SYNC_POINT("BuildTable:BeforeSyncTable");
       if (s.ok() && !empty) {
         StopWatch sw(ioptions.clock, ioptions.stats, TABLE_SYNC_MICROS);
         io_status = file_writer->Sync(ioptions.use_fsync);
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       TEST_SYNC_POINT("BuildTable:BeforeCloseTableFile");
       if (s.ok() && io_status.ok() && !empty) {
         io_status = file_writer->Close();
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       if (s.ok() && io_status.ok() && !empty) {
         // Add the checksum information to file metadata.
-        // fprintf(stderr, "gethere : %d\n", __LINE__);
-        // fflush(stderr);
         meta->file_checksum = file_writer->GetFileChecksum();
         meta->file_checksum_func_name = file_writer->GetFileChecksumFuncName();
         DPU_fd.smallest_seqno = meta->fd.smallest_seqno;
@@ -1112,21 +1062,16 @@ int Build_Table_num = 0;
           // if failed to get unique id, just set it Null
           meta->unique_id = kNullUniqueId64x2;
         }
-        // fprintf(stderr, "gethere:%d\n", __LINE__);
-        // fflush(stderr);
         // }
       }
-      // fprintf(stderr, "gethere:%d\n", __LINE__);
-      // fflush(stderr);
       if (s.ok()) {
         s = io_status;
       }
 
-      // for (int i = 0; i < parallel_threads; ++i) {
-      //   delete new_mems[i];
-      //   // delete iters[i];
-      //   delete c_iters[i];
-      // }
+      for (int i = 0; i < parallel_threads; ++i) {
+        delete new_mems[i];
+        delete c_iters[i];
+      }
     }
     else {
       printf("no valid!\n");
@@ -1150,20 +1095,15 @@ int Build_Table_num = 0;
       }
     }
     Status status_for_listener = s;
-    fprintf(stderr, "gethere:%d\n", __LINE__);
-    fflush(stderr);
     if (DPU_fd.GetFileSize() == 0) {
       fname = "(nil)";
       if (s.ok()) {
         status_for_listener = Status::Aborted("Empty SST file not kept");
       }
     }
-    fprintf(stderr, "gethere:%d\n", __LINE__);
-    fflush(stderr);
     *return_status = s;
     *packed_number_and_path_id = DPU_fd.packed_number_and_path_id;
     *file_size = DPU_fd.file_size;
-    fprintf(stderr, "largest_seqno:%lx, smallest_seqno:%lx line:%d\n", DPU_fd.largest_seqno, DPU_fd.smallest_seqno, __LINE__);
     *smallest_seqno = DPU_fd.smallest_seqno;
     *largest_seqno = DPU_fd.largest_seqno;
     return;

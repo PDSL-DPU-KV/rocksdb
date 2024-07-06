@@ -11,6 +11,7 @@ extern "C" {
 
 #define SYNC 1
 #define ASYNC 2
+#define DMA 3
 
     typedef struct {
         uintptr_t ptr;

@@ -633,7 +633,7 @@ if(WITH_MERCURY)
     message(FATAL_ERROR "pkg-config not found")
   endif()
   pkg_check_modules(mercury REQUIRED IMPORTED_TARGET libfabric mercury)
-  pkg_check_modules(doca REQUIRED IMPORTED_TARGET doca-common doca-rdma doca-erasure-coding doca-dpa libflexio)
+  pkg_check_modules(doca REQUIRED IMPORTED_TARGET doca-common doca-rdma doca-erasure-coding doca-dpa doca-dma libflexio)
 endif()
 
 # Proto file

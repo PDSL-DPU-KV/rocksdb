@@ -92,7 +92,7 @@ namespace ROCKSDB_NAMESPACE {
   constexpr const uint32_t access_mask =
     DOCA_ACCESS_FLAG_LOCAL_READ_WRITE | DOCA_ACCESS_FLAG_PCI_READ_WRITE;
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 #include <cstdio>
 #include <cstdlib>
 #include <doca_error.h>

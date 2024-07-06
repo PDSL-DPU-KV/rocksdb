@@ -10,9 +10,15 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include <doca_buf.h>
+#include <doca_buf_array.h>
+#include <doca_buf_inventory.h>
+#include <doca_ctx.h>
 #include <doca_dev.h>
+#include <doca_dma.h>
 #include <doca_dpa.h>
 #include <doca_mmap.h>
+#include <doca_pe.h>
 #include <doca_sync_event.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -54,24 +60,21 @@ static inline void relax() {}
 
 using namespace std::chrono_literals;
 
-extern "C" doca_dpa_app * dflush_app;
-extern "C" doca_dpa_func_t dflush_func;
-extern "C" doca_dpa_func_t trigger;
-
 constexpr const uint32_t access_mask =
 DOCA_ACCESS_FLAG_LOCAL_READ_WRITE | DOCA_ACCESS_FLAG_PCI_READ_WRITE;
-std::mutex mtx;
-const uint32_t nthreads_task = 8;
-const uint32_t nthreads_memcpy = 1;
-int flush_num = 0;
+
+const uint32_t nthreads_task = 64;
+
 enum class Location : uint32_t {
     Host = HOST,
     Device = DEVICE,
 };
+
 struct DbPath_struct {
     char path[128];
     uint64_t target_size;
 };
+
 int send_meta(rocksdb::FileMetaData* meta, char* ptr) {
     int send_size = 0;
 
@@ -307,14 +310,51 @@ int recv_meta(rocksdb::FileMetaData* meta, char* ptr) {
 
     return recv_size;
 }
+typedef doca_error_t(*tasks_check)(struct doca_devinfo*);
+
+doca_error_t dma_task_is_supported(struct doca_devinfo* devinfo) {
+    return doca_dma_cap_task_memcpy_is_supported(devinfo);
+}
+
+void open_device(tasks_check func) {
+    doca_devinfo** dev_list;
+    doca_devinfo* dev_info = NULL;
+    uint32_t nb_devs;
+    doca_check(doca_devinfo_create_list(&dev_list, &nb_devs));
+    char ibdev_name_buf[DOCA_DEVINFO_IBDEV_NAME_SIZE];
+    doca_error_t result = DOCA_SUCCESS;
+    for (uint32_t i = 0; i < nb_devs; i++) {
+        result = doca_devinfo_get_ibdev_name(dev_list[i], ibdev_name_buf,
+                                             DOCA_DEVINFO_IBDEV_NAME_SIZE);
+        if (result == DOCA_SUCCESS &&
+            strncmp(ibdev_name, ibdev_name_buf, strlen(ibdev_name)) == 0) {
+            if (func != NULL && func(dev_list[i]) != DOCA_SUCCESS)
+                continue;
+            dev_info = dev_list[i];
+            break;
+        }
+    }
+    if (!dev_info) {
+        std::abort();
+    }
+    doca_check(doca_dev_open(dev_info, &dev));
+    doca_check(doca_devinfo_destroy_list(dev_list));
+}
+
+void close_device() { doca_check(doca_dev_close(dev)); }
+
 std::pair<doca_mmap*, region_t> alloc_mem(Location l, uint64_t len) {
-    region_t r;
+    region_t r = { 0,0,0 };
     r.flag = (uint32_t)l;
     doca_mmap* mmap;
     doca_check(doca_mmap_create(&mmap));
     switch (l) {
         case Location::Host: {
+                printf("a, r.ptr:%lx\n", r.ptr);
                 r.ptr = (uintptr_t)aligned_alloc(64, len);
+                printf("b, r.ptr:%lx\n", r.ptr);
+                // r.ptr = (uintptr_t)malloc(len);
+                // memset((char *)r.ptr, 'A', len);
                 doca_check(doca_mmap_add_dev(mmap, dev));
                 doca_check(doca_mmap_set_memrange(mmap, (void*)r.ptr, len));
                 doca_check(doca_mmap_set_permissions(mmap, access_mask));
@@ -325,7 +365,7 @@ std::pair<doca_mmap*, region_t> alloc_mem(Location l, uint64_t len) {
             } break;
     }
     doca_check(doca_mmap_start(mmap));
-    doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
+    // doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
     return { mmap, r };
 }
 
@@ -334,28 +374,11 @@ std::pair<doca_mmap*, region_t> alloc_mem_from_export(Location l, uint64_t len, 
     r.flag = (uint32_t)l;
     doca_mmap* mmap;
     size_t size;
-    doca_check(doca_mmap_create_from_export(nullptr, export_desc.data(), export_desc.size(), dev, &mmap));
-    doca_check(doca_mmap_add_dev(mmap, dev));
+    doca_check(doca_mmap_create_from_export(nullptr, export_desc.data(),
+        export_desc.size(), dev, &mmap));
     doca_check(doca_mmap_get_memrange(mmap, (void**)&r.ptr, &size));
-    doca_check(doca_mmap_set_permissions(mmap, access_mask));
-    doca_check(doca_mmap_start(mmap));
-    doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
+    // doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
     return { mmap, r };
-}
-
-void do_memset(region_t r, uint64_t len, char c) {
-    if (r.flag == (uint32_t)Location::Host) {
-        memset((char*)r.ptr, c, len);
-    }
-}
-
-void do_memcheck(region_t dst, region_t src, uint64_t len) {
-    if (dst.flag == (uint32_t)Location::Host &&
-        src.flag == (uint32_t)Location::Host) {
-        if (0 != memcmp((void*)dst.ptr, (void*)src.ptr, len)) {
-            std::abort();
-        }
-    }
 }
 
 void free_mem(region_t& r, doca_mmap* mmap) {
@@ -371,174 +394,136 @@ void free_mem(region_t& r, doca_mmap* mmap) {
     doca_check(doca_mmap_destroy(mmap));
 }
 
-std::pair<doca_sync_event*, doca_dpa_dev_sync_event_t> create_se(bool host2dev) {
-    doca_sync_event* se;
-    doca_dpa_dev_sync_event_t h;
-    doca_check(doca_sync_event_create(&se));
-    if (host2dev) {
-        doca_check(doca_sync_event_add_publisher_location_cpu(se, dev));
-        doca_check(doca_sync_event_add_subscriber_location_dpa(se, dpa));
-    }
-    else {
-        doca_check(doca_sync_event_add_publisher_location_dpa(se, dpa));
-        doca_check(doca_sync_event_add_subscriber_location_cpu(se, dev));
-    }
-    doca_check(doca_sync_event_start(se));
-    doca_check(doca_sync_event_get_dpa_handle(se, dpa, &h));
-    return { se, h };
+static void dma_memcpy_completed_callback(struct doca_dma_task_memcpy* dma_task,
+                                          union doca_data task_user_data,
+                                          union doca_data ctx_user_data) {
+    struct dma_resources* resources = (struct dma_resources*)ctx_user_data.ptr;
+    struct doca_task* task = doca_dma_task_memcpy_as_task(dma_task);
+    doca_check(doca_task_get_status(task));
+
+    /* Free task */
+    doca_task_free(doca_dma_task_memcpy_as_task(dma_task));
 }
 
-void destroy_se(doca_sync_event* se) {
-    doca_check(doca_sync_event_stop(se));
-    doca_check(doca_sync_event_destroy(se));
+static void dma_memcpy_error_callback(struct doca_dma_task_memcpy* dma_task,
+                                      union doca_data task_user_data,
+                                      union doca_data ctx_user_data) {
+    printf("dma error!\n");
+    struct dma_resources* resources = (struct dma_resources*)ctx_user_data.ptr;
+    struct doca_task* task = doca_dma_task_memcpy_as_task(dma_task);
+    doca_check(doca_task_get_status(task));
+
+    /* Free task */
+    doca_task_free(task);
 }
 
-struct DPAThread {
-    DPAThread(doca_dpa_tg* tg, uintptr_t ctx_ptr, uint64_t rank)
-        : ctx_ptr(ctx_ptr), rank(rank) {
-        doca_check(doca_dpa_thread_create(dpa, &t));
-        doca_check(
-            doca_dpa_thread_set_func_arg(t, dflush_func, (uintptr_t)ctx_ptr));
-        doca_check(doca_dpa_thread_group_set_thread(tg, t, rank));
-        doca_check(doca_dpa_thread_start(t));
+static void dma_state_changed_callback(const union doca_data user_data,
+                                       struct doca_ctx* ctx,
+                                       enum doca_ctx_states prev_state,
+                                       enum doca_ctx_states next_state) {
+    (void)ctx;
+    (void)prev_state;
 
-        doca_check(doca_dpa_completion_create(dpa, 4096, &comp));
-        doca_check(doca_dpa_completion_set_thread(comp, t));
-        doca_check(doca_dpa_completion_start(comp));
-        doca_check(doca_dpa_completion_get_dpa_handle(comp, &c.comp_handle));
+    switch (next_state) {
+        case DOCA_CTX_STATE_IDLE:
+            printf("DMA context has been stopped\n");
+            break;
+        case DOCA_CTX_STATE_STARTING:
+            printf("DMA context entered into starting state. Unexpected transition\n");
+            break;
+        case DOCA_CTX_STATE_RUNNING:
+            printf("DMA context is running\n");
+            break;
+        case DOCA_CTX_STATE_STOPPING:
+            printf("DMA context entered into stopping state. Any inflight tasks "
+                   "will be flushed\n");
+            break;
+        default:
+            break;
+    }
+}
 
-        doca_check(doca_dpa_notification_completion_create(dpa, t, &notify));
-        doca_check(doca_dpa_notification_completion_start(notify));
-        doca_check(doca_dpa_notification_completion_get_dpa_handle(
-            notify, &c.notify_handle));
+static uint64_t max_dma_buffer_size() {
+    uint64_t max_buffer_size = 0;
+    doca_dma_cap_task_memcpy_get_max_buf_size(doca_dev_as_devinfo(dev),
+                                              &max_buffer_size);
+    return max_buffer_size;
+}
 
-        doca_check(doca_dpa_async_ops_create(dpa, 4096, 0, &aops));
-        doca_check(doca_dpa_async_ops_attach(aops, comp));
-        doca_check(doca_dpa_async_ops_start(aops));
-        doca_check(doca_dpa_async_ops_get_dpa_handle(aops, &c.aops_handle));
+struct DMAThread {
+    DMAThread(uint32_t max_bufs, uint32_t num_dma_tasks) {
+        doca_check(doca_buf_inventory_create(max_bufs, &buf_inv));
+        doca_check(doca_buf_inventory_start(buf_inv));
+        doca_check(doca_pe_create(&pe));
+        doca_check(doca_dma_create(dev, &dma_ctx));
+        ctx = doca_dma_as_ctx(dma_ctx);
+        doca_check(doca_ctx_set_state_changed_cb(ctx, dma_state_changed_callback));
+        doca_check(doca_dma_task_memcpy_set_conf(
+            dma_ctx, dma_memcpy_completed_callback, dma_memcpy_error_callback,
+            num_dma_tasks));
+        doca_check(doca_pe_connect_ctx(pe, ctx));
+        doca_check(doca_ctx_start(ctx));
     }
 
-    void run(doca_dpa_dev_sync_event_t w_handle,
-             doca_dpa_dev_sync_event_t s_handle, const params_memcpy_t& params,
-             region_t result, region_t sync, bool use_atomic) {
-        c.w_handle = w_handle;
-        c.s_handle = s_handle;
-        c.params = params;
-        c.result = result;
-        c.sync = sync;
-        c.call_counter = 0;
-        c.notify_done = 0;
-        c.use_atomic = use_atomic;
-        doca_check(doca_dpa_h2d_memcpy(dpa, ctx_ptr, &c, sizeof(ctx_t)));
-        doca_check(doca_dpa_thread_run(t));
+    void run(params_memcpy_t params, doca_mmap* dst_m, doca_mmap* src_m) {
+        struct doca_dma_task_memcpy* dma_task = nullptr;
+        union doca_data task_user_data = { 0 };
+        struct doca_task* task = nullptr;
+        std::vector<doca_buf*> dst_bufs;
+        std::vector<doca_buf*> src_bufs;
+
+        for (uint64_t i = 0; i < params.copy_n; i++) {
+            doca_buf* dst_buf = nullptr;
+            doca_buf* src_buf = nullptr;
+            auto dst_addr = (char*)params.dst.ptr + i * params.copy_size;
+            auto src_addr = (char*)params.src.ptr + i * params.copy_size;
+            //   printf("copy %d, size: %ld, dst: %lx, src: %lx\n", i,
+            //   params.copy_size,
+            //          dst_addr, src_addr);
+            doca_check(doca_buf_inventory_buf_get_by_addr(
+                buf_inv, dst_m, (void*)dst_addr, params.copy_size, &dst_buf));
+            doca_check(doca_buf_inventory_buf_get_by_addr(
+                buf_inv, src_m, (void*)src_addr, params.copy_size, &src_buf));
+            doca_check(
+                doca_buf_set_data(src_buf, (void*)src_addr, params.copy_size));
+            dst_bufs.emplace_back(dst_buf);
+            src_bufs.emplace_back(src_buf);
+            doca_check(doca_dma_task_memcpy_alloc_init(dma_ctx, src_buf, dst_buf,
+                task_user_data, &dma_task));
+            task = doca_dma_task_memcpy_as_task(dma_task);
+            doca_check(doca_task_submit(task));
+            //   poll until dma task finished
+            while (!doca_pe_progress(pe))
+                ;
+        }
+
+        for (int i = 0; i < dst_bufs.size(); i++) {
+            doca_buf_dec_refcount(dst_bufs[i], NULL);
+            doca_buf_dec_refcount(src_bufs[i], NULL);
+        }
     }
 
-    ~DPAThread() {
-        doca_check(doca_dpa_notification_completion_stop(notify));
-        doca_check(doca_dpa_async_ops_stop(aops));
-        doca_check(doca_dpa_completion_stop(comp));
-        doca_check(doca_dpa_thread_stop(t));
-
-        doca_check(doca_dpa_notification_completion_destroy(notify));
-        doca_check(doca_dpa_async_ops_destroy(aops));
-        doca_check(doca_dpa_completion_destroy(comp));
-        doca_check(doca_dpa_thread_destroy(t));
+    ~DMAThread() {
+        doca_check(doca_ctx_stop(ctx));
+        doca_check(doca_dma_destroy(dma_ctx));
+        doca_check(doca_pe_destroy(pe));
+        doca_check(doca_buf_inventory_destroy(buf_inv));
     }
 
-    doca_dpa_dev_uintptr_t ctx_ptr;
-    doca_dpa_thread* t;
-    doca_dpa_completion* comp;
-    doca_dpa_notification_completion* notify;
-    doca_dpa_async_ops* aops;
-    ctx_t c;
-    uint64_t rank;
+    struct doca_buf_inventory* buf_inv;
+    struct doca_pe* pe;
+    struct doca_dma* dma_ctx;
+    struct doca_ctx* ctx;
 };
 
-struct DPAThreads {
-    DPAThreads(uint64_t n_threads, const params_memcpy_t& params, bool use_atomic)
-        : use_atomic(use_atomic) {
-        std::tie(cycles_map, cycles_region) =
-            alloc_mem(Location::Host, std::max(64ul, sizeof(uint64_t) * n_threads));
-        std::tie(sync_map, sync_region) =
-            alloc_mem(Location::Host, std::max(64ul, sizeof(uint64_t) * n_threads));
-        doca_check(doca_dpa_mem_alloc(dpa, sizeof(ctx_t) * n_threads, &ctx_ptr));
-        doca_check(doca_dpa_thread_group_create(dpa, n_threads, &tg));
-        ts.reserve(n_threads);
-        for (uint64_t i = 0; i < n_threads; i++) {
-            ts.emplace_back(tg, ctx_ptr + i * sizeof(ctx_t), i);
-        }
-        doca_dpa_dev_sync_event_t w_handle;
-        doca_dpa_dev_sync_event_t s_handle;
-        doca_check(doca_dpa_thread_group_start(tg));
-        std::tie(w, w_handle) = create_se(true);
-        std::tie(s, s_handle) = create_se(true);
-        for (uint64_t i = 0; i < n_threads; i++) {
-            ts[i].run(w_handle, s_handle, params, cycles_region, sync_region,
-                      use_atomic);
-        }
-        if (!use_atomic) {
-            doca_check(doca_dpa_kernel_launch_update_set(
-                dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 0ull));
-        }
-    }
-
-    void trigger_all() {
-        if (use_atomic) {
-            doca_check(doca_dpa_kernel_launch_update_set(
-                dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 0ull));
-        }
-        else {
-            doca_check(doca_sync_event_update_set(s, ++call_counter));
-        }
-    }
-
-    void wait_all() {
-        if (use_atomic) {
-            auto sync = (std::atomic_uint64_t*)sync_region.ptr;
-            while (true) {
-                uint32_t cnt = 0;
-                for (uint32_t i = 0; i < ts.size(); i++) {
-                    cnt += sync[i].load(std::memory_order_relaxed);
-                }
-                if (cnt == ts.size()) {
-                    break;
-                }
-                relax();
-            }
-            for (uint32_t i = 0; i < ts.size(); i++) {
-                sync[i].store(0);
-            }
-        }
-        else {
-            doca_check(doca_sync_event_wait_eq(w, ts.size(), -1));
-            doca_check(doca_sync_event_update_set(w, 0));
-        }
-    }
-
-    ~DPAThreads() {
-        doca_check(doca_dpa_kernel_launch_update_set(
-            dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 1ull));
-        doca_check(doca_dpa_thread_group_stop(tg));
-        destroy_se(w);
-        destroy_se(s);
-        doca_check(doca_dpa_thread_group_destroy(tg));
-        doca_check(doca_dpa_mem_free(dpa, ctx_ptr));
-        free_mem(cycles_region, cycles_map);
-        free_mem(sync_region, sync_map);
-    }
-
-    bool use_atomic;
-    uint64_t call_counter = 0;
-    doca_sync_event* w; // own
-    doca_sync_event* s; // own
-    doca_dpa_tg* tg;
-    doca_mmap* cycles_map;
-    doca_mmap* sync_map;
-    region_t cycles_region;
-    region_t sync_region;
-    uintptr_t ctx_ptr;
-    std::vector<DPAThread> ts;
-};
+void run_memcpy(params_memcpy_t params, doca_mmap* dst_m, doca_mmap* src_m) {
+    auto num_dma_tasks = params.copy_n;
+    auto max_bufs = params.copy_n * 2;
+    auto dt = new DMAThread(max_bufs, num_dma_tasks);
+    assert(params.copy_size <= max_dma_buffer_size());
+    dt->run(params, dst_m, src_m);
+    delete dt;
+}
 
 static int PrepareConn(struct sockaddr_in* server_addr) {
     auto server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -566,38 +551,15 @@ static int PrepareConn(struct sockaddr_in* server_addr) {
     return server_fd;
 }
 
-void run_memcpy(const params_memcpy_t& params) {
-    // double actual_elapsed = 0; //计时用
-    auto threads = new DPAThreads(nthreads_memcpy, params, 0);
-    // auto cycles = (uint64_t*)ts->cycles_region.ptr;
-    // uint64_t total_elapsed = 0;
-
-    // Timer t;
-    // t.begin();
-    threads->trigger_all();
-    threads->wait_all();
-    // t.end();
-
-    // total_elapsed += t.elapsed().count();
-    // uint64_t max_s = 0;
-    // for (uint32_t j = 0;j < ts->ts.size();++j) {
-    //     max_s = std::max(cycles[j], max_s);
-    //     cycles[j] = 0;
-    // }
-    delete threads;
-}
-
-void RunJob(int client_fd, int task_id) {
-    // 从 tcp 中解析数据
-    flush_num++;
-    printf("RunJob %d\n", flush_num);
+void RunJob(int client_fd) {
+    // get message from tcp
+    printf("RunJob!\n");
     std::string mmap_desc;
     uintptr_t Node_head;
     uintptr_t mt_buf;
     uint64_t num_entries;
     char buffer[1024];
     read(client_fd, buffer, 1024);
-    printf("\n");
     char* ptr = buffer;
 
     // mems
@@ -733,11 +695,11 @@ void RunJob(int client_fd, int task_id) {
 
 
     params_memcpy_t params;
-    params.copy_size = 140 * 1024; // 单次单线程copy大小为140KB
+    params.copy_size = max_dma_buffer_size(); // 单次单线程copy大小为140KB
     params.region_size = 140 * 1024 * 1024;//总共copy大小为140MB
-    params.piece_size = params.region_size / nthreads_memcpy;//分给八个线程
+    params.piece_size = params.region_size;//分给八个线程
     params.copy_n = params.piece_size / params.copy_size;//每个线程的copy次数
-    params.memcpy_mode = ASYNC;//copy模式
+    params.memcpy_mode = DMA;//copy模式
 
     uint64_t offset;
     doca_mmap* dst_m;
@@ -747,9 +709,7 @@ void RunJob(int client_fd, int task_id) {
     std::tie(src_m, params.src) = alloc_mem_from_export(Location::Host, params.region_size, mmap_desc);
     params.src.ptr = mt_buf;
     offset = params.dst.ptr - params.src.ptr;
-    mtx.lock();
-    run_memcpy(params);
-    mtx.unlock();
+    run_memcpy(params, dst_m, src_m);
 
 
 
@@ -881,11 +841,14 @@ void RunJob(int client_fd, int task_id) {
 
     send(client_fd, result_buffer, result_size, 0);
     free_mem(params.dst, dst_m);
+    doca_check(doca_mmap_stop(src_m));
+    doca_check(doca_mmap_destroy(src_m));
 }
 
 int main() {
 
-    attach_device(dflush_app); // 启动dpa并附加到dflush_app上
+    open_device(&dma_task_is_supported);
+
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -893,15 +856,17 @@ int main() {
     auto server_fd = PrepareConn(&server_addr);
 
     ThreadPool tp(nthreads_task);
-    int task_id = 0;
     while (true) {
         socklen_t address_size = sizeof(server_addr);
-        auto client_fd = accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
+        auto client_fd =
+            accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
         if (client_fd < 0) {
             printf("fail to accept!\n");
             exit(EXIT_FAILURE);
         }
-        tp.enqueue(RunJob, client_fd, task_id++);
+        tp.enqueue(RunJob, client_fd);
     }
-    detach_device();
+
+    close_device();
+    return 0;
 }
