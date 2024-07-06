@@ -1150,15 +1150,20 @@ int Build_Table_num = 0;
       }
     }
     Status status_for_listener = s;
+    fprintf(stderr, "gethere:%d\n", __LINE__);
+    fflush(stderr);
     if (DPU_fd.GetFileSize() == 0) {
       fname = "(nil)";
       if (s.ok()) {
         status_for_listener = Status::Aborted("Empty SST file not kept");
       }
     }
+    fprintf(stderr, "gethere:%d\n", __LINE__);
+    fflush(stderr);
     *return_status = s;
     *packed_number_and_path_id = DPU_fd.packed_number_and_path_id;
     *file_size = DPU_fd.file_size;
+    fprintf(stderr, "largest_seqno:%lx, smallest_seqno:%lx line:%d\n", DPU_fd.largest_seqno, DPU_fd.smallest_seqno, __LINE__);
     *smallest_seqno = DPU_fd.smallest_seqno;
     *largest_seqno = DPU_fd.largest_seqno;
     return;

@@ -969,13 +969,11 @@ namespace ROCKSDB_NAMESPACE {
 
     void EmitBlock_other(uint64_t index, uint64_t offset) {
       size_t size = block_rep_buf_parallel[index].size();
-      // printf("block_rep_buf_size:%lu, index:%lu emitblock_other!\n", size, index);
       for (uint64_t i = 0;i < size;++i) {
         BlockRep* block_rep = block_rep_buf_parallel[index][i];
-        // printf("index:%lu, emitblock_other!\n", index);
         file_size_estimator.EmitBlock(block_rep->data->size(), offset);
         if (!write_queue.push(block_rep->slot.get())) {
-          // printf("push write_queue failed!\n");
+          printf("push write_queue failed!\n");
           std::abort();
         }
       }
@@ -1122,6 +1120,8 @@ namespace ROCKSDB_NAMESPACE {
     if (!ok()) return;
     if (r->data_block_parallel[index]->empty()) return;
     ParallelCompressionRep::BlockRep* block_rep;
+    // fprintf(stderr, "get here:%d\n", __LINE__);
+    // fflush(stderr);
     if (r->IsParallelCompressionEnabled() && r->state == Rep::State::kUnbuffered) {
       r->data_block_parallel[index]->Finish();
       if (!(key.empty()))
@@ -1137,12 +1137,12 @@ namespace ROCKSDB_NAMESPACE {
       // fprintf(stderr, "index:%lu\n", index);
       // fflush(stderr);
       if (index == 0) {
-        // printf("index:%lu, emitblock!\n", index);
         r->pc_rep->file_size_estimator.EmitBlock(block_rep->data->size(), r->get_offset());
         r->pc_rep->EmitBlock(block_rep);
       }
       else {
-        // printf("index:%lu, emitblock_compression!\n", index);
+        // printf("before emitblock!\n");
+        r->pc_rep->file_size_estimator.EmitBlock(block_rep->data->size(), r->get_offset());
         r->pc_rep->EmitBlock_Compression(block_rep, index);
         // printf("after emitblock!\n");
       }
