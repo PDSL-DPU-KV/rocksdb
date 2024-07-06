@@ -333,7 +333,6 @@ std::pair<doca_mmap*, region_t> alloc_mem_from_export(Location l, uint64_t len, 
     region_t r;
     r.flag = (uint32_t)l;
     doca_mmap* mmap;
-    doca_buf_arr* buf_arr;
     size_t size;
     doca_check(doca_mmap_create_from_export(nullptr, export_desc.data(), export_desc.size(), dev, &mmap));
     doca_check(doca_mmap_add_dev(mmap, dev));

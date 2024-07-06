@@ -1114,47 +1114,6 @@ namespace ROCKSDB_NAMESPACE {
     }
   }
 
-  void BlockBasedTableBuilder::Flush_parallel(uint64_t index, const Slice& key) {
-    Rep* r = rep_;
-    assert(rep_->state != Rep::State::kClosed);
-    if (!ok()) return;
-    if (r->data_block_parallel[index]->empty()) return;
-    ParallelCompressionRep::BlockRep* block_rep;
-    // fprintf(stderr, "get here:%d\n", __LINE__);
-    // fflush(stderr);
-    if (r->IsParallelCompressionEnabled() && r->state == Rep::State::kUnbuffered) {
-      r->data_block_parallel[index]->Finish();
-      if (!(key.empty()))
-        r->first_key_in_next_block_parallel[index] = &key;
-      else
-        r->first_key_in_next_block_parallel[index] = nullptr;
-      // fprintf(stderr, "r->first_key:%lx", r->first_key_in_next_block_parallel[index]->data());
-      // fflush(stderr);
-      // printf("before prepareblock!\n");
-      block_rep = r->pc_rep->PrepareBlock_parallel(r->compression_type, r->first_key_in_next_block_parallel[index], r->data_block_parallel[index], index);
-      // printf("after prepareblock!\n");
-      assert(block_rep != nullptr);
-      // fprintf(stderr, "index:%lu\n", index);
-      // fflush(stderr);
-      if (index == 0) {
-        r->pc_rep->file_size_estimator.EmitBlock(block_rep->data->size(), r->get_offset());
-        r->pc_rep->EmitBlock(block_rep);
-      }
-      else {
-        // printf("before emitblock!\n");
-        r->pc_rep->file_size_estimator.EmitBlock(block_rep->data->size(), r->get_offset());
-        r->pc_rep->EmitBlock_Compression(block_rep, index);
-        // printf("after emitblock!\n");
-      }
-    }
-    else {
-      // 不支持其他类型操作
-      fprintf(stderr, "table_builder.cc %d\n", __LINE__);
-      fflush(stderr);
-      std::abort();
-    }
-  }
-
   void BlockBasedTableBuilder::Flush_parallel(uint64_t index) {
     Rep* r = rep_;
     assert(rep_->state != Rep::State::kClosed);
