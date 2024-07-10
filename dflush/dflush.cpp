@@ -34,6 +34,7 @@
 #include <chrono>
 
 #include "../util/coding.h"
+#include "../util/work_queue.h"
 #include "common.h"
 #include "db/builder.h"
 #include "db/db_with_timestamp_test_util.h"
@@ -49,6 +50,7 @@
 #include "threadpool.h"
 #include "timer.h"
 #include "mutex"
+
 #if defined(__x86_64__)
 #include <immintrin.h>
 static inline void relax() { _mm_pause(); }
@@ -60,10 +62,16 @@ static inline void relax() {}
 
 using namespace std::chrono_literals;
 
+extern "C" doca_dpa_app * dflush_app;
+extern "C" doca_dpa_func_t dflush_func;
+extern "C" doca_dpa_func_t trigger;
+
 constexpr const uint32_t access_mask =
 DOCA_ACCESS_FLAG_LOCAL_READ_WRITE | DOCA_ACCESS_FLAG_PCI_READ_WRITE;
 
-const uint32_t nthreads_task = 64;
+const uint32_t nthreads_task = 32;
+const uint32_t nthreads_memcpy = 4;
+const bool DPA_MEMCPY = 1;
 
 enum class Location : uint32_t {
     Host = HOST,
@@ -74,6 +82,11 @@ struct DbPath_struct {
     char path[128];
     uint64_t target_size;
 };
+
+struct DMAThread;
+struct DPAThreads;
+ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
+ROCKSDB_NAMESPACE::WorkQueue<DPAThreads*> DPAThreads_pool;
 
 int send_meta(rocksdb::FileMetaData* meta, char* ptr) {
     int send_size = 0;
@@ -350,9 +363,7 @@ std::pair<doca_mmap*, region_t> alloc_mem(Location l, uint64_t len) {
     doca_check(doca_mmap_create(&mmap));
     switch (l) {
         case Location::Host: {
-                printf("a, r.ptr:%lx\n", r.ptr);
                 r.ptr = (uintptr_t)aligned_alloc(64, len);
-                printf("b, r.ptr:%lx\n", r.ptr);
                 // r.ptr = (uintptr_t)malloc(len);
                 // memset((char *)r.ptr, 'A', len);
                 doca_check(doca_mmap_add_dev(mmap, dev));
@@ -365,7 +376,7 @@ std::pair<doca_mmap*, region_t> alloc_mem(Location l, uint64_t len) {
             } break;
     }
     doca_check(doca_mmap_start(mmap));
-    // doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
+    doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
     return { mmap, r };
 }
 
@@ -374,10 +385,10 @@ std::pair<doca_mmap*, region_t> alloc_mem_from_export(Location l, uint64_t len, 
     r.flag = (uint32_t)l;
     doca_mmap* mmap;
     size_t size;
-    doca_check(doca_mmap_create_from_export(nullptr, export_desc.data(),
-        export_desc.size(), dev, &mmap));
+    doca_check(doca_mmap_create_from_export(nullptr, export_desc.data(), export_desc.size(), dev, &mmap));
     doca_check(doca_mmap_get_memrange(mmap, (void**)&r.ptr, &size));
-    // doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
+    doca_check(doca_mmap_start(mmap));
+    doca_check(doca_mmap_dev_get_dpa_handle(mmap, dev, &r.handle));
     return { mmap, r };
 }
 
@@ -516,13 +527,207 @@ struct DMAThread {
     struct doca_ctx* ctx;
 };
 
-void run_memcpy(params_memcpy_t params, doca_mmap* dst_m, doca_mmap* src_m) {
-    auto num_dma_tasks = params.copy_n;
-    auto max_bufs = params.copy_n * 2;
-    auto dt = new DMAThread(max_bufs, num_dma_tasks);
+std::pair<doca_sync_event*, doca_dpa_dev_sync_event_t> create_se(bool host2dev) {
+    doca_sync_event* se;
+    doca_dpa_dev_sync_event_t h;
+    doca_check(doca_sync_event_create(&se));
+    if (host2dev) {
+        doca_check(doca_sync_event_add_publisher_location_cpu(se, dev));
+        doca_check(doca_sync_event_add_subscriber_location_dpa(se, dpa));
+    }
+    else {
+        doca_check(doca_sync_event_add_publisher_location_dpa(se, dpa));
+        doca_check(doca_sync_event_add_subscriber_location_cpu(se, dev));
+    }
+    doca_check(doca_sync_event_start(se));
+    doca_check(doca_sync_event_get_dpa_handle(se, dpa, &h));
+    return { se, h };
+}
+
+void destroy_se(doca_sync_event* se) {
+    doca_check(doca_sync_event_stop(se));
+    doca_check(doca_sync_event_destroy(se));
+}
+
+struct DPAThread {
+    DPAThread(doca_dpa_tg* tg, uintptr_t ctx_ptr, uint64_t rank)
+        : ctx_ptr(ctx_ptr), rank(rank) {
+        doca_check(doca_dpa_thread_create(dpa, &t));
+        doca_check(
+            doca_dpa_thread_set_func_arg(t, dflush_func, (uintptr_t)ctx_ptr));
+        doca_check(doca_dpa_thread_group_set_thread(tg, t, rank));
+        doca_check(doca_dpa_thread_start(t));
+
+        doca_check(doca_dpa_completion_create(dpa, 4096, &comp));
+        doca_check(doca_dpa_completion_set_thread(comp, t));
+        doca_check(doca_dpa_completion_start(comp));
+        doca_check(doca_dpa_completion_get_dpa_handle(comp, &c.comp_handle));
+
+        doca_check(doca_dpa_notification_completion_create(dpa, t, &notify));
+        doca_check(doca_dpa_notification_completion_start(notify));
+        doca_check(doca_dpa_notification_completion_get_dpa_handle(
+            notify, &c.notify_handle));
+
+        doca_check(doca_dpa_async_ops_create(dpa, 4096, 0, &aops));
+        doca_check(doca_dpa_async_ops_attach(aops, comp));
+        doca_check(doca_dpa_async_ops_start(aops));
+        doca_check(doca_dpa_async_ops_get_dpa_handle(aops, &c.aops_handle));
+    }
+
+    void run(doca_dpa_dev_sync_event_t w_handle,
+             doca_dpa_dev_sync_event_t s_handle, const params_memcpy_t& params,
+             region_t result, region_t sync, bool use_atomic) {
+        c.w_handle = w_handle;
+        c.s_handle = s_handle;
+        c.params = params;
+        c.result = result;
+        c.sync = sync;
+        c.call_counter = 0;
+        c.notify_done = 0;
+        c.use_atomic = use_atomic;
+        doca_check(doca_dpa_h2d_memcpy(dpa, ctx_ptr, &c, sizeof(ctx_t)));
+        doca_check(doca_dpa_thread_run(t));
+    }
+
+    void set_params(const params_memcpy_t& params) {
+        c.params = params;
+        // doca_check(doca_dpa_h2d_memcpy(dpa, ctx_ptr + sizeof(ctx_t) - sizeof(params_memcpy_t),
+        //     &c.params, sizeof(params_memcpy_t)));
+        doca_check(doca_dpa_h2d_memcpy(dpa, ctx_ptr, &c, sizeof(ctx_t)));
+    }
+
+    ~DPAThread() {
+        doca_check(doca_dpa_notification_completion_stop(notify));
+        doca_check(doca_dpa_async_ops_stop(aops));
+        doca_check(doca_dpa_completion_stop(comp));
+        doca_check(doca_dpa_thread_stop(t));
+
+        doca_check(doca_dpa_notification_completion_destroy(notify));
+        doca_check(doca_dpa_async_ops_destroy(aops));
+        doca_check(doca_dpa_completion_destroy(comp));
+        doca_check(doca_dpa_thread_destroy(t));
+    }
+
+    doca_dpa_dev_uintptr_t ctx_ptr;
+    doca_dpa_thread* t;
+    doca_dpa_completion* comp;
+    doca_dpa_notification_completion* notify;
+    doca_dpa_async_ops* aops;
+    ctx_t c;
+    uint64_t rank;
+};
+
+
+
+struct DPAThreads {
+    DPAThreads(uint64_t n_threads, const params_memcpy_t& params, bool use_atomic)
+        : use_atomic(use_atomic) {
+        std::tie(cycles_map, cycles_region) =
+            alloc_mem(Location::Host, std::max(64ul, sizeof(uint64_t) * n_threads));
+        std::tie(sync_map, sync_region) =
+            alloc_mem(Location::Host, std::max(64ul, sizeof(uint64_t) * n_threads));
+        doca_check(doca_dpa_mem_alloc(dpa, sizeof(ctx_t) * n_threads, &ctx_ptr));
+        doca_check(doca_dpa_thread_group_create(dpa, n_threads, &tg));
+        ts.reserve(n_threads);
+        for (uint64_t i = 0; i < n_threads; i++) {
+            ts.emplace_back(tg, ctx_ptr + i * sizeof(ctx_t), i);
+        }
+        doca_dpa_dev_sync_event_t w_handle;
+        doca_dpa_dev_sync_event_t s_handle;
+        doca_check(doca_dpa_thread_group_start(tg));
+        std::tie(w, w_handle) = create_se(true);
+        std::tie(s, s_handle) = create_se(true);
+        for (uint64_t i = 0; i < n_threads; i++) {
+            ts[i].run(w_handle, s_handle, params, cycles_region, sync_region,
+                      use_atomic);
+        }
+        if (!use_atomic) {
+            doca_check(doca_dpa_kernel_launch_update_set(
+                dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 0ull));
+        }
+    }
+
+    void trigger_all() {
+        if (use_atomic) {
+            doca_check(doca_dpa_kernel_launch_update_set(
+                dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 0ull));
+        }
+        else {
+            doca_check(doca_sync_event_update_set(s, ++call_counter));
+        }
+    }
+
+    void wait_all() {
+        if (use_atomic) {
+            auto sync = (std::atomic_uint64_t*)sync_region.ptr;
+            while (true) {
+                uint32_t cnt = 0;
+                for (uint32_t i = 0; i < ts.size(); i++) {
+                    cnt += sync[i].load(std::memory_order_relaxed);
+                }
+                if (cnt == ts.size()) {
+                    break;
+                }
+                relax();
+            }
+            for (uint32_t i = 0; i < ts.size(); i++) {
+                sync[i].store(0);
+            }
+        }
+        else {
+            doca_check(doca_sync_event_wait_eq(w, ts.size(), -1));
+            doca_check(doca_sync_event_update_set(w, 0));
+        }
+    }
+
+    void set_params(const params_memcpy_t& params) {
+        uint64_t nthreads = ts.size();
+        for (uint64_t i = 0;i < nthreads;++i) {
+            ts[i].set_params(params);
+        }
+    }
+
+    ~DPAThreads() {
+        doca_check(doca_dpa_kernel_launch_update_set(
+            dpa, nullptr, 0, nullptr, 0, 1, trigger, ctx_ptr, ts.size(), 1ull));
+        doca_check(doca_dpa_thread_group_stop(tg));
+        destroy_se(w);
+        destroy_se(s);
+        doca_check(doca_dpa_thread_group_destroy(tg));
+        doca_check(doca_dpa_mem_free(dpa, ctx_ptr));
+        free_mem(cycles_region, cycles_map);
+        free_mem(sync_region, sync_map);
+    }
+
+
+    bool use_atomic;
+    uint64_t call_counter = 0;
+    doca_sync_event* w; // own
+    doca_sync_event* s; // own
+    doca_dpa_tg* tg;
+    doca_mmap* cycles_map;
+    doca_mmap* sync_map;
+    region_t cycles_region;
+    region_t sync_region;
+    uintptr_t ctx_ptr;
+    std::vector<DPAThread> ts;
+};
+
+void run_memcpy_dma(params_memcpy_t params, doca_mmap* dst_m, doca_mmap* src_m) {
+    DMAThread* dt;
+    DMAThread_pool.pop(dt);
     assert(params.copy_size <= max_dma_buffer_size());
     dt->run(params, dst_m, src_m);
-    delete dt;
+    DMAThread_pool.push(dt);
+}
+
+void run_memcpy_dpa(const params_memcpy_t& params) {
+    DPAThreads* threads;
+    DPAThreads_pool.pop(threads);
+    threads->set_params(params);
+    threads->trigger_all();
+    threads->wait_all();
+    DPAThreads_pool.push(threads);
 }
 
 static int PrepareConn(struct sockaddr_in* server_addr) {
@@ -694,7 +899,6 @@ void RunJob(int client_fd) {
     }
 
     printf("total_size after dbname : %ld\n", ptr - buffer);
-    // FLAGS_env->mmap_export_desc
     auto mmap_desc_size = *(uint64_t*)ptr;
     printf("mmap_desc_size:%ld\n", mmap_desc_size);
     ptr += sizeof(uint64_t);
@@ -703,11 +907,20 @@ void RunJob(int client_fd) {
 
 
     params_memcpy_t params;
-    params.copy_size = max_dma_buffer_size(); // 单次单线程copy大小为140KB
-    params.region_size = 140 * 1024 * 1024;//总共copy大小为140MB
-    params.piece_size = params.region_size;//分给八个线程
-    params.copy_n = params.piece_size / params.copy_size;//每个线程的copy次数
-    params.memcpy_mode = DMA;//copy模式
+    if (DPA_MEMCPY) {
+        params.copy_size = 140 * 1024; // 单次单线程copy大小为140KB
+        params.region_size = 140 * 1024 * 1024;//总共copy大小为140MB
+        params.piece_size = params.region_size / nthreads_memcpy;//分给八个线程
+        params.copy_n = params.piece_size / params.copy_size;//每个线程的copy次数
+        params.memcpy_mode = ASYNC;//copy模式
+    }
+    else {
+        params.copy_size = max_dma_buffer_size(); // 单次单线程copy大小为140KB
+        params.region_size = 140 * 1024 * 1024;//总共copy大小为140MB
+        params.piece_size = params.region_size;//分给八个线程
+        params.copy_n = params.piece_size / params.copy_size;//每个线程的copy次数
+        params.memcpy_mode = DMA;//copy模式
+    }
 
     uint64_t offset;
     doca_mmap* dst_m;
@@ -717,29 +930,15 @@ void RunJob(int client_fd) {
     std::tie(src_m, params.src) = alloc_mem_from_export(Location::Host, params.region_size, mmap_desc);
     params.src.ptr = mt_buf;
     offset = params.dst.ptr - params.src.ptr;
-    run_memcpy(params, dst_m, src_m);
-
-
-
-
-    // /// TODO:对dst的memtable进行剩下的操作
-
-    // static uint64_t nums = 0; // 只是两边验证一下
-
-    // 这里加减offset有点烦人，只是为了验证，后面可以修改
-// uintptr_t key1_ptr = Node_head + sizeof(uintptr_t);
-//     ROCKSDB_NAMESPACE::Slice tmp = ROCKSDB_NAMESPACE::GetLengthPrefixedSlice((const char*)(key1_ptr + offset));
-//     key1_ptr = (uintptr_t)tmp.data();
-// printf("dflush key1:%ld",*(uint64_t*)key1_ptr);
-// // printf("dflush nums:%ld, head_key_ptr:%lx\n", nums, key1_ptr - offset);
-// // printf("dflush nums:%ld, key1:%ld\n", nums, *(uint64_t*)(key1_ptr));
-// uintptr_t node_next = *(uintptr_t*)(Node_head + offset);
-//     uintptr_t key2_ptr = node_next + sizeof(uintptr_t);
-//     tmp = ROCKSDB_NAMESPACE::GetLengthPrefixedSlice((const char*)(key2_ptr + offset));
-//     key2_ptr = (uintptr_t)tmp.data();
-// printf("dflush key2:%ld",*(uint64_t*)key2_ptr);
-// printf("dflush nums:%ld, next_key_ptr:%lx\n", nums, key2_ptr - offset);
-// printf("dflush nums:%ld, key2:%ld\n", nums++, *(uint64_t*)(key2_ptr));
+    auto a = std::chrono::high_resolution_clock::now();
+    if (DPA_MEMCPY) {
+        run_memcpy_dpa(params);
+    }
+    else {
+        run_memcpy_dma(params, dst_m, src_m);
+    }
+    auto b = std::chrono::high_resolution_clock::now();
+    printf("memcpytime:%lu\n", std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() / 1000 / 1000);
 
     rocksdb::Status return_status = rocksdb::Status();
     rocksdb::Arena arena;
@@ -752,30 +951,7 @@ void RunJob(int client_fd) {
     uint64_t memtable_garbage_bytes = 0;
     uint64_t packed_number_and_path_id = 0;
     uint64_t file_size = 0;
-    // int node_num = 0;
-    // for (uintptr_t temp_ptr = Node_head + offset; *((uintptr_t*)(temp_ptr)) != 0; temp_ptr = *(uintptr_t*)(temp_ptr) + offset) {
-    //   node_num++;
-    //   rocksdb::Slice key_and_vallue = ROCKSDB_NAMESPACE::GetLengthPrefixedSlice(
-    //       (const char*)(temp_ptr + sizeof(uintptr_t)));
-    //   rocksdb::Slice key, value;
-    //   bool key_flag =
-    //       ROCKSDB_NAMESPACE::GetLengthPrefixedSlice(&key_and_vallue, &key);
-    //   bool value_flag =
-    //       ROCKSDB_NAMESPACE::GetLengthPrefixedSlice(&key_and_vallue, &value);
-    // //   // printf("mem key:%ld\n",*(uint64_t*)key.data());
-    // //   // printf("mem value:%ld\n", *(uint64_t*)value.data());
 
-    // //   return_status = new_mem->Add(sequence, rocksdb::ValueType::kTypeValue,
-    // //                                key, value, nullptr, false, nullptr,
-    // nullptr);
-    // //   if (!return_status.ok()) {
-    // //     printf("ok() fail\n");
-    // //   }
-    // };
-    // printf("node_num:%d\n", node_num);
-    // meta->fd = rocksdb::FileDescriptor(new_versions_NewFileNumber, 0, 0);
-    //
-    // 
     printf("meta.smallest.DebugString:%s\n",
            meta.smallest.DebugString(true).c_str());
     printf("meta.largest.DebugString:%s\n", meta.largest.DebugString(true).c_str());
@@ -855,13 +1031,37 @@ void RunJob(int client_fd) {
 
 int main() {
 
-    open_device(&dma_task_is_supported);
-
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(10086);
     auto server_fd = PrepareConn(&server_addr);
+
+    if (DPA_MEMCPY) {
+        // DPA COPY
+        attach_device(dflush_app);
+        params_memcpy_t params;
+        params.copy_size = 140 * 1024; // 单次单线程copy大小为140KB
+        params.region_size = 140 * 1024 * 1024;//总共copy大小为140MB
+        params.piece_size = params.region_size / nthreads_memcpy;//分给八个线程
+        params.copy_n = params.piece_size / params.copy_size;//每个线程的copy次数
+        params.memcpy_mode = ASYNC;//copy模式
+
+        DPAThreads_pool.setMaxSize(nthreads_task);
+        for (uint64_t i = 0; i < nthreads_task; ++i) {
+            DPAThreads_pool.push(new DPAThreads(nthreads_memcpy, params, 1));
+        }
+    }
+    else {
+        // DMA COPY
+        open_device(&dma_task_is_supported);
+        auto num_dma_tasks = 140 * 1024 * 1024 / max_dma_buffer_size();
+        auto max_bufs = num_dma_tasks * 2;
+        DMAThread_pool.setMaxSize(nthreads_task);
+        for (int i = 0;i < nthreads_task;++i) {
+            DMAThread_pool.push(new DMAThread(max_bufs, num_dma_tasks));
+        }
+    }
 
     ThreadPool tp(nthreads_task);
     while (true) {
@@ -875,6 +1075,11 @@ int main() {
         tp.enqueue(RunJob, client_fd);
     }
 
-    close_device();
+    if (DPA_MEMCPY) {
+        detach_device();
+    }
+    else {
+        close_device();
+    }
     return 0;
 }

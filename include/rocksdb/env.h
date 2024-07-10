@@ -83,9 +83,6 @@ namespace ROCKSDB_NAMESPACE {
   extern double iotime, blocktime, compresstime;
   extern uint64_t c_iter_nexttime;
 
-  extern double iotime, blocktime, compresstime;
-  extern uint64_t c_iter_nexttime;
-
   typedef struct {
     uintptr_t ptr;
     uint32_t flag;
