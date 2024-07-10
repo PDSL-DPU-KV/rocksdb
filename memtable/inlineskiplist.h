@@ -1087,6 +1087,7 @@ typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuati
   for (int i = 0; i < node_count * num / 4;i++) {
     temp_node_ = temp_node_->Next(level);
   }
+  temp_node_ = temp_node_->Next(0);
   return temp_node_;
 }
 
