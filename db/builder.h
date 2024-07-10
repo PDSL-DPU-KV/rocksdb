@@ -73,6 +73,7 @@ extern Status BuildTable(
 
 void BuildTable_new(
     uintptr_t Node_head,
+    std::vector<uint64_t> Node_heads,
     uint64_t offset,
     uint64_t num_entries,
     FileMetaData* meta, 

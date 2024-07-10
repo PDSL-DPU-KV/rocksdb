@@ -776,7 +776,6 @@ void RunJob(int client_fd) {
     ptr += sizeof(uintptr_t);   
     printf("TrisectionPoint: %lu %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2,TrisectionPoint_3);
 
-
     // mems
     num_entries = *(uint64_t*)ptr;
     ptr += sizeof(uint64_t);
@@ -785,6 +784,12 @@ void RunJob(int client_fd) {
     mt_buf = *(uintptr_t*)ptr;
     ptr += sizeof(uintptr_t);
     printf("total_size after mems: %ld\n", ptr - buffer);
+
+    std::vector<uint64_t> Node_heads;
+    Node_heads.push_back(Node_head);
+    Node_heads.push_back(TrisectionPoint_1);
+    Node_heads.push_back(TrisectionPoint_2);
+    Node_heads.push_back(TrisectionPoint_3);
 
     // meta_
     ROCKSDB_NAMESPACE::FileMetaData meta;
@@ -959,7 +964,7 @@ void RunJob(int client_fd) {
     printf("meta.largest.DebugString:%s\n", meta.largest.DebugString(true).c_str());
     auto a_point = std::chrono::high_resolution_clock::now();
     BuildTable_new(  // versions_->current_next_file_number()
-        Node_head, offset, num_entries, &meta, new_versions_NewFileNumber, seqno_to_time_mapping,
+        Node_head, Node_heads, offset, num_entries, &meta, new_versions_NewFileNumber, seqno_to_time_mapping,
         kUnknownColumnFamily, paranoid_file_checks, job_id,
         earliest_write_conflict_snapshot, job_snapshot, timestamp_size,
         tboptions_ioptions_cf_paths, *cfd_GetName, *dbname,

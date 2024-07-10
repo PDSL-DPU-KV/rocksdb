@@ -24,7 +24,7 @@ double get_memoccupy() {
   char buff[256];
   MEM_OCCUPY m;
 
-  fd = fopen("/home/zqy2023/rocksdb/test_sh/meminfo", "r");
+  fd = fopen("/home/yzk/rocksdb/test_sh/meminfo", "r");
 
   fgets(buff, sizeof(buff), fd);
   sscanf(buff, "%s %lu ", m.name1, &m.MemTotal);

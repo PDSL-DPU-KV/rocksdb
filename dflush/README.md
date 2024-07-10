@@ -23,4 +23,3 @@
 ##### 执行步骤
 1. 压缩端（S21），依次执行 `./procp_server ./csa_server`，再启动计算端（S20）`./test.sh`。
 
-

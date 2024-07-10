@@ -464,7 +464,7 @@ namespace ROCKSDB_NAMESPACE {
   /**********************************************************************************************************************/
   // /**********************************************************************************************************************/
 
-  const uint64_t parallel_threads = 8;
+  const uint64_t parallel_threads = 4;
 
   class NewMemTable {
   private:
@@ -642,7 +642,8 @@ namespace ROCKSDB_NAMESPACE {
 
 
   void BuildTable_new(
-      uintptr_t Node_head, uint64_t offset, uint64_t num_entries,
+      
+      uintptr_t Node_head,std::vector<uint64_t> Node_heads, uint64_t offset, uint64_t num_entries,
       FileMetaData* meta,
       uint64_t new_versions_NewFileNumber,
 
@@ -791,27 +792,27 @@ namespace ROCKSDB_NAMESPACE {
           /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
           /*shutting_down=*/nullptr, db_options.info_log, nullptr);
 
-      // parameters needed for parallel iter
+      // // parameters needed for parallel iter
       auto a_point = std::chrono::high_resolution_clock::now();
-      std::vector<uint64_t> Node_heads;
-      Node_heads.push_back(Node_head);
-      uint64_t iter_nums = 0;
-      uint64_t y = num_entries / 50;
-      uint64_t x = (num_entries - 28 * y) / parallel_threads;
-      uint64_t times = parallel_threads - 1;
-      int factor = 0;
-      for (;iter->Valid();iter->Next()) {
-        if (iter_nums == x + factor * y) {
-          Node_heads.push_back(iter->Node_head());
-          iter_nums = 0;
-          times--;
-          factor++;
-        }
-        if (times == 0) break;
-        iter_nums++;
-      }
-      // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
-      Node_heads.push_back(0);
+      // std::vector<uint64_t> Node_heads;
+      // Node_heads.push_back(Node_head);
+      // uint64_t iter_nums = 0;
+      // uint64_t y = num_entries / 50;
+      // uint64_t x = (num_entries - 28 * y) / parallel_threads;
+      // uint64_t times = parallel_threads - 1;
+      // int factor = 0;
+      // for (;iter->Valid();iter->Next()) {
+      //   if (iter_nums == x + factor * y) {
+      //     Node_heads.push_back(iter->Node_head());
+      //     iter_nums = 0;
+      //     times--;
+      //     factor++;
+      //   }
+      //   if (times == 0) break;
+      //   iter_nums++;
+      // }
+      // // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
+      // Node_heads.push_back(0);
 
 
       std::vector<std::thread> flush_thread_pool;

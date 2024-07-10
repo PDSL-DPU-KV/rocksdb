@@ -1084,9 +1084,19 @@ template <class Comparator>
 typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuatilenPoint(int level,int num) {
   int node_count = LevelNodeCount(level);
   Node* temp_node_ = this->head_;
-  for (int i = 0; i < node_count * num / 4;i++) {
+
+  // x
+  // x+y   num=1:x
+  // x+2y  num=2:2x+y
+  // x+3y  num=3:3x+3y
+  
+  int x = 0.23 * node_count;// arg <0.25
+  int y = (node_count - 4 * x) / 6;
+  
+  for (int i = 0; i < x * num + num*(num-1)*y/2;i++) {
     temp_node_ = temp_node_->Next(level);
   }
+  temp_node_ = temp_node_->Next(0);
   return temp_node_;
 }
 

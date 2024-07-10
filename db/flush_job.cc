@@ -1104,9 +1104,9 @@ namespace ROCKSDB_NAMESPACE {
   printf("------------------------------------------------------------------\n");
   MemTable* tmp = mems_[0];
   tmp->get_table_()->get_skip_list().PrintNodeCount();
-  auto TrisectionPoint_1 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(5,1);
-  auto TrisectionPoint_2 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(5,2);
-  auto TrisectionPoint_3 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(5,3);
+  auto TrisectionPoint_1 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,1);
+  auto TrisectionPoint_2 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,2);
+  auto TrisectionPoint_3 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,3);
   printf("------------------------------------------------------------------\n");
   printf("------------------------------------------------------------------\n");
 #ifdef DFLUSH
@@ -1253,14 +1253,14 @@ namespace ROCKSDB_NAMESPACE {
           uint64_t total_size = 0;
 
           // TrisectionPoint
-          *(uintptr_t*)ptr = TrisectionPoint_1;
+          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_1;
           ptr += sizeof(uintptr_t);
-          *(uintptr_t*)ptr = TrisectionPoint_2;
+          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_2;
           ptr += sizeof(uintptr_t);
-          *(uintptr_t*)ptr = TrisectionPoint_3;
+          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_3;
           ptr += sizeof(uintptr_t);
           total_size += 3*sizeof(uintptr_t);
-          printf("TrisectionPoint: %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2,TrisectionPoint_3);
+          printf("TrisectionPoint: %lu %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2,TrisectionPoint_3);
 
           // mems
           *(uint64_t*)ptr = total_num_entries;
