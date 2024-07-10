@@ -882,11 +882,13 @@ namespace ROCKSDB_NAMESPACE {
       : curr_block_keys(new Keys()),
       block_rep_buf(parallel_threads),
       block_rep_pool(parallel_threads),
-      compress_queue(parallel_threads * 10),
-      write_queue(parallel_threads * 10),
+      compress_queue(parallel_threads),
+      write_queue(parallel_threads),
       first_block_processed(false) {
-      block_rep_buf.resize(20000);
-      block_rep_pool.setMaxSize(20000);
+      block_rep_pool.setMaxSize(30000);
+      compress_queue.setMaxSize(30000);
+      block_rep_buf.resize(30000);
+      block_rep_pool.setMaxSize(30000);
       for (uint32_t i = 0; i < parallel_threads; i++) {
         block_rep_buf[i].contents = Slice();
         block_rep_buf[i].compressed_contents = Slice();
@@ -900,8 +902,7 @@ namespace ROCKSDB_NAMESPACE {
         block_rep_pool.push(&block_rep_buf[i]);
       }
 
-      for (uint32_t i = parallel_threads;i < 20000;i++) {
-        // printf("i:%u, line:%d\n", i, __LINE__);
+      for (uint32_t i = parallel_threads;i < 30000;i++) {
         block_rep_buf[i].contents = Slice();
         block_rep_buf[i].compressed_contents = Slice();
         block_rep_buf[i].data.reset(new std::string());
@@ -911,9 +912,7 @@ namespace ROCKSDB_NAMESPACE {
         block_rep_buf[i].keys.reset(new Keys());
         block_rep_buf[i].slot.reset(new BlockRepSlot());
         block_rep_buf[i].status = Status::OK();
-        // printf("i:%u, line:%d\n", i, __LINE__);
         block_rep_pool.push(&block_rep_buf[i]);
-        // printf("i:%u, line:%d\n", i, __LINE__);
       }
 
       for (uint32_t i = 0;i < parallel_threads;i++) {
@@ -1213,7 +1212,6 @@ namespace ROCKSDB_NAMESPACE {
   }
 
   void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
-    auto start = std::chrono::steady_clock::now();
     Rep* r = rep_;
     // if (r->state == Rep::State::kBuffered) {
     //   printf("state:%d\n", r->state);
@@ -1331,9 +1329,6 @@ namespace ROCKSDB_NAMESPACE {
     else if (value_type == kTypeMerge) {
       r->props.num_merge_operands++;
     }
-
-    auto end = std::chrono::steady_clock::now();
-    blocktime += std::chrono::duration<double>(end - start).count();
   }
 
   void BlockBasedTableBuilder::Flush() {
@@ -1404,7 +1399,6 @@ namespace ROCKSDB_NAMESPACE {
       UncompressionContext* verify_ctx) {
     ParallelCompressionRep::BlockRep* block_rep = nullptr;
     while (rep_->pc_rep->compress_queue.pop(block_rep)) {
-      // auto start = std::chrono::steady_clock::now();
       assert(block_rep != nullptr);
       CompressAndVerifyBlock(block_rep->contents, true, /* is_data_block*/
                              compression_ctx, verify_ctx,
@@ -1412,8 +1406,6 @@ namespace ROCKSDB_NAMESPACE {
                              &block_rep->compressed_contents,
                              &(block_rep->compression_type), &block_rep->status);
       block_rep->slot->Fill(block_rep);
-      // auto end = std::chrono::steady_clock::now();
-      // compresstime += std::chrono::duration<double>(end - start).count();
     }
   }
 
@@ -1659,6 +1651,7 @@ namespace ROCKSDB_NAMESPACE {
     ParallelCompressionRep::BlockRepSlot* slot = nullptr;
     ParallelCompressionRep::BlockRep* block_rep = nullptr;
     while (r->pc_rep->write_queue.pop(slot)) {
+      // printf("%s, %d, write_queue_size:%lu\n", __FILE__, __LINE__, r->pc_rep->write_queue.queue_size());
       assert(slot != nullptr);
       slot->Take(block_rep);
       // auto start = std::chrono::steady_clock::now();

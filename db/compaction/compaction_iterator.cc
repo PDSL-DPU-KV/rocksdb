@@ -154,12 +154,10 @@ namespace ROCKSDB_NAMESPACE {
     // If there is a merge output, return it before continuing to process the
     // input.
     if (merge_out_iter_.Valid()) {
-      // printf("我进入这里%d\n", __LINE__);
       merge_out_iter_.Next();
 
       // Check if we returned all records of the merge output.
       if (merge_out_iter_.Valid()) {
-        // printf("我进入这里%d\n", __LINE__);
         key_ = merge_out_iter_.key();
         value_ = merge_out_iter_.value();
         Status s = ParseInternalKey(key_, &ikey_, allow_data_in_errors_);

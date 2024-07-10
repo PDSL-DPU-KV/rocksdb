@@ -463,6 +463,9 @@ namespace ROCKSDB_NAMESPACE {
   /**********************************************************************************************************************/
   /**********************************************************************************************************************/
   // /**********************************************************************************************************************/
+
+  const uint64_t parallel_threads = 8;
+
   class NewMemTable {
   private:
   public:
@@ -599,75 +602,32 @@ namespace ROCKSDB_NAMESPACE {
     return new (mem) NewMemTableIterator(*mt, read_options, c, arena);
   }
 
-
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  // /**********************************************************************************************************************/
-
-
   void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
                      CompactionIterator* c_iter, std::atomic<uint64_t>& counter) {
-    // fprintf(stderr, "index:%lu, gethere, %d\n", index, __LINE__);
-    // fprintf(stderr, "Node_head:%lx\n", c_iter->Node_head());
-    // fflush(stderr);
-    // uint64_t nums = 0;
-    // fprintf(stderr, "index:%lu, skip_nums:%lu, need_nums:%lu\n", index, skip_nums, need_nums);
+
     auto a_point = std::chrono::high_resolution_clock::now();
-    //nums < need_nums&&
-    // std::this_thread::sleep_for(std::chrono::milliseconds(20 * index));
     for (c_iter->SeekToFirst(); c_iter->Valid(); c_iter->Next()) {
-      // if (nums < skip_nums) {
-      //   nums++;
-      //   continue;
-      // }
-      // if (index) {
-      //   printf("index:%lu nums:%lu, gethere, %d\n", index, nums, __LINE__);
-      // }
-      // fflush(stderr);
       const Slice& key = c_iter->key();
       const Slice& value = c_iter->value();
       const ParsedInternalKey& ikey = c_iter->ikey();
-      // if (index) {
-      //   printf("index:%lu nums:%lu, gethere, %d\n", index, nums, __LINE__);
-      // }
 
 
       builder->Add_parallel(key, value, index);
-      // fprintf(stderr, "index:%lu nums:%lu, gethere, %d\n", index, nums, __LINE__);
-      // fflush(stderr);
-      // if (index) {
-      //   printf("index:%lu nums:%lu, gethere, %d\n", index, nums, __LINE__);
-      // }
-      // 这里点进去看代码可以知道和顺序没关系，只需要保证不同时访问就行 
-      // meta_mtx.lock();
+
       meta->UpdateBoundaries(key, value, ikey.sequence, ikey.type);
-      // meta_mtx.unlock();
-      // if (nums == 0) {
-      //   nums++;
-      //   printf("index:%lu, fisrt key:%s\n", index, key.ToString().c_str());
-      // }
+
     }
     auto b_point = std::chrono::high_resolution_clock::now();
-    // fprintf(stderr, "gethere, %d\n", __LINE__);
     // Flush最后一部分没有成为整个 datablock 的 kv
-    // printf("index:%lu, last key:%s\n", index, c_iter->key().ToString().c_str());
     builder->Flush_parallel(index);
-    // builder->Flush_parallel(index, Slice{});
+
     auto c_point = std::chrono::high_resolution_clock::now();
     while (counter.load(std::memory_order_relaxed) != index) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     auto d_point = std::chrono::high_resolution_clock::now();
     if (index > 0) builder->EmitRemainOpts(index);
-    if (index == 2) {
+    if (index == parallel_threads - 1) {
       const Slice& key = c_iter->key();
       const Slice& value = c_iter->value();
       const ParsedInternalKey& ikey = c_iter->ikey();
@@ -767,8 +727,6 @@ namespace ROCKSDB_NAMESPACE {
             snapshots, nullptr));
     std::string fname = TableFileName(ioptions.cf_paths, DPU_fd.GetNumber(),
                                       DPU_fd.GetPathId());
-    // fprintf(stderr, "largest_seqno:%lx, smallest_seqno:%lx line:%d\n", DPU_fd.largest_seqno, DPU_fd.smallest_seqno, __LINE__);
-    // std::cout << fname << std::endl;
     std::vector<std::string> blob_file_paths;
     std::string file_checksum = kUnknownFileChecksum;
     std::string file_checksum_func_name = kUnknownFileChecksumFuncName;
@@ -781,7 +739,6 @@ namespace ROCKSDB_NAMESPACE {
     assert(fs);
     TableProperties tp;
     bool table_file_created = false;
-    // printf("line %u iter->Valid():%d\n", __LINE__, iter->Valid());
     if (iter->Valid()) {
       TableBuilder* builder;
       std::unique_ptr<WritableFileWriter> file_writer;
@@ -821,76 +778,52 @@ namespace ROCKSDB_NAMESPACE {
 
       const std::atomic<bool> kManualCompactionCanceledFalse{ false };
 
-      // CompactionIterator c_iter(
-      //     iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
-      //     earliest_write_conflict_snapshot, job_snapshot, nullptr, env,
-      //     ShouldReportDetailedTime(env, ioptions.stats),
-      //     true /* internal key corruption is not ok */,
-      //     range_del_agg.get(),
-      //     nullptr,
-      //     // blob_file_builder.get(),
-      //     ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
-      //     /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
-      //     /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-      //     /*shutting_down=*/nullptr, db_options.info_log, nullptr);
-      // printf("iter Node_head:%lx, c_iter Node_head:%lx\n", (uint64_t)iter->Current(), (uint64_t)c_iter.Node_head());
-      // c_iter.SeekToFirst();
-      // const Slice key = c_iter.key();
-      // printf("c_iter keyaddr:%lx\n", key.data());
-      // if (!c_iter.Valid()) {
-      //   printf("error!\n");
-      // }
+      CompactionIterator c_iter(
+          iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
+          earliest_write_conflict_snapshot, job_snapshot, nullptr, env,
+          ShouldReportDetailedTime(env, ioptions.stats),
+          true /* internal key corruption is not ok */,
+          range_del_agg.get(),
+          nullptr,
+          // blob_file_builder.get(),
+          ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
+          /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+          /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
+          /*shutting_down=*/nullptr, db_options.info_log, nullptr);
 
       // parameters needed for parallel iter
       auto a_point = std::chrono::high_resolution_clock::now();
-      uint64_t parallel_threads = 3;
       std::vector<uint64_t> Node_heads;
       Node_heads.push_back(Node_head);
       uint64_t iter_nums = 0;
-      uint64_t every_thread_entries = num_entries / parallel_threads;
+      uint64_t y = num_entries / 50;
+      uint64_t x = (num_entries - 28 * y) / parallel_threads;
       uint64_t times = parallel_threads - 1;
+      int factor = 0;
       for (;iter->Valid();iter->Next()) {
-        if (iter_nums == every_thread_entries) {
-          // printf("before iter->Node_head:%lx\n", iter->Node_head());
-          // c_iter.Next();
-          // c_iter.Next();
-          // printf("after iter->Node_head:%lx\n", iter->Node_head());
+        if (iter_nums == x + factor * y) {
           Node_heads.push_back(iter->Node_head());
           iter_nums = 0;
           times--;
+          factor++;
         }
         if (times == 0) break;
         iter_nums++;
       }
-      printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
-      if (Node_heads.size() == 1) {
-        for (iter->SeekToFirst();iter->Valid();iter->Next()) {
-          printf("iter->Node_head:%lx\n", iter->Node_head());
-        }
-        uint64_t* ptr = (uint64_t*)(Node_head + offset);
-        for (int i = 0;i < 10;i++) {
-          printf("i:%d, data:%lu\n", i, *(ptr + i));
-        }
-      }
+      // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
       Node_heads.push_back(0);
 
 
-
-
-      std::mutex meta_mtx;
       std::vector<std::thread> flush_thread_pool;
       std::vector<InternalIterator*> iters(parallel_threads);
       std::vector<CompactionIterator*> c_iters;
       std::vector<Arena> arenas(parallel_threads);
       std::vector<NewMemTable*> new_mems(parallel_threads);
       std::atomic<uint64_t> counter(0);
-      // fprintf(stderr, "line:%d, Node_head:%lx\n", __LINE__, Node_head);
       for (int i = 0;i < parallel_threads;++i) {
         new_mems[i] = new NewMemTable(Node_heads[i], offset + Node_heads[i + 1], offset, cfd_internal_comparator);
-        // printf("memsNode_head:%lx\n", new_mems[i]->Node_head_);
         iters[i] = NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
         iters[i]->SeekToFirst();
-        // printf("iters Node_head:%lx\n", iters[i]->Node_head());
         c_iters.push_back(new CompactionIterator(iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
           earliest_write_conflict_snapshot, job_snapshot, nullptr, env,
           ShouldReportDetailedTime(env, ioptions.stats),
@@ -902,32 +835,21 @@ namespace ROCKSDB_NAMESPACE {
           /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
           /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
           /*shutting_down=*/nullptr, db_options.info_log, nullptr));
-        // printf("c_iters Node_head:%lx\n", c_iters[i]->Node_head());
       }
       auto c_point = std::chrono::high_resolution_clock::now();
 
       for (uint64_t i = 0;i < parallel_threads;i++) {
-        // uint64_t index = i;
-        // fprintf(stderr, "index:%lu, Node_head:%lx\n", index,
-        // c_iters[i]->Node_head()); flush_thread_pool.emplace_back([i,
-        // &builder, &meta, &meta_mtx, &token_pools, &c_iters, &arenas]
-        // {iter_parallel(0, builder, meta, std::ref(meta_mtx), c_iters[0],
-        // arenas[0], token_pools[0], token_pools[1],
-        //   0, 10000000ul);});
-        // if (i != 0) {
-        //   flush_thread_pool[i - 1].join();
-        // }
         flush_thread_pool.emplace_back(iter_parallel, i, builder, meta, c_iters[i], std::ref(counter));
-        //piece_nums * index, piece_nums * (index + 1));});
       }
-      // flush_thread_pool[parallel_threads - 1].join();
+
+      for (int i = 0; i < flush_thread_pool.size(); i++) {
+        flush_thread_pool[i].join();
+      }
 
       // uint64_t nums = 0;
       // int c_iter_num = 0;
       // auto begin = std::chrono::steady_clock::now();
       // for (c_iter.SeekToFirst(); c_iter.Valid(); c_iter.Next()) {
-      //   // c_iter_num++;
-      //   // auto time0 = std::chrono::steady_clock::now();
       //   const Slice& key = c_iter.key();
       //   const Slice& value = c_iter.value();
       //   const ParsedInternalKey& ikey = c_iter.ikey();
@@ -937,28 +859,24 @@ namespace ROCKSDB_NAMESPACE {
       //   //   printf("从这里退出循环%lu\n", __LINE__);
       //   //   break;
       //   // }
-      //   // auto time1 = std::chrono::steady_clock::now();
       //   builder->Add(key, value);
-      //   // printf("meta->UpdateBoundaries begin\n");
-      //   // printf("key.size: %lu key:%ld\n",key.size(),*(uint64_t*)key.data());
-      //   // printf("value.size: %lu value:%ld\n", value.size(),*(uint64_t*)value.data());
-      //   // auto start = std::chrono::steady_clock::now();
+
       //   s = meta->UpdateBoundaries(key, value, ikey.sequence, ikey.type);
       //   if (!s.ok()) {
       //     break;
       //   }
-        // auto end2 = std::chrono::steady_clock::now();
-        // updatetime += std::chrono::duration<double>(end2 - time0).count();
-        // addtime += std::chrono::duration<double>(start - time1).count();
-        // getkvtime += std::chrono::duration<double>(time1 - time0).count();
-        // TODO(noetzli): Update stats after flush, too.
-        // 这个分支好像根本没有进去过，所以我注释掉了
-        // if (io_priority == Env::IO_HIGH &&
-        //     IOSTATS(bytes_written) >= kReportFlushIOStatsEvery) {
-        //   printf("line:%lu\n", __LINE__);
-        //   ThreadStatusUtil::SetThreadOperationProperty(
-        //       ThreadStatus::FLUSH_BYTES_WRITTEN, IOSTATS(bytes_written));
-        // }
+      //   // auto end2 = std::chrono::steady_clock::now();
+      //   // updatetime += std::chrono::duration<double>(end2 - time0).count();
+      //   // addtime += std::chrono::duration<double>(start - time1).count();
+      //   // getkvtime += std::chrono::duration<double>(time1 - time0).count();
+      //   // TODO(noetzli): Update stats after flush, too.
+      //   // 这个分支好像根本没有进去过，所以我注释掉了
+      //   // if (io_priority == Env::IO_HIGH &&
+      //   //     IOSTATS(bytes_written) >= kReportFlushIOStatsEvery) {
+      //   //   printf("line:%lu\n", __LINE__);
+      //   //   ThreadStatusUtil::SetThreadOperationProperty(
+      //   //       ThreadStatus::FLUSH_BYTES_WRITTEN, IOSTATS(bytes_written));
+      //   // }
       // }
       // auto end = std::chrono::steady_clock::now();
       // double c_iter_time = std::chrono::duration<double>(end - begin).count();
@@ -973,9 +891,7 @@ namespace ROCKSDB_NAMESPACE {
       // else if (!c_iter.status().ok()) {
       //   s = c_iter.status();
       // }
-      for (int i = 0; i < flush_thread_pool.size(); i++) {
-        flush_thread_pool[i].join();
-      }
+
       auto b_point = std::chrono::high_resolution_clock::now();
       uint64_t iter_time = std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point).count();
       uint64_t init_time = std::chrono::duration_cast<std::chrono::milliseconds>(c_point - a_point).count();
@@ -1082,8 +998,6 @@ namespace ROCKSDB_NAMESPACE {
     if (!iter->status().ok()) {
       s = iter->status();
     }
-    // fprintf(stderr, "gethere:%d\n", __LINE__);
-    // fflush(stderr);
     if (!s.ok() || DPU_fd.GetFileSize() == 0) {
       TEST_SYNC_POINT("BuildTable:BeforeDeleteFile");
 
