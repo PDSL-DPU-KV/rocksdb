@@ -148,6 +148,7 @@ class InlineSkipList {
   
   int LevelNodeCount(int level);
   Node* FindTrisectionPoint(int level, int num);
+  Node* FindQuatilenPoint(int level, int num);
   void PrintNodeCount();
   // Iteration over the contents of a skip list
   class Iterator {
@@ -1074,6 +1075,16 @@ typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindTrise
   Node* temp_node_ = this->head_;
   // printf("level: %d num: %d node_count*num/3: %d\n ",level,num,node_count * num / 3);
   for (int i = 0; i < node_count * num / 3;i++) {
+    temp_node_ = temp_node_->Next(level);
+  }
+  return temp_node_;
+}
+
+template <class Comparator>
+typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuatilenPoint(int level,int num) {
+  int node_count = LevelNodeCount(level);
+  Node* temp_node_ = this->head_;
+  for (int i = 0; i < node_count * num / 4;i++) {
     temp_node_ = temp_node_->Next(level);
   }
   return temp_node_;

@@ -772,7 +772,9 @@ void RunJob(int client_fd) {
     ptr += sizeof(uintptr_t);
     uintptr_t TrisectionPoint_2 = *(uintptr_t*)ptr;
     ptr += sizeof(uintptr_t);
-    printf("TrisectionPoint: %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2);
+    uintptr_t TrisectionPoint_3 = *(uintptr_t*)ptr;
+    ptr += sizeof(uintptr_t);   
+    printf("TrisectionPoint: %lu %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2,TrisectionPoint_3);
 
 
     // mems
