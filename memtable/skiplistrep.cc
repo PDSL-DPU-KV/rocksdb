@@ -36,7 +36,9 @@ class SkipListRep : public MemTableRep {
     *buf = skip_list_.AllocateKey(len);
     return static_cast<KeyHandle>(*buf);
   }
-
+  InlineSkipList<const KeyComparator&>& get_skip_list() override {
+      return skip_list_;
+  }
   // Insert key into the list.
   // REQUIRES: nothing that compares equal to key is currently in the list.
   void Insert(KeyHandle handle) override {

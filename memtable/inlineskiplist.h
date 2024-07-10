@@ -145,7 +145,10 @@ class InlineSkipList {
 
   // Validate correctness of the skip-list.
   void TEST_Validate() const;
-
+  
+  int LevelNodeCount(int level);
+  Node* FindTrisectionPoint(int level, int num);
+  void PrintNodeCount();
   // Iteration over the contents of a skip list
   class Iterator {
    public:
@@ -1054,5 +1057,32 @@ void InlineSkipList<Comparator>::TEST_Validate() const {
     assert(nodes[i] != nullptr && nodes[i]->Next(i) == nullptr);
   }
 }
+template <class Comparator>
+int InlineSkipList<Comparator>::LevelNodeCount(int level) {
+  Node* temp_node_ = this->head_;
+  int num =0;
+  while (temp_node_ != nullptr) {
+    temp_node_ = temp_node_->Next(level);
+    num++;
+  }
+  return num;
+}
 
+template <class Comparator>
+typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindTrisectionPoint(int level,int num) {
+  int node_count = LevelNodeCount(level);
+  Node* temp_node_ = this->head_;
+  // printf("level: %d num: %d node_count*num/3: %d\n ",level,num,node_count * num / 3);
+  for (int i = 0; i < node_count * num / 3;i++) {
+    temp_node_ = temp_node_->Next(level);
+  }
+  return temp_node_;
+}
+
+template <class Comparator>
+void InlineSkipList<Comparator>::PrintNodeCount() {
+  for (int i = 0; i <GetMaxHeight() ; i++) {
+    printf("level: %d,node num: %d\n",i,LevelNodeCount(i));
+  }
+}
 }  // namespace ROCKSDB_NAMESPACE

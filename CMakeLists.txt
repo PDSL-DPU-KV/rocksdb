@@ -34,7 +34,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/zqy2023/lib/grpc")
+set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/yzk/grpc/build")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 include(ReadVersion)
 include(GoogleTest)
@@ -623,7 +623,7 @@ if(USE_FOLLY)
 endif()
 find_package(Threads REQUIRED)
 
-set(ENV{PKG_CONFIG_PATH} "/home/zqy2023/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig/:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig/:/opt/mellanox/flexio/lib/pkgconfig/:/opt/mellanox/dpdk/lib/aarch64-linux-gnu/pkgconfig/")
+set(ENV{PKG_CONFIG_PATH} "/home/yzk/rocksdb/third-party/deps/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/doca/lib/x86_64-linux-gnu/pkgconfig/:/opt/mellanox/flexio/lib/pkgconfig/:/opt/mellanox/dpdk/lib/x86_64-linux-gnu/pkgconfig/")
 option(WITH_MERCURY "Build with mercury" ON)
 if(WITH_MERCURY)
   find_package(PkgConfig REQUIRED)
@@ -1628,7 +1628,7 @@ if (WITH_DPU_SERVER)
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::mercury)
   target_link_libraries(dpu_server${ARTIFACT_SUFFIX} 
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS} PkgConfig::doca)
-  target_link_libraries(dpu_server /home/zqy2023/rocksdb/dflush/build/kernels/dflush_app.a)
+  target_link_libraries(dpu_server /home/yzk/rocksdb/dflush/build/kernels/dflush_app.a)
 endif()
 
 if(WITH_BENCHMARK_TOOLS)

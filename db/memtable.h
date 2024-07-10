@@ -539,7 +539,9 @@ class MemTable {
   bool get_mt_flag_() {
     return arena_.get_mt_flag_();
   }
-
+  MemTableRep* get_table_() {
+    return table_.get();
+  }
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 

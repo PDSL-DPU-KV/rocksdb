@@ -1100,6 +1100,14 @@ namespace ROCKSDB_NAMESPACE {
   }
 
   Status FlushJob::WriteLevel0Table() {
+  printf("------------------------------------------------------------------\n");
+  printf("------------------------------------------------------------------\n");
+  MemTable* tmp = mems_[0];
+  tmp->get_table_()->get_skip_list().PrintNodeCount();
+  auto TrisectionPoint_1 =tmp->get_table_()->get_skip_list().FindTrisectionPoint(5,1);
+  auto TrisectionPoint_2 =tmp->get_table_()->get_skip_list().FindTrisectionPoint(5,2);
+  printf("------------------------------------------------------------------\n");
+  printf("------------------------------------------------------------------\n");
 #ifdef DFLUSH
     Status s;
     for (uint64_t index = 0;index < mems_.size();index++) {
@@ -1242,6 +1250,15 @@ namespace ROCKSDB_NAMESPACE {
           char buffer[1024];
           char* ptr = buffer;
           uint64_t total_size = 0;
+
+          // TrisectionPoint
+          *(uintptr_t*)ptr = TrisectionPoint_1;
+          ptr += sizeof(uintptr_t);
+          *(uintptr_t*)ptr = TrisectionPoint_2;
+          ptr += sizeof(uintptr_t);
+
+          total_size += sizeof(uintptr_t);
+          printf("TrisectionPoint: %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2);
 
           // mems
           *(uint64_t*)ptr = total_num_entries;

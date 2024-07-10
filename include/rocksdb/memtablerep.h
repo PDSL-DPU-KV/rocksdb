@@ -42,6 +42,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#include "memtable/inlineskiplist.h"
 #include "rocksdb/customizable.h"
 #include "rocksdb/slice.h"
 
@@ -97,6 +98,8 @@ class MemTableRep {
   // REQUIRES: nothing that compares equal to key is currently in the
   // collection, and no concurrent modifications to the table in progress
   virtual void Insert(KeyHandle handle) = 0;
+
+  virtual InlineSkipList<const KeyComparator&>& get_skip_list(){}
 
   // Same as ::Insert
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
