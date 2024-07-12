@@ -1100,16 +1100,16 @@ namespace ROCKSDB_NAMESPACE {
   }
 
   Status FlushJob::WriteLevel0Table() {
-  printf("------------------------------------------------------------------\n");
-  printf("------------------------------------------------------------------\n");
-  MemTable* tmp = mems_[0];
-  tmp->get_table_()->get_skip_list().PrintNodeCount();
-  auto TrisectionPoint_1 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,1);
-  auto TrisectionPoint_2 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,2);
-  auto TrisectionPoint_3 =tmp->get_table_()->get_skip_list().FindQuatilenPoint(4,3);
-  printf("------------------------------------------------------------------\n");
-  printf("------------------------------------------------------------------\n");
 #ifdef DFLUSH
+    printf("------------------------------------------------------------------\n");
+    printf("------------------------------------------------------------------\n");
+    MemTable* tmp = mems_[0];
+    tmp->get_table_()->get_skip_list().PrintNodeCount();
+    auto TrisectionPoint_1 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 1);
+    auto TrisectionPoint_2 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 2);
+    auto TrisectionPoint_3 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 3);
+    printf("------------------------------------------------------------------\n");
+    printf("------------------------------------------------------------------\n");
     Status s;
     for (uint64_t index = 0;index < mems_.size();index++) {
       MemTable* m = mems_[index];
@@ -1678,7 +1678,7 @@ namespace ROCKSDB_NAMESPACE {
           job_context_->GetJobSnapshotSequence();
         const ReadOptions read_options(Env::IOActivity::kFlush);
 
-        auto point_1 = std::chrono::high_resolution_clock::now();
+        // auto point_1 = std::chrono::high_resolution_clock::now();
         s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
                    read_options, cfd_->table_cache(), iter.get(),
                    std::move(range_del_iters), &meta_, &blob_file_additions,
@@ -1691,9 +1691,9 @@ namespace ROCKSDB_NAMESPACE {
                    &table_properties_, write_hint, full_history_ts_low,
                    blob_callback_, base_, &num_input_entries,
                    &memtable_payload_bytes, &memtable_garbage_bytes);
-        auto point_2 = std::chrono::high_resolution_clock::now();
-        uint64_t buildtable_time = std::chrono::duration_cast<std::chrono::nanoseconds>(point_2 - point_1).count();
-        printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
+        // auto point_2 = std::chrono::high_resolution_clock::now();
+        // uint64_t buildtable_time = std::chrono::duration_cast<std::chrono::nanoseconds>(point_2 - point_1).count();
+        // printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
 
         // TODO: Cleanup io_status in BuildTable and table builders
         assert(!s.ok() || io_s.ok());
@@ -1748,7 +1748,7 @@ namespace ROCKSDB_NAMESPACE {
       // threads could be concurrently producing compacted files for
       // that key range.
       // Add file to L0
-      printf("filesize:%lu\n", meta_.fd.GetFileSize());
+      // printf("filesize:%lu\n", meta_.fd.GetFileSize());
       edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
                      meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
                      meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
