@@ -2101,7 +2101,7 @@ namespace ROCKSDB_NAMESPACE {
       if (r->compression_opts.use_zstd_dict_trainer) {
         dict = ZSTD_TrainDictionary(compression_dict_samples,
                                     compression_dict_sample_lens,
-                                    r->compression_opts.max_dict_bytes);https://poe.com/chat/3ezsk0ma3pi9l5ryrd0
+                                    r->compression_opts.max_dict_bytes);
       }
       else {
         dict = ZSTD_FinalizeDictionary(
