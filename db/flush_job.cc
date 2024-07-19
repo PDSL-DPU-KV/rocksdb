@@ -14,18 +14,13 @@
 #include <unistd.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cinttypes>
 #include <cstdio>
-#include <iostream>
 #include <vector>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
-#include "db/event_helpers.h"
-#include "db/log_reader.h"
-#include "db/log_writer.h"
 #include "db/memtable.h"
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
@@ -33,15 +28,12 @@
 #include "db/version_builder.h"
 #include "db/version_edit.h"
 #include "db/version_set.h"
-#include "file/file_util.h"
 #include "file/filename.h"
 #include "logging/event_logger.h"
 #include "logging/log_buffer.h"
 #include "logging/logging.h"
 #include "monitoring/iostats_context_imp.h"
-#include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
-#include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
@@ -52,8 +44,6 @@
 #include "table/two_level_iterator.h"
 #include "test_util/sync_point.h"
 #include "util/coding.h"
-#include "util/mutexlock.h"
-#include "util/stop_watch.h"
 
 namespace ROCKSDB_NAMESPACE {
 int send_meta(FileMetaData* meta, char* ptr) {
@@ -1090,13 +1080,13 @@ Status FlushJob::WriteLevel0Table() {
   printf(
       "------------------------------------------------------------------\n");
   MemTable* tmp = mems_[0];
-  tmp->get_table_()->get_skip_list().PrintNodeCount();
+  tmp->get_table_()->get_skip_list()->PrintNodeCount();
   auto TrisectionPoint_1 =
-      tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 1);
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1);
   auto TrisectionPoint_2 =
-      tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 2);
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2);
   auto TrisectionPoint_3 =
-      tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 3);
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3);
   printf(
       "------------------------------------------------------------------\n");
   printf(
@@ -1252,7 +1242,7 @@ Status FlushJob::WriteLevel0Table() {
         *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_3;
         ptr += sizeof(uintptr_t);
         total_size += 3 * sizeof(uintptr_t);
-        printf("TrisectionPoint: %lu %lu %lu\n", TrisectionPoint_1,
+        printf("TrisectionPoint: %p %p %p\n", TrisectionPoint_1,
                TrisectionPoint_2, TrisectionPoint_3);
 
         // mems
@@ -1357,7 +1347,7 @@ Status FlushJob::WriteLevel0Table() {
         if ((uint32_t)tboptions.ioptions.cf_paths.size() > 0) {
           DbPath_struct send_tboptions_ioptions_cf_paths
               [(uint32_t)tboptions.ioptions.cf_paths.size()];
-          for (int i = 0; i < tboptions.ioptions.cf_paths.size(); i++) {
+          for (uint32_t i = 0; i < tboptions.ioptions.cf_paths.size(); i++) {
             std::strcpy(send_tboptions_ioptions_cf_paths[i].path,
                         tboptions.ioptions.cf_paths[i].path.c_str());
             send_tboptions_ioptions_cf_paths[i].target_size =
@@ -1548,7 +1538,7 @@ Status FlushJob::WriteLevel0Table() {
                               mutable_cf_options_.write_buffer_size;
     auto vfs = cfd_->current()->storage_info();
     metrics.l0_files = vfs->NumLevelFiles(vfs->base_level());
-    metrics.write_out_bandwidth = stats.bytes_written / stats.micros;
+    metrics.write_out_bandwidth = (double)stats.bytes_written / stats.micros;
 
     db_options_.flush_stats->push_back(metrics);
   }

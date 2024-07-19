@@ -39,7 +39,6 @@
 #include <stdlib.h>
 
 #include <memory>
-#include <stdexcept>
 #include <unordered_set>
 
 #include "memtable/inlineskiplist.h"
@@ -99,7 +98,9 @@ class MemTableRep {
   // collection, and no concurrent modifications to the table in progress
   virtual void Insert(KeyHandle handle) = 0;
 
-  virtual InlineSkipList<const KeyComparator&>& get_skip_list(){}
+  virtual InlineSkipList<const KeyComparator&>* get_skip_list() {
+    return nullptr;
+  }
 
   // Same as ::Insert
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
@@ -259,9 +260,7 @@ class MemTableRep {
     // Final state of iterator is Valid() iff collection is not empty.
     virtual void SeekToLast() = 0;
 
-    virtual void* Current() {
-      return nullptr;
-    }
+    virtual void* Current() { return nullptr; }
   };
 
   // Return an iterator over the keys in this representation.

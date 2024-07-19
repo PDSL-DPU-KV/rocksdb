@@ -3,7 +3,6 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
-#include <random>
 
 #include "db/memtable.h"
 #include "memory/arena.h"
@@ -36,8 +35,8 @@ class SkipListRep : public MemTableRep {
     *buf = skip_list_.AllocateKey(len);
     return static_cast<KeyHandle>(*buf);
   }
-  InlineSkipList<const KeyComparator&>& get_skip_list() override {
-      return skip_list_;
+  InlineSkipList<const KeyComparator&>* get_skip_list() override {
+    return &skip_list_;
   }
   // Insert key into the list.
   // REQUIRES: nothing that compares equal to key is currently in the list.
@@ -331,13 +330,11 @@ class SkipListRep : public MemTableRep {
     if (lookahead_ > 0) {
       void* mem =
           arena ? arena->AllocateAligned(sizeof(SkipListRep::LookaheadIterator))
-                :
-                operator new(sizeof(SkipListRep::LookaheadIterator));
+                : operator new(sizeof(SkipListRep::LookaheadIterator));
       return new (mem) SkipListRep::LookaheadIterator(*this);
     } else {
       void* mem = arena ? arena->AllocateAligned(sizeof(SkipListRep::Iterator))
-                        :
-                        operator new(sizeof(SkipListRep::Iterator));
+                        : operator new(sizeof(SkipListRep::Iterator));
       return new (mem) SkipListRep::Iterator(&skip_list_);
     }
   }
