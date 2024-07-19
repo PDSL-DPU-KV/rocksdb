@@ -11,8 +11,8 @@
 
 #include "db/range_tombstone_fragmenter.h"
 #include "db/seqno_to_time_mapping.h"
-#include "db/version_set.h"
 #include "db/version_edit.h"
+#include "db/version_set.h"
 #include "logging/event_logger.h"
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
@@ -33,6 +33,49 @@ class TableBuilder;
 class WritableFileWriter;
 class InternalStats;
 class BlobFileCompletionCallback;
+
+struct DbPath_struct {
+  char path[128];
+  uint64_t target_size;
+};
+
+struct MetaReq {
+  uintptr_t TrisectionPoint[3];
+  uint64_t num_entries;
+  uintptr_t Node_head;
+  std::vector<uint64_t> Node_heads;
+  uintptr_t mt_buf;
+  rocksdb::FileMetaData file_meta;
+  uint64_t new_versions_NewFileNumber;
+  rocksdb::SeqnoToTimeMapping seqno_to_time_mapping;
+  uint32_t kUnknownColumnFamily;
+  std::string str_full_history_ts_low;
+  rocksdb::Env::IOPriority* io_priority;
+  bool paranoid_file_checks;
+  int job_id;
+  std::vector<rocksdb::SequenceNumber> snapshots;
+  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
+  rocksdb::SequenceNumber job_snapshot;
+  size_t timestamp_size;
+  std::vector<rocksdb::DbPath> tboptions_ioptions_cf_paths;
+  rocksdb::SequenceNumber smallest_seqno;
+  rocksdb::SequenceNumber largest_seqno;
+  std::string cfd_GetName;
+  std::string dbname;
+  std::string mmap_desc;
+};
+
+struct MetaResult {
+  rocksdb::Status status;
+  uint64_t num_input_entries;
+  uint64_t memtable_payload_bytes;
+  uint64_t memtable_garbage_bytes;
+  uint64_t packed_number_and_path_id;
+  uint64_t file_size;
+  rocksdb::SequenceNumber smallest_seqno;
+  rocksdb::SequenceNumber largest_seqno;
+  rocksdb::FileMetaData file_meta;
+};
 
 // Convenience function for NewTableBuilder on the embedded table_factory.
 TableBuilder* NewTableBuilder(const TableBuilderOptions& tboptions,
@@ -71,34 +114,5 @@ extern Status BuildTable(
     uint64_t* memtable_payload_bytes = nullptr,
     uint64_t* memtable_garbage_bytes = nullptr);
 
-void BuildTable_new(
-    uintptr_t Node_head,
-    std::vector<uint64_t> Node_heads,
-    uint64_t offset,
-    uint64_t num_entries,
-    FileMetaData* meta, 
-    uint64_t new_versions_NewFileNumber,  
-    
-    SeqnoToTimeMapping seqno_to_time_mapping,
-    uint32_t kUnknownColumnFamily,  
-    bool paranoid_file_checks,  
-    int job_id,    
-    SequenceNumber earliest_write_conflict_snapshot, 
-    SequenceNumber job_snapshot,  
-    size_t timestamp_size,     
-    std::vector<DbPath> tboptions_ioptions_cf_paths,  
-    std::string cfd_GetName,  
-    std::string dbname,    
-
-    /* Ouput List */
-    Status* return_status,
-    uint64_t* num_input_entries,  // output 在程序中定义，局部变量
-    uint64_t* memtable_payload_bytes,  // output 在程序中定义，局部变量
-    uint64_t* memtable_garbage_bytes,  // output 在程序中定义，局部变量
-    uint64_t* packed_number_and_path_id,
-    uint64_t* file_size,
-    SequenceNumber* smallest_seqno,  // The smallest seqno in this file
-    SequenceNumber* largest_seqno
-
-) ;
+void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result);
 }  // namespace ROCKSDB_NAMESPACE
