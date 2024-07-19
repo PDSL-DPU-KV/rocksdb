@@ -1893,9 +1893,6 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   auto& remote_listeners =
       const_cast<std::vector<std::shared_ptr<EventListener>>&>(
           db_options.listeners);
-  tmp_options.compaction_service = std::make_shared<MyTestCompactionService>(
-      dbname, compaction_options, compaction_stats, remote_listeners,
-      remote_table_properties_collector_factories);
 
   Status s = ValidateOptionsByTable(db_options, column_families);
   if (!s.ok()) {
