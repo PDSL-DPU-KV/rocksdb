@@ -20,85 +20,93 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 #include "rocksdb/types.h"
+#include "dflush/DPAThreads_Flush.h"
+#include "dflush/common.h"
 
 namespace ROCKSDB_NAMESPACE {
 
-struct FileMetaData;
+    struct FileMetaData;
 
-class VersionSet;
-class BlobFileAddition;
-class SnapshotChecker;
-class TableCache;
-class TableBuilder;
-class WritableFileWriter;
-class InternalStats;
-class BlobFileCompletionCallback;
+    class VersionSet;
+    class BlobFileAddition;
+    class SnapshotChecker;
+    class TableCache;
+    class TableBuilder;
+    class WritableFileWriter;
+    class InternalStats;
+    class BlobFileCompletionCallback;
 
-// Convenience function for NewTableBuilder on the embedded table_factory.
-TableBuilder* NewTableBuilder(const TableBuilderOptions& tboptions,
-                              WritableFileWriter* file);
+    // Convenience function for NewTableBuilder on the embedded table_factory.
+    TableBuilder* NewTableBuilder(const TableBuilderOptions& tboptions,
+                                  WritableFileWriter* file);
 
-// Build a Table file from the contents of *iter.  The generated file
-// will be named according to number specified in meta. On success, the rest of
-// *meta will be filled with metadata about the generated table.
-// If no data is present in *iter, meta->file_size will be set to
-// zero, and no Table file will be produced.
-//
-// @param column_family_name Name of the column family that is also identified
-//    by column_family_id, or empty string if unknown.
-extern Status BuildTable(
-    const std::string& dbname, VersionSet* versions,
-    const ImmutableDBOptions& db_options, const TableBuilderOptions& tboptions,
-    const FileOptions& file_options, const ReadOptions& read_options,
-    TableCache* table_cache, InternalIterator* iter,
-    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        range_del_iters,
-    FileMetaData* meta, std::vector<BlobFileAddition>* blob_file_additions,
-    std::vector<SequenceNumber> snapshots,
-    SequenceNumber earliest_write_conflict_snapshot,
-    SequenceNumber job_snapshot, SnapshotChecker* snapshot_checker,
-    bool paranoid_file_checks, InternalStats* internal_stats,
-    IOStatus* io_status, const std::shared_ptr<IOTracer>& io_tracer,
-    BlobFileCreationReason blob_creation_reason,
-    const SeqnoToTimeMapping& seqno_to_time_mapping,
-    EventLogger* event_logger = nullptr, int job_id = 0,
-    const Env::IOPriority io_priority = Env::IO_HIGH,
-    TableProperties* table_properties = nullptr,
-    Env::WriteLifeTimeHint write_hint = Env::WLTH_NOT_SET,
-    const std::string* full_history_ts_low = nullptr,
-    BlobFileCompletionCallback* blob_callback = nullptr,
-    Version* version = nullptr, uint64_t* num_input_entries = nullptr,
-    uint64_t* memtable_payload_bytes = nullptr,
-    uint64_t* memtable_garbage_bytes = nullptr);
+    // Build a Table file from the contents of *iter.  The generated file
+    // will be named according to number specified in meta. On success, the rest of
+    // *meta will be filled with metadata about the generated table.
+    // If no data is present in *iter, meta->file_size will be set to
+    // zero, and no Table file will be produced.
+    //
+    // @param column_family_name Name of the column family that is also identified
+    //    by column_family_id, or empty string if unknown.
+    extern Status BuildTable(
+        const std::string& dbname, VersionSet* versions,
+        const ImmutableDBOptions& db_options, const TableBuilderOptions& tboptions,
+        const FileOptions& file_options, const ReadOptions& read_options,
+        TableCache* table_cache, InternalIterator* iter,
+        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+            range_del_iters,
+        FileMetaData* meta, std::vector<BlobFileAddition>* blob_file_additions,
+        std::vector<SequenceNumber> snapshots,
+        SequenceNumber earliest_write_conflict_snapshot,
+        SequenceNumber job_snapshot, SnapshotChecker* snapshot_checker,
+        bool paranoid_file_checks, InternalStats* internal_stats,
+        IOStatus* io_status, const std::shared_ptr<IOTracer>& io_tracer,
+        BlobFileCreationReason blob_creation_reason,
+        const SeqnoToTimeMapping& seqno_to_time_mapping,
+        EventLogger* event_logger = nullptr, int job_id = 0,
+        const Env::IOPriority io_priority = Env::IO_HIGH,
+        TableProperties* table_properties = nullptr,
+        Env::WriteLifeTimeHint write_hint = Env::WLTH_NOT_SET,
+        const std::string* full_history_ts_low = nullptr,
+        BlobFileCompletionCallback* blob_callback = nullptr,
+        Version* version = nullptr, uint64_t* num_input_entries = nullptr,
+        uint64_t* memtable_payload_bytes = nullptr,
+        uint64_t* memtable_garbage_bytes = nullptr);
 
-void BuildTable_new(
-    uintptr_t Node_head,
-    std::vector<uint64_t> Node_heads,
-    uint64_t offset,
-    uint64_t num_entries,
-    FileMetaData* meta, 
-    uint64_t new_versions_NewFileNumber,  
-    
-    SeqnoToTimeMapping seqno_to_time_mapping,
-    uint32_t kUnknownColumnFamily,  
-    bool paranoid_file_checks,  
-    int job_id,    
-    SequenceNumber earliest_write_conflict_snapshot, 
-    SequenceNumber job_snapshot,  
-    size_t timestamp_size,     
-    std::vector<DbPath> tboptions_ioptions_cf_paths,  
-    std::string cfd_GetName,  
-    std::string dbname,    
+    void BuildTable_new(
+        uintptr_t Node_head,
+        std::vector<uint64_t> Node_heads,
+        const params_memcpy_t& params,
+        uint64_t bufarr_handle,
+        uint64_t offset,
+        uint64_t num_entries,
+        FileMetaData* meta,
+        uint64_t new_versions_NewFileNumber,
 
-    /* Ouput List */
-    Status* return_status,
-    uint64_t* num_input_entries,  // output 在程序中定义，局部变量
-    uint64_t* memtable_payload_bytes,  // output 在程序中定义，局部变量
-    uint64_t* memtable_garbage_bytes,  // output 在程序中定义，局部变量
-    uint64_t* packed_number_and_path_id,
-    uint64_t* file_size,
-    SequenceNumber* smallest_seqno,  // The smallest seqno in this file
-    SequenceNumber* largest_seqno
+        SeqnoToTimeMapping seqno_to_time_mapping,
+        uint32_t kUnknownColumnFamily,
+        bool paranoid_file_checks,
+        int job_id,
+        SequenceNumber earliest_write_conflict_snapshot,
+        SequenceNumber job_snapshot,
+        size_t timestamp_size,
+        std::vector<DbPath> tboptions_ioptions_cf_paths,
+        std::string cfd_GetName,
+        std::string dbname,
 
-) ;
+        /* Ouput List */
+        Status* return_status,
+        uint64_t* num_input_entries,  // output 在程序中定义，局部变量
+        uint64_t* memtable_payload_bytes,  // output 在程序中定义，局部变量
+        uint64_t* memtable_garbage_bytes,  // output 在程序中定义，局部变量
+        uint64_t* packed_number_and_path_id,
+        uint64_t* file_size,
+        SequenceNumber* smallest_seqno,  // The smallest seqno in this file
+        SequenceNumber* largest_seqno
+
+    );
+
+    void BuildTable_new_init(uint64_t task_threads, uint64_t dpa_threads,
+                                const params_memcpy_t& params);
+
 }  // namespace ROCKSDB_NAMESPACE

@@ -51,7 +51,7 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
 
   if (smallest.size() == 0) {
     smallest.DecodeFrom(key);
-  }
+  } 
   largest.DecodeFrom(key);
   fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
   fd.largest_seqno = std::max(fd.largest_seqno, seqno);

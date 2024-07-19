@@ -79,9 +79,11 @@ namespace ROCKSDB_NAMESPACE {
   struct ConfigOptions;
 
   const size_t kDefaultPageSize = 4 * 1024;
-  
+
   extern double iotime, blocktime, compresstime;
   extern uint64_t c_iter_nexttime;
+
+#ifdef DFLUSH
 
   typedef struct {
     uintptr_t ptr;
@@ -113,6 +115,8 @@ namespace ROCKSDB_NAMESPACE {
   } while (0);
 #else
 #define doca_check(expr) (void)(expr)
+#endif
+
 #endif
 
   // Options while opening a file to read/write
@@ -1952,8 +1956,11 @@ namespace ROCKSDB_NAMESPACE {
   std::unique_ptr<Env> NewCompositeEnv(const std::shared_ptr<FileSystem>& fs);
 
   extern Env* FLAGS_env;
+
+#ifdef DFLUSH
   extern doca_dev* dev;
   extern doca_dpa* dpa;
+#endif
 
 
 }  // namespace ROCKSDB_NAMESPACE

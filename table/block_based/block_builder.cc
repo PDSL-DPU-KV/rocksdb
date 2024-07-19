@@ -136,6 +136,7 @@ Slice BlockBuilder::Finish() {
       BlockBasedTableOptions::kDataBlockBinarySearch;
   if (data_block_hash_index_builder_.Valid() &&
       CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
+    // 这里没进来过
     data_block_hash_index_builder_.Finish(buffer_);
     index_type = BlockBasedTableOptions::kDataBlockBinaryAndHash;
   }
@@ -239,6 +240,7 @@ inline void BlockBuilder::AddWithLastKeyImpl(const Slice& key,
   }
 
   // TODO(yuzhangyu): make user defined timestamp work with block hash index.
+  // 这个分支不会进入
   if (data_block_hash_index_builder_.Valid()) {
     // Only data blocks should be using `kDataBlockBinaryAndHash` index type.
     // And data blocks should always be built with internal keys instead of
@@ -258,11 +260,13 @@ const Slice BlockBuilder::MaybeStripTimestampFromKey(std::string* key_buf,
   if (ts_sz_ > 0 && !persist_user_defined_timestamps_) {
     if (is_user_key_) {
       stripped_key.remove_suffix(ts_sz_);
-    } else {
+    }
+    else {
       StripTimestampFromInternalKey(key_buf, key, ts_sz_);
       stripped_key = *key_buf;
     }
   }
+  // 直接返回了 key
   return stripped_key;
 }
 }  // namespace ROCKSDB_NAMESPACE

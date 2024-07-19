@@ -45,6 +45,9 @@
 #include "util/work_queue.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+  WorkQueue<DPAThreads_Flush*> DPAThreads_Flush_pool;
+
   std::chrono::milliseconds meta_send_time_sum(0);
   int Build_Table_num = 0;
 
@@ -452,18 +455,6 @@ namespace ROCKSDB_NAMESPACE {
     return s;
   }
 
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  /**********************************************************************************************************************/
-  // /**********************************************************************************************************************/
-
   const uint64_t parallel_threads = 4;
 
   class NewMemTable {
@@ -642,8 +633,9 @@ namespace ROCKSDB_NAMESPACE {
 
 
   void BuildTable_new(
-      
-      uintptr_t Node_head,std::vector<uint64_t> Node_heads, uint64_t offset, uint64_t num_entries,
+      uintptr_t Node_head, std::vector<uint64_t> Node_heads,
+      const params_memcpy_t& params, uint64_t bufarr_handle,
+      uint64_t offset, uint64_t num_entries,
       FileMetaData* meta,
       uint64_t new_versions_NewFileNumber,
 
@@ -667,8 +659,18 @@ namespace ROCKSDB_NAMESPACE {
       uint64_t* file_size,
       SequenceNumber* smallest_seqno,  // The smallest seqno in this file
       SequenceNumber* largest_seqno
-
   ) {
+    printf("Nodehead:%lx, Nodeheads:%lx\n", Node_head, Node_heads[0]);
+    if (bufarr_handle) {
+      // 新路径
+      DPAThreads_Flush* dpathreads;
+      DPAThreads_Flush_pool.pop(dpathreads);
+      printf("builder.cc:bufarr_handle:%lx\n", bufarr_handle);
+      dpathreads->set_params(params, bufarr_handle, Node_heads);
+      dpathreads->trigger_all();
+      dpathreads->wait_all();
+      DPAThreads_Flush_pool.push(dpathreads);
+    }
     ImmutableDBOptions db_options;
     Env::IOPriority io_priority;
     std::vector<SequenceNumber> snapshots;
@@ -688,7 +690,7 @@ namespace ROCKSDB_NAMESPACE {
     std::string tboptions_db_session_id =
       "tboptions->db_session_id";  // tboptions->db_session_id
     CompressionOptions compression_opts;
-    compression_opts.parallel_threads = 10;
+    compression_opts.parallel_threads = 8;
     std::vector<std::unique_ptr<IntTblPropCollectorFactory>> int_tbl_prop_collector_factories;
     TableBuilderOptions tboptions(ioptions, tboptions_moptions,
                                   internal_comparatortboptions, &int_tbl_prop_collector_factories,
@@ -707,19 +709,6 @@ namespace ROCKSDB_NAMESPACE {
 
     NewMemTable new_m(Node_head, offset, offset, cfd_internal_comparator);
     InternalIterator* iter = NewIterator(&new_m, ro, &arena, cfd_internal_comparator);
-
-    /*请求处理过程*/
-    // assert((tboptions_column_family_id == kUnknownColumnFamily) == tboptions_column_family_name.empty());
-
-    // Reports the IOStats for flush for every following bytes.
-    // const size_t kReportFlushIOStatsEvery = 1048576;  // 每隔一定字节数报告刷新IO统计信息
-
-    // OutputValidator类用于验证插入到SST文件中的键值对是否符合规范。
-    // 通过调用OutputValidator::Add()方法传入文件的每个键值对，可以验证键的顺序，并可选择计算键和值的哈希值。
-    // OutputValidator output_validator(
-    //     internal_comparatortboptions,
-    //     tboptions_moptions.check_flush_compaction_key_order,
-    //     paranoid_file_checks);
 
     Status s;
     iter->SeekToFirst();
@@ -779,26 +768,26 @@ namespace ROCKSDB_NAMESPACE {
 
       const std::atomic<bool> kManualCompactionCanceledFalse{ false };
 
-      CompactionIterator c_iter(
-          iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
-          earliest_write_conflict_snapshot, job_snapshot, nullptr, env,
-          ShouldReportDetailedTime(env, ioptions.stats),
-          true /* internal key corruption is not ok */,
-          range_del_agg.get(),
-          nullptr,
-          // blob_file_builder.get(),
-          ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
-          /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
-          /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-          /*shutting_down=*/nullptr, db_options.info_log, nullptr);
+      // CompactionIterator c_iter(
+      //     iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
+      //     earliest_write_conflict_snapshot, job_snapshot, nullptr, env,
+      //     ShouldReportDetailedTime(env, ioptions.stats),
+      //     true /* internal key corruption is not ok */,
+      //     range_del_agg.get(),
+      //     nullptr,
+      //     // blob_file_builder.get(),
+      //     ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
+      //     /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+      //     /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
+      //     /*shutting_down=*/nullptr, db_options.info_log, nullptr);
 
       // // parameters needed for parallel iter
       auto a_point = std::chrono::high_resolution_clock::now();
       // std::vector<uint64_t> Node_heads;
       // Node_heads.push_back(Node_head);
       // uint64_t iter_nums = 0;
-      // uint64_t y = num_entries / 50;
-      // uint64_t x = (num_entries - 28 * y) / parallel_threads;
+      // uint64_t y = num_entries / 20;
+      // uint64_t x = (num_entries - 6 * y) / parallel_threads;
       // uint64_t times = parallel_threads - 1;
       // int factor = 0;
       // for (;iter->Valid();iter->Next()) {
@@ -811,8 +800,20 @@ namespace ROCKSDB_NAMESPACE {
       //   if (times == 0) break;
       //   iter_nums++;
       // }
-      // // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
+      // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu, iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times, iter_nums);
       // Node_heads.push_back(0);
+
+
+
+      // if (bufarr_handle) {
+      //   // 新路径
+      //   DPAThreads_Flush* dpathreads;
+      //   DPAThreads_Flush_pool.pop(dpathreads);
+      //   dpathreads->set_params(params, bufarr_handle, Node_heads);
+      //   dpathreads->trigger_all();
+      //   dpathreads->wait_all();
+      //   DPAThreads_Flush_pool.push(dpathreads);
+      // } 
 
 
       std::vector<std::thread> flush_thread_pool;
@@ -860,7 +861,7 @@ namespace ROCKSDB_NAMESPACE {
       //   //   printf("从这里退出循环%lu\n", __LINE__);
       //   //   break;
       //   // }
-      //   builder->Add(key, value);
+        // builder->Add(key, value);
 
       //   s = meta->UpdateBoundaries(key, value, ikey.sequence, ikey.type);
       //   if (!s.ok()) {
@@ -911,6 +912,7 @@ namespace ROCKSDB_NAMESPACE {
       if (*num_input_entries != num_entries) {
         printf("nums error!\n");
       }
+      printf("num_entries:%lu\n", num_entries);
       // *num_input_entries = c_iter.num_input_entry_scanned();
       if (!s.ok() || empty) {
         builder->Abandon();
@@ -936,23 +938,6 @@ namespace ROCKSDB_NAMESPACE {
         meta->tail_size = builder->GetTailSize();
         meta->marked_for_compaction = builder->NeedCompact();
         assert(DPU_fd.GetFileSize() > 0);
-        // tp = builder->GetTableProperties();
-        // const CompactionIterationStats& ci_stats = c_iters[0]->iter_stats();
-        // const CompactionIterationStats& ci_stats = c_iter.iter_stats();
-        // uint64_t total_payload_bytes =
-        //   ci_stats.total_input_raw_key_bytes +
-        //   ci_stats.total_input_raw_value_bytes;
-        // uint64_t total_payload_bytes_written =
-        //   (tp.raw_key_size + tp.raw_value_size);
-        // if (total_payload_bytes_written <= total_payload_bytes) {
-        //   *memtable_payload_bytes = total_payload_bytes;
-        //   *memtable_garbage_bytes =
-        //     total_payload_bytes - total_payload_bytes_written;
-        // }
-        // else {
-        //   memtable_payload_bytes = 0;
-        //   memtable_garbage_bytes = 0;
-        // }
       }
       delete builder;
       TEST_SYNC_POINT("BuildTable:BeforeSyncTable");
@@ -1022,5 +1007,13 @@ namespace ROCKSDB_NAMESPACE {
     *smallest_seqno = DPU_fd.smallest_seqno;
     *largest_seqno = DPU_fd.largest_seqno;
     return;
+  }
+
+  void BuildTable_new_init(uint64_t task_threads, uint64_t dpa_threads,
+                            const params_memcpy_t& params) {
+    DPAThreads_Flush_pool.setMaxSize(task_threads);
+    for (uint64_t i = 0;i < task_threads;++i) {
+      DPAThreads_Flush_pool.push(new DPAThreads_Flush(dpa_threads, params));
+    }
   }
 }  // namespace ROCKSDB_NAMESPACE

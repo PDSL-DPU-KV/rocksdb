@@ -1163,11 +1163,7 @@ namespace ROCKSDB_NAMESPACE {
       if (should_flush) {
         assert(!r->data_block_parallel[index]->empty());
         r->first_key_in_next_block_parallel[index] = &key;
-        // fprintf(stderr, "into flush\n");
-        // fflush(stderr);
-        // printf("before flush\n");
         Flush_parallel(index);
-        // printf("after flush\n");
         if (ok() && r->state == Rep::State::kUnbuffered) {
           // 默认只支持 IsParallelCompression 模式
           r->pc_rep->curr_block_keys_parallel[index]->Clear();
@@ -1183,8 +1179,6 @@ namespace ROCKSDB_NAMESPACE {
 
     if (r->state == Rep::State::kUnbuffered) {
       // 默认只支持 IsParallelCompression 模式
-      // fprintf(stderr, "line:%d, keyaddr:%lx\n", __LINE__, key.data());
-      // fflush(stderr);
       r->pc_rep->curr_block_keys_parallel[index]->PushBack(key);
     }
     else {
@@ -1195,15 +1189,13 @@ namespace ROCKSDB_NAMESPACE {
     }
 
     r->data_block_parallel[index]->AddWithLastKey(key, value, r->last_key_parallel[index]);
-    // fprintf(stderr, "last_key:%lx\n", key.data());
-    // fflush(stderr);
     r->last_key_parallel[index].assign(key.data(), key.size());
 
     r->props_parallel[index].num_entries++;
     r->props_parallel[index].raw_key_size += key.size();
-    if (!r->persist_user_defined_timestamps) { //默认不会进入
-      r->props_parallel[index].raw_key_size -= r->ts_sz;
-    }
+    // if (!r->persist_user_defined_timestamps) { //默认不会进入
+    //   r->props_parallel[index].raw_key_size -= r->ts_sz;
+    // }
     r->props_parallel[index].raw_value_size += value.size();
 
     NotifyCollectTableCollectorsOnAdd(key, value, r->get_offset(),

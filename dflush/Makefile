@@ -65,6 +65,9 @@ endef
 
 $(foreach e,$(KERNEL_NAMES),$(eval $(call KERNEL_RULE,$(e))))
 
+$(BUILD_DIR)/%.o: %.c* $(HOST_INCLUDES)
+	$(CXX) -c -o $@ $< $(CFLAGS)
+
 $(BUILD_DIR)/%.dpa.o: %.c $(KERNEL_INCLUDES)
 	dpacc -c -o $@ $< $(DEVCC_CFLAGS)
 

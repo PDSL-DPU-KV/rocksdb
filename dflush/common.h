@@ -32,8 +32,8 @@
 
 constexpr const inline char* ibdev_name = "mlx5_1";
 
-inline static doca_dev* dev;
-inline static doca_dpa* dpa;
+extern doca_dev* dev;
+extern doca_dpa* dpa;
 
 inline void attach_device(doca_dpa_app* app) {
     doca_devinfo** dev_list;
@@ -73,4 +73,8 @@ inline void attach_device(doca_dpa_app* app) {
 inline void detach_device() {
     doca_check(doca_dpa_destroy(dpa));
     doca_check(doca_dev_close(dev));
+}
+
+static uintptr_t host2dev(uintptr_t host_addr) {
+    return host_addr | (1ULL << 63);
 }

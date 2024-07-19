@@ -100,6 +100,8 @@ namespace ROCKSDB_NAMESPACE {
 #endif
 
   Env* FLAGS_env = nullptr;
+
+#ifdef DFLUSH
   doca_dev* dev;
   doca_dpa* dpa;
   std::mutex dpa_mut;
@@ -154,6 +156,7 @@ namespace ROCKSDB_NAMESPACE {
     free((void*)ptr);
     doca_check(doca_mmap_destroy(mmap));
   }
+#endif
 
   namespace {
 
@@ -521,7 +524,8 @@ namespace ROCKSDB_NAMESPACE {
           result = free_chunks_.front();
           free_chunks_.pop();
           printf("getaddr:%lx\n", (uintptr_t)result);
-        } else {
+        }
+        else {
           printf("free_chunks is empty!\n");
           std::abort();
         }
@@ -592,7 +596,7 @@ namespace ROCKSDB_NAMESPACE {
       size_t size;
       doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
       mmap_export_desc = std::string((const char*)addr, size);
-      uint64_t mt_bytes = 140*(1U<<20);
+      uint64_t mt_bytes = 140 * (1U << 20);
       for (int i = 0; i < 20; ++i) {
         free_chunks_.push(mt_buf + i * mt_bytes);
       }

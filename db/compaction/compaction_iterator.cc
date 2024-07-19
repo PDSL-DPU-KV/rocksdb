@@ -476,8 +476,6 @@ namespace ROCKSDB_NAMESPACE {
     at_next_ = false;
     validity_info_.Invalidate();
 
-    int nums = 0;
-
     while (!Valid() && input_.Valid() && !IsPausingManualCompaction() &&
            !IsShuttingDown()) {
       // printf("into there %d, nums:%d\n", __LINE__, nums);

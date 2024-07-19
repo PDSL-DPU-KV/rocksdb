@@ -1086,7 +1086,7 @@ namespace ROCKSDB_NAMESPACE {
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(10086);
-    if (inet_pton(AF_INET, "192.168.2.20", &serv_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, "192.168.2.21", &serv_addr.sin_addr) <= 0) {
       printf("\nInvalid address/ Address not supported \n");
       return -1;
     }
@@ -1101,18 +1101,11 @@ namespace ROCKSDB_NAMESPACE {
 
   Status FlushJob::WriteLevel0Table() {
 #ifdef DFLUSH
-    printf("------------------------------------------------------------------\n");
-    printf("------------------------------------------------------------------\n");
-    MemTable* tmp = mems_[0];
-    tmp->get_table_()->get_skip_list().PrintNodeCount();
-    auto TrisectionPoint_1 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 1);
-    auto TrisectionPoint_2 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 2);
-    auto TrisectionPoint_3 = tmp->get_table_()->get_skip_list().FindQuatilenPoint(4, 3);
-    printf("------------------------------------------------------------------\n");
-    printf("------------------------------------------------------------------\n");
     Status s;
     for (uint64_t index = 0;index < mems_.size();index++) {
       MemTable* m = mems_[index];
+      m->get_table_()->get_skip_list().PrintNodeCount();
+      std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list().FindPoints(4, 4);
       if (index > 0) {
         edit_ = m->GetEdits();
         edit_->SetPrevLogNumber(0);
@@ -1253,14 +1246,14 @@ namespace ROCKSDB_NAMESPACE {
           uint64_t total_size = 0;
 
           // TrisectionPoint
-          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_1;
+          *(uintptr_t*)ptr = (uintptr_t)startpoints[0];
           ptr += sizeof(uintptr_t);
-          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_2;
+          *(uintptr_t*)ptr = (uintptr_t)startpoints[1];
           ptr += sizeof(uintptr_t);
-          *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_3;
+          *(uintptr_t*)ptr = (uintptr_t)startpoints[2];
           ptr += sizeof(uintptr_t);
-          total_size += 3*sizeof(uintptr_t);
-          printf("TrisectionPoint: %lu %lu %lu\n", TrisectionPoint_1,TrisectionPoint_2,TrisectionPoint_3);
+          total_size += 3 * sizeof(uintptr_t);
+          printf("TrisectionPoint: %lu %lu %lu\n", startpoints[0], startpoints[1], startpoints[2]);
 
           // mems
           *(uint64_t*)ptr = total_num_entries;
@@ -1588,7 +1581,7 @@ namespace ROCKSDB_NAMESPACE {
       // Used for testing:
       uint64_t mems_size = mems_.size();
       if (mems_size != 1) {
-        fprintf(stderr,"mems_size:%d\n",mems_size);
+        fprintf(stderr, "mems_size:%d\n", mems_size);
       }
       (void)mems_size;  // avoids unused variable error when
       // TEST_SYNC_POINT_CALLBACK not used.
