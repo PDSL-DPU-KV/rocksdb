@@ -1060,7 +1060,7 @@ int ConnectToServer() {
   struct sockaddr_in serv_addr;
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(10086);
-  if (inet_pton(AF_INET, "192.168.2.20", &serv_addr.sin_addr) <= 0) {
+  if (inet_pton(AF_INET, "192.168.2.21", &serv_addr.sin_addr) <= 0) {
     printf("\nInvalid address/ Address not supported \n");
     return -1;
   }
@@ -1075,25 +1075,18 @@ int ConnectToServer() {
 
 Status FlushJob::WriteLevel0Table() {
 #ifdef DFLUSH
-  printf(
-      "------------------------------------------------------------------\n");
-  printf(
-      "------------------------------------------------------------------\n");
-  MemTable* tmp = mems_[0];
-  tmp->get_table_()->get_skip_list()->PrintNodeCount();
-  auto TrisectionPoint_1 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1);
-  auto TrisectionPoint_2 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2);
-  auto TrisectionPoint_3 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3);
-  printf(
-      "------------------------------------------------------------------\n");
-  printf(
-      "------------------------------------------------------------------\n");
   Status s;
   for (uint64_t index = 0; index < mems_.size(); index++) {
     MemTable* m = mems_[index];
+    printf("------------------------------------------------------------------\n");
+    printf("------------------------------------------------------------------\n");
+    m->get_table_()->get_skip_list()->PrintNodeCount();
+    // 寻找第四层跳表的三个节点，免得以后多线程写很多个函数来找
+    std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list()->FindPoints(4, 4);
+    printf(
+        "------------------------------------------------------------------\n");
+    printf(
+        "------------------------------------------------------------------\n");
     if (index > 0) {
       edit_ = m->GetEdits();
       edit_->SetPrevLogNumber(0);
@@ -1235,15 +1228,15 @@ Status FlushJob::WriteLevel0Table() {
         uint64_t total_size = 0;
 
         // TrisectionPoint
-        *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_1;
+        *(uintptr_t*)ptr = (uintptr_t)startpoints[0];
         ptr += sizeof(uintptr_t);
-        *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_2;
+        *(uintptr_t*)ptr = (uintptr_t)startpoints[1];
         ptr += sizeof(uintptr_t);
-        *(uintptr_t*)ptr = (uintptr_t)TrisectionPoint_3;
+        *(uintptr_t*)ptr = (uintptr_t)startpoints[2];
         ptr += sizeof(uintptr_t);
         total_size += 3 * sizeof(uintptr_t);
-        printf("TrisectionPoint: %p %p %p\n", TrisectionPoint_1,
-               TrisectionPoint_2, TrisectionPoint_3);
+        printf("TrisectionPoint: %lx %lx %lx\n", startpoints[0],
+               startpoints[1], startpoints[2]);
 
         // mems
         *(uint64_t*)ptr = total_num_entries;

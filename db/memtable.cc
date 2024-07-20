@@ -703,7 +703,7 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
   char* buf = nullptr;
   std::unique_ptr<MemTableRep>& table =
       type == kTypeRangeDeletion ? range_del_table_ : table_;
-  KeyHandle handle = table->Allocate(encoded_len, &buf);
+  KeyHandle handle = table->Allocate(encoded_len + VarintLength(0) + VarintLength(internal_key_size) + VarintLength(val_size), &buf);
 
   char* p = EncodeVarint32(buf, internal_key_size);
   memcpy(p, key.data(), key_size);
@@ -716,6 +716,12 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
   memcpy(p, value.data(), val_size);
   assert((unsigned)(p + val_size - buf + moptions_.protection_bytes_per_key) ==
          (unsigned)encoded_len);
+
+  // add | shared | nonshared(key_size) | val_size | after value
+  p += val_size;
+  p = EncodeVarint32(p, 0);
+  p = EncodeVarint32(p, VarintLength(internal_key_size));
+  p = EncodeVarint32(p, VarintLength(val_size));
 
   UpdateEntryChecksum(kv_prot_info, key, value, type, s,
                       buf + encoded_len - moptions_.protection_bytes_per_key);

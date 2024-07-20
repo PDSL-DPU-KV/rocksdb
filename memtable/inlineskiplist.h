@@ -149,6 +149,7 @@ class InlineSkipList {
   int LevelNodeCount(int level);
   Node* FindTrisectionPoint(int level, int num);
   Node* FindQuatilenPoint(int level, int num);
+  std::vector<uintptr_t> FindPoints(int level, int num);
   void PrintNodeCount();
   // Iteration over the contents of a skip list
   class Iterator {
@@ -1096,7 +1097,6 @@ typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuati
   for (int i = 0; i < x * num + num*(num-1)*y/2;i++) {
     temp_node_ = temp_node_->Next(level);
   }
-  temp_node_ = temp_node_->Next(0);
   return temp_node_;
 }
 
@@ -1106,4 +1106,25 @@ void InlineSkipList<Comparator>::PrintNodeCount() {
     printf("level: %d,node num: %d\n",i,LevelNodeCount(i));
   }
 }
+
+template <class Comparator>
+std::vector<uintptr_t> InlineSkipList<Comparator>::FindPoints(int level, int num) {
+  int node_count = LevelNodeCount(level);
+  Node* temp_node_ = this->head_;
+  std::vector<uintptr_t> result;
+  int times = num - 1;
+  int counter = 0;
+  int counter_const = node_count / num;
+  while (times) {
+    temp_node_ = temp_node_->Next(level);
+    counter++;
+    if (counter == counter_const) {
+      counter = 0;
+      result.push_back((uintptr_t)temp_node_);
+      times--;
+    }
+  }
+  return result;
+}
+
 }  // namespace ROCKSDB_NAMESPACE
