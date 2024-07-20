@@ -198,7 +198,6 @@ Status BuildTable(
                   blob_creation_reason, &blob_file_paths, blob_file_additions)
             : nullptr);
 
-    auto a_point = std::chrono::high_resolution_clock::now();
     const std::atomic<bool> kManualCompactionCanceledFalse{false};
     CompactionIterator c_iter(
         iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
@@ -236,19 +235,6 @@ Status BuildTable(
             ThreadStatus::FLUSH_BYTES_WRITTEN, IOSTATS(bytes_written));
       }
     }
-    auto b_point = std::chrono::high_resolution_clock::now();
-    uint64_t buildtable_time =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
-            .count();
-    printf(
-        "iter time:%lu, compress time: %lu, write time: %lu, checksum time: "
-        "%lu\n",
-        buildtable_time / 1000 / 1000, compress_time / 1000 / 1000,
-        write_time / 1000 / 1000, checksum_time / 1000 / 1000);
-    compress_time = 0;
-    write_time = 0;
-    checksum_time = 0;
-
     if (!s.ok()) {
       c_iter.status().PermitUncheckedError();
     } else if (!c_iter.status().ok()) {
