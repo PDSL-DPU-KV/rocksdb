@@ -687,7 +687,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
   std::string tboptions_db_session_id =
       "tboptions->db_session_id";  // tboptions->db_session_id
   CompressionOptions compression_opts;
-  compression_opts.parallel_threads = parallel_threads;
+  compression_opts.parallel_threads = 1;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
   TableBuilderOptions tboptions(
@@ -771,6 +771,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
     const std::atomic<bool> kManualCompactionCanceledFalse{false};
 
     // 3.2 use iterator to build table
+    auto a = std::chrono::high_resolution_clock::now();
     if (!use_optimized) {
       // native build table
       CompactionIterator c_iter(
@@ -860,6 +861,17 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
         delete c_iters[i];
       }
     }
+    auto b = std::chrono::high_resolution_clock::now();
+    printf(
+        "iter time:%lu, compress time: %lu, write time: %lu, checksum time: "
+        "%lu\n",
+        std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() /
+            1000 / 1000,
+        compress_time / 1000 / 1000, write_time / 1000 / 1000,
+        checksum_time / 1000 / 1000);
+    compress_time = 0;
+    write_time = 0;
+    checksum_time = 0;
 
     // 3.3 sync and close writable file
     const bool empty = builder->IsEmpty();
@@ -923,8 +935,6 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
   }
 
   // 4. set result that will be return to host
-  printf("send back to host begin\n");
-  // Check for input iterator errors
   if (!iter->status().ok()) {
     s = iter->status();
   }

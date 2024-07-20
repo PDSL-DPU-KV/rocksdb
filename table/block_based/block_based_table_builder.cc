@@ -13,6 +13,7 @@
 #include <stdio.h>
 
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <map>
 #include <memory>
@@ -60,8 +61,9 @@ namespace ROCKSDB_NAMESPACE {
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;
 
-double blocktime, compresstime, iotime;
-uint64_t c_iter_nexttime;
+uint64_t compress_time = 0;
+uint64_t write_time = 0;
+uint64_t checksum_time = 0;
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
 namespace {
@@ -606,6 +608,8 @@ struct BlockBasedTableBuilder::Rep {
       ROCKS_LOG_INFO(ioptions.logger, "db_host_id property will not be set");
     }
 
+    // todo(optimize)
+    auto a = std::chrono::high_resolution_clock::now();
     props_parallel.resize(compression_opts.parallel_threads);
     data_block_parallel.resize(compression_opts.parallel_threads);
     last_key_parallel.resize(compression_opts.parallel_threads);
@@ -640,6 +644,10 @@ struct BlockBasedTableBuilder::Rep {
           table_options.flush_block_policy_factory->NewFlushBlockPolicy(
               table_options, *data_block_parallel[i]);
     }
+    auto b = std::chrono::high_resolution_clock::now();
+    printf("Rep init time: %lu\n",
+           std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() /
+               1000 / 1000);
   }
 
   Rep(const Rep&) = delete;
@@ -875,6 +883,8 @@ struct BlockBasedTableBuilder::ParallelCompressionRep {
         compress_queue(parallel_threads),
         write_queue(parallel_threads),
         first_block_processed(false) {
+    // todo(optimize)
+    auto a = std::chrono::high_resolution_clock::now();
     block_rep_pool.setMaxSize(30000);
     compress_queue.setMaxSize(30000);
     block_rep_buf.resize(30000);
@@ -909,6 +919,10 @@ struct BlockBasedTableBuilder::ParallelCompressionRep {
       curr_block_keys_parallel.push_back(std::make_unique<Keys>());
       block_rep_buf_parallel.push_back(std::vector<BlockRep*>());
     }
+    auto b = std::chrono::high_resolution_clock::now();
+    printf("Compression Rep init time: %lu\n",
+           std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() /
+               1000 / 1000);
   }
 
   ~ParallelCompressionRep() { block_rep_pool.finish(); }
@@ -955,6 +969,7 @@ struct BlockBasedTableBuilder::ParallelCompressionRep {
     return block_rep;
   }
 
+  // todo(optimize)
   void EmitBlock_other(uint64_t index, uint64_t offset) {
     size_t size = block_rep_buf_parallel[index].size();
     for (uint64_t i = 0; i < size; ++i) {
@@ -1358,17 +1373,32 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& uncompressed_block_data,
   CompressionType type;
   Status compress_status;
   bool is_data_block = block_type == BlockType::kData;
+  auto a = std::chrono::high_resolution_clock::now();
   CompressAndVerifyBlock(uncompressed_block_data, is_data_block,
                          *(r->compression_ctxs[0]), r->verify_ctxs[0].get(),
                          &(r->compressed_output), &(block_contents), &type,
                          &compress_status);
+  auto b = std::chrono::high_resolution_clock::now();
+  compress_time +=
+      std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
+  // printf("compress time: %lu\n",
+  //        std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count()
+  //        /
+  //            1000 / 1000);
   r->SetStatus(compress_status);
   if (!ok()) {
     return;
   }
 
+  auto a2 = std::chrono::high_resolution_clock::now();
   WriteMaybeCompressedBlock(block_contents, type, handle, block_type,
                             &uncompressed_block_data);
+  auto b2 = std::chrono::high_resolution_clock::now();
+  write_time +=
+      std::chrono::duration_cast<std::chrono::nanoseconds>(b2 - a2).count();
+  // printf("write time: %lu\n",
+  //        std::chrono::duration_cast<std::chrono::nanoseconds>(b2 -
+  //        a2).count());
   r->compressed_output.clear();
   if (is_data_block) {
     r->props.data_size = r->get_offset();
@@ -1379,6 +1409,7 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& uncompressed_block_data,
 void BlockBasedTableBuilder::BGWorkCompression(
     const CompressionContext& compression_ctx,
     UncompressionContext* verify_ctx) {
+  pthread_setname_np(pthread_self(), "BGWorkCompress");
   ParallelCompressionRep::BlockRep* block_rep = nullptr;
   while (rep_->pc_rep->compress_queue.pop(block_rep)) {
     assert(block_rep != nullptr);
@@ -1546,11 +1577,15 @@ void BlockBasedTableBuilder::WriteMaybeCompressedBlock(
     }
   }
 
+  auto a = std::chrono::high_resolution_clock::now();
   std::array<char, kBlockTrailerSize> trailer;
   trailer[0] = comp_type;
   uint32_t checksum = ComputeBuiltinChecksumWithLastByte(
       r->table_options.checksum, block_contents.data(), block_contents.size(),
       /*last_byte*/ comp_type);
+  auto b = std::chrono::high_resolution_clock::now();
+  checksum_time +=
+      std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
 
   if (block_type == BlockType::kFilter) {
     Status s = r->filter_builder->MaybePostVerifyFilter(block_contents);
@@ -1622,6 +1657,7 @@ void BlockBasedTableBuilder::WriteMaybeCompressedBlock(
 }
 
 void BlockBasedTableBuilder::BGWorkWriteMaybeCompressedBlock() {
+  pthread_setname_np(pthread_self(), "BGWorkWrite");
   Rep* r = rep_;
   ParallelCompressionRep::BlockRepSlot* slot = nullptr;
   ParallelCompressionRep::BlockRep* block_rep = nullptr;
