@@ -662,7 +662,9 @@ void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
          index, iter_time, flush_other_time, wait_time);
 }
 
-void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
+void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
+                    bool use_optimized) {
+  // 1. initialize options for building table
   ImmutableDBOptions db_options;
   Env::IOPriority io_priority;
   std::vector<SequenceNumber> snapshots;
@@ -670,7 +672,6 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
   ReadOptions ro;
   ro.total_order_seek = true;
   ro.io_activity = Env::IOActivity::kFlush;
-  // tboptions
   MutableCFOptions tboptions_moptions;  // = tboptions->moptions;
   ImmutableOptions ioptions;            //= tboptions->ioptions;
   ioptions.cf_paths = req->tboptions_ioptions_cf_paths;
@@ -686,7 +687,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
   std::string tboptions_db_session_id =
       "tboptions->db_session_id";  // tboptions->db_session_id
   CompressionOptions compression_opts;
-  compression_opts.parallel_threads = 10;
+  compression_opts.parallel_threads = parallel_threads;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
   TableBuilderOptions tboptions(
@@ -694,37 +695,20 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
       &int_tbl_prop_collector_factories, kSnappyCompression, compression_opts,
       tboptions_column_family_id, tboptions_column_family_name, 0, false,
       TableFileCreationReason::kMisc, 0, 0, "", "", 0, 0);
-  // kSnappyCompression
   InternalKeyComparator cfd_internal_comparator;
   uint64_t old_versions_NewFileNumber;
-  EventLogger event_logger(
-      db_options.info_log.get());  // event_logger_   事件记录器
-  IOStatus io_status;              //&io_s  IO操作的状态
+  EventLogger event_logger(db_options.info_log.get());
+  IOStatus io_status;
   Env::WriteLifeTimeHint write_hint = Env::WLTH_MEDIUM;
-
   FileDescriptor DPU_fd = FileDescriptor(req->new_versions_NewFileNumber, 0, 0);
 
+  // 2. create a new memtable and iterator via copied memory
   Arena arena;
-
   NewMemTable new_m(req->Node_head, offset, offset, cfd_internal_comparator);
   InternalIterator* iter =
       NewIterator(&new_m, ro, &arena, cfd_internal_comparator);
 
-  /*请求处理过程*/
-  // assert((tboptions_column_family_id == kUnknownColumnFamily) ==
-  // tboptions_column_family_name.empty());
-
-  // Reports the IOStats for flush for every following bytes.
-  // const size_t kReportFlushIOStatsEvery = 1048576;  //
-  // 每隔一定字节数报告刷新IO统计信息
-
-  // OutputValidator类用于验证插入到SST文件中的键值对是否符合规范。
-  // 通过调用OutputValidator::Add()方法传入文件的每个键值对，可以验证键的顺序，并可选择计算键和值的哈希值。
-  // OutputValidator output_validator(
-  //     internal_comparatortboptions,
-  //     tboptions_moptions.check_flush_compaction_key_order,
-  //     paranoid_file_checks);
-
+  // 3. build table via new iterator
   Status s;
   iter->SeekToFirst();
   std::unique_ptr<CompactionRangeDelAggregator> range_del_agg(
@@ -748,6 +732,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
   if (iter->Valid()) {
     TableBuilder* builder;
     std::unique_ptr<WritableFileWriter> file_writer;
+    // 3.1 new writable file and file writer
     {
       std::unique_ptr<FSWritableFile> file;
       IOStatus io_s = NewWritableFile(fs, fname, &file, file_options);
@@ -785,147 +770,99 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
 
     const std::atomic<bool> kManualCompactionCanceledFalse{false};
 
-    // CompactionIterator c_iter(
-    //     iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
-    //     req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
-    //     env, ShouldReportDetailedTime(env, ioptions.stats), true /* internal
-    //     key corruption is not ok */, range_del_agg.get(), nullptr,
-    //     // blob_file_builder.get(),
-    //     ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
-    //     /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
-    //     /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-    //     /*shutting_down=*/nullptr, db_options.info_log, nullptr);
-
-    // // parameters needed for parallel iter
-    auto a_point = std::chrono::high_resolution_clock::now();
-    // std::vector<uint64_t> Node_heads;
-    // Node_heads.push_back(Node_head);
-    // uint64_t iter_nums = 0;
-    // uint64_t y = num_entries / 50;
-    // uint64_t x = (num_entries - 28 * y) / parallel_threads;
-    // uint64_t times = parallel_threads - 1;
-    // int factor = 0;
-    // for (;iter->Valid();iter->Next()) {
-    //   if (iter_nums == x + factor * y) {
-    //     Node_heads.push_back(iter->Node_head());
-    //     iter_nums = 0;
-    //     times--;
-    //     factor++;
-    //   }
-    //   if (times == 0) break;
-    //   iter_nums++;
-    // }
-    // // printf("Node_heads.size:%lu, every_thread_entries:%lu, times:%lu,
-    // iter_nums:%lu\n", Node_heads.size(), every_thread_entries, times,
-    // iter_nums);
-    req->Node_heads.push_back(0);
-
-    std::vector<std::thread> flush_thread_pool;
-    std::vector<InternalIterator*> iters(parallel_threads);
-    std::vector<CompactionIterator*> c_iters;
-    std::vector<Arena> arenas(parallel_threads);
-    std::vector<NewMemTable*> new_mems(parallel_threads);
-    std::atomic<uint64_t> counter(0);
-    for (int i = 0; i < parallel_threads; ++i) {
-      new_mems[i] =
-          new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
-                          offset, cfd_internal_comparator);
-      iters[i] =
-          NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
-      iters[i]->SeekToFirst();
-      c_iters.push_back(new CompactionIterator(
-          iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
+    // 3.2 use iterator to build table
+    if (!use_optimized) {
+      // native build table
+      CompactionIterator c_iter(
+          iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
           req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
-          env, ShouldReportDetailedTime(env, ioptions.stats),
-          true /* internal key corruption is not ok */, range_del_agg.get(),
-          nullptr,
+          env, ShouldReportDetailedTime(env, ioptions.stats), true /*
+          internal key corruption is not ok */
+          ,
+          range_del_agg.get(), nullptr,
           // blob_file_builder.get(),
           ioptions.allow_data_in_errors, ioptions.enforce_single_del_contracts,
           /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
           /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-          /*shutting_down=*/nullptr, db_options.info_log, nullptr));
+          /*shutting_down=*/nullptr, db_options.info_log, nullptr);
+
+      for (c_iter.SeekToFirst(); c_iter.Valid(); c_iter.Next()) {
+        const Slice& key = c_iter.key();
+        const Slice& value = c_iter.value();
+        const ParsedInternalKey& ikey = c_iter.ikey();
+        builder->Add(key, value);
+
+        s = req->file_meta.UpdateBoundaries(key, value, ikey.sequence,
+                                            ikey.type);
+        if (!s.ok()) {
+          break;
+        }
+      }
+
+      if (!s.ok()) {
+        c_iter.status().PermitUncheckedError();
+      } else if (!c_iter.status().ok()) {
+        s = c_iter.status();
+      }
+
+      result->num_input_entries = c_iter.num_input_entry_scanned();
+      if (result->num_input_entries != req->num_entries) {
+        printf("nums error!\n");
+      }
+    } else {
+      // optimized build table
+      std::vector<std::thread> flush_thread_pool;
+      std::vector<InternalIterator*> iters(parallel_threads);
+      std::vector<CompactionIterator*> c_iters;
+      std::vector<Arena> arenas(parallel_threads);
+      std::vector<NewMemTable*> new_mems(parallel_threads);
+      std::atomic<uint64_t> counter(0);
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        new_mems[i] =
+            new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
+                            offset, cfd_internal_comparator);
+        iters[i] =
+            NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
+        iters[i]->SeekToFirst();
+        c_iters.push_back(new CompactionIterator(
+            iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
+            req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
+            env, ShouldReportDetailedTime(env, ioptions.stats),
+            true
+            /* internal key corruption is not ok */,
+            range_del_agg.get(), nullptr,
+            // blob_file_builder.get(),
+            ioptions.allow_data_in_errors,
+            ioptions.enforce_single_del_contracts,
+            /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+            /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
+            /*shutting_down=*/nullptr, db_options.info_log, nullptr));
+      }
+      for (uint64_t i = 0; i < parallel_threads; i++) {
+        flush_thread_pool.emplace_back(iter_parallel, i, builder,
+                                       &req->file_meta, c_iters[i],
+                                       std::ref(counter));
+      }
+      for (uint64_t i = 0; i < flush_thread_pool.size(); i++) {
+        flush_thread_pool[i].join();
+      }
+      builder->merge_prop();
+
+      result->num_input_entries = 0;
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        result->num_input_entries += c_iters[i]->num_input_entry_scanned();
+      }
+      if (result->num_input_entries != req->num_entries) {
+        printf("nums error!\n");
+      }
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        delete new_mems[i];
+        delete c_iters[i];
+      }
     }
-    auto c_point = std::chrono::high_resolution_clock::now();
 
-    for (uint64_t i = 0; i < parallel_threads; i++) {
-      flush_thread_pool.emplace_back(iter_parallel, i, builder, &req->file_meta,
-                                     c_iters[i], std::ref(counter));
-    }
-
-    for (int i = 0; i < flush_thread_pool.size(); i++) {
-      flush_thread_pool[i].join();
-    }
-
-    // uint64_t nums = 0;
-    // int c_iter_num = 0;
-    // auto begin = std::chrono::steady_clock::now();
-    // for (c_iter.SeekToFirst(); c_iter.Valid(); c_iter.Next()) {
-    //   const Slice& key = c_iter.key();
-    //   const Slice& value = c_iter.value();
-    //   const ParsedInternalKey& ikey = c_iter.ikey();
-    //   // 这一段好像没什么用，注释掉也可以跑
-    //   // s = output_validator.Add(key, value);//
-    //   添加一个键到键值序列中，并返回键是否符合规范，例如键是否按顺序排列。
-    //   // if (!s.ok()) {
-    //   //   printf("从这里退出循环%lu\n", __LINE__);
-    //   //   break;
-    //   // }
-    //   builder->Add(key, value);
-
-    //   s = meta->UpdateBoundaries(key, value, ikey.sequence, ikey.type);
-    //   if (!s.ok()) {
-    //     break;
-    //   }
-    //   // auto end2 = std::chrono::steady_clock::now();
-    //   // updatetime += std::chrono::duration<double>(end2 - time0).count();
-    //   // addtime += std::chrono::duration<double>(start - time1).count();
-    //   // getkvtime += std::chrono::duration<double>(time1 - time0).count();
-    //   // TODO(noetzli): Update stats after flush, too.
-    //   // 这个分支好像根本没有进去过，所以我注释掉了
-    //   // if (io_priority == Env::IO_HIGH &&
-    //   //     IOSTATS(bytes_written) >= kReportFlushIOStatsEvery) {
-    //   //   printf("line:%lu\n", __LINE__);
-    //   //   ThreadStatusUtil::SetThreadOperationProperty(
-    //   //       ThreadStatus::FLUSH_BYTES_WRITTEN, IOSTATS(bytes_written));
-    //   // }
-    // }
-    // auto end = std::chrono::steady_clock::now();
-    // double c_iter_time = std::chrono::duration<double>(end - begin).count();
-    // printf("nums:%lu, c_iter_num %d, c_iter_time:%lf\n", nums, c_iter_num,
-    // c_iter_time); printf("nums:%lu, blocktime:%lf, compresstime:%lf,
-    // iotime:%lf, nexttime:%lf, c_iter_nexttime:%lu\n", nums, blocktime,
-    // compresstime, iotime, nexttime, c_iter_nexttime); printf("nums:%lu,
-    // getkeytime:%lu\n", nums++, getkeytime);
-
-    // if (!s.ok()) {
-    //   c_iter.status().PermitUncheckedError();
-    // }
-    // else if (!c_iter.status().ok()) {
-    //   s = c_iter.status();
-    // }
-
-    auto b_point = std::chrono::high_resolution_clock::now();
-    uint64_t iter_time =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
-            .count();
-    uint64_t init_time =
-        std::chrono::duration_cast<std::chrono::milliseconds>(c_point - a_point)
-            .count();
-    printf("iter time:%lu, init_time:%lu\n", iter_time / 1000 / 1000,
-           init_time);
-
-    builder->merge_prop();
-
-    TEST_SYNC_POINT("BuildTable:BeforeFinishBuildTable");
+    // 3.3 sync and close writable file
     const bool empty = builder->IsEmpty();
-    result->num_input_entries = 0;
-    for (uint64_t i = 0; i < parallel_threads; ++i) {
-      result->num_input_entries += c_iters[i]->num_input_entry_scanned();
-    }
-    if (result->num_input_entries != req->num_entries) {
-      printf("nums error!\n");
-    }
-    // *num_input_entries = c_iter.num_input_entry_scanned();
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
@@ -949,31 +886,12 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
       req->file_meta.tail_size = builder->GetTailSize();
       req->file_meta.marked_for_compaction = builder->NeedCompact();
       assert(DPU_fd.GetFileSize() > 0);
-      // tp = builder->GetTableProperties();
-      // const CompactionIterationStats& ci_stats = c_iters[0]->iter_stats();
-      // const CompactionIterationStats& ci_stats = c_iter.iter_stats();
-      // uint64_t total_payload_bytes =
-      //   ci_stats.total_input_raw_key_bytes +
-      //   ci_stats.total_input_raw_value_bytes;
-      // uint64_t total_payload_bytes_written =
-      //   (tp.raw_key_size + tp.raw_value_size);
-      // if (total_payload_bytes_written <= total_payload_bytes) {
-      //   *memtable_payload_bytes = total_payload_bytes;
-      //   *memtable_garbage_bytes =
-      //     total_payload_bytes - total_payload_bytes_written;
-      // }
-      // else {
-      //   memtable_payload_bytes = 0;
-      //   memtable_garbage_bytes = 0;
-      // }
     }
     delete builder;
-    TEST_SYNC_POINT("BuildTable:BeforeSyncTable");
     if (s.ok() && !empty) {
       StopWatch sw(ioptions.clock, ioptions.stats, TABLE_SYNC_MICROS);
       io_status = file_writer->Sync(ioptions.use_fsync);
     }
-    TEST_SYNC_POINT("BuildTable:BeforeCloseTableFile");
     if (s.ok() && io_status.ok() && !empty) {
       io_status = file_writer->Close();
     }
@@ -1000,15 +918,11 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result) {
     if (s.ok()) {
       s = io_status;
     }
-
-    for (int i = 0; i < parallel_threads; ++i) {
-      delete new_mems[i];
-      delete c_iters[i];
-    }
   } else {
     printf("no valid!\n");
   }
-  // 回传 host
+
+  // 4. set result that will be return to host
   printf("send back to host begin\n");
   // Check for input iterator errors
   if (!iter->status().ok()) {

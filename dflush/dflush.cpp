@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -39,13 +40,14 @@ doca_dpa* dpa;
 const uint32_t nthreads_task = 32;
 const uint32_t nthreads_memcpy = 4;
 const bool DPA_MEMCPY = 0;
+const bool use_optimized = 1;
 
 ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
 ROCKSDB_NAMESPACE::WorkQueue<DPAThreads*> DPAThreads_pool;
 
 void run_memcpy_dma(params_memcpy_t params, doca_mmap* dst_m,
                     doca_mmap* src_m) {
-  DMAThread* dt;
+  DMAThread* dt = nullptr;
   DMAThread_pool.pop(dt);
   assert(params.copy_size <= max_dma_buffer_size());
   dt->run(params, dst_m, src_m);
@@ -53,7 +55,7 @@ void run_memcpy_dma(params_memcpy_t params, doca_mmap* dst_m,
 }
 
 void run_memcpy_dpa(const params_memcpy_t& params) {
-  DPAThreads* dt;
+  DPAThreads* dt = nullptr;
   DPAThreads_pool.pop(dt);
   dt->set_params(params);
   dt->trigger_all();
@@ -320,6 +322,7 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   req->Node_heads.push_back(req->TrisectionPoint[0]);
   req->Node_heads.push_back(req->TrisectionPoint[1]);
   req->Node_heads.push_back(req->TrisectionPoint[2]);
+  req->Node_heads.push_back(0);
 
   // meta_
   int meta_size = parse_file_meta(&req->file_meta, ptr);
@@ -481,7 +484,8 @@ void RunJob(int client_fd) {
   char buffer[1024];
   rocksdb::MetaReq req;
   rocksdb::MetaResult result;
-  read(client_fd, buffer, 1024);
+  auto read_size = read(client_fd, buffer, 1024);
+  assert(read_size == 1024);
   DeSerializeReq(buffer, &req);
 
   // copy memtable from host
@@ -528,7 +532,7 @@ void RunJob(int client_fd) {
          req.file_meta.largest.DebugString(true).c_str());
 
   auto a_point = std::chrono::high_resolution_clock::now();
-  rocksdb::BuildTable_new(offset, &req, &result);
+  rocksdb::BuildTable_new(offset, &req, &result, use_optimized);
   auto b_point = std::chrono::high_resolution_clock::now();
   uint64_t buildtable_time =
       std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
@@ -550,7 +554,8 @@ void RunJob(int client_fd) {
   // serialize and return result to host
   char result_buffer[1024];
   auto result_size = SerializeResult(result_buffer, &result);
-  send(client_fd, result_buffer, result_size, 0);
+  auto send_size = send(client_fd, result_buffer, result_size, 0);
+  assert(send_size == result_size);
   free_mem(params.dst, dst_m);
   doca_check(doca_mmap_stop(src_m));
   doca_check(doca_mmap_destroy(src_m));
@@ -610,7 +615,7 @@ int main() {
     auto max_bufs = num_dma_tasks * 2;
     printf("max_bufs: %ld, dev: %p\n", max_bufs, dev);
     DMAThread_pool.setMaxSize(nthreads_task);
-    for (int i = 0; i < nthreads_task; ++i) {
+    for (uint32_t i = 0; i < nthreads_task; ++i) {
       DMAThread_pool.push(new DMAThread(max_bufs, num_dma_tasks));
     }
   }

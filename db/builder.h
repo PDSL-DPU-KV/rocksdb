@@ -114,5 +114,6 @@ extern Status BuildTable(
     uint64_t* memtable_payload_bytes = nullptr,
     uint64_t* memtable_garbage_bytes = nullptr);
 
-void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result);
+void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
+                    bool use_optimized = false);
 }  // namespace ROCKSDB_NAMESPACE
