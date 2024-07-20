@@ -1672,7 +1672,7 @@ Status FlushJob::WriteLevel0Table() {
           job_context_->GetJobSnapshotSequence();
       const ReadOptions read_options(Env::IOActivity::kFlush);
 
-      // auto point_1 = std::chrono::high_resolution_clock::now();
+      auto a = std::chrono::high_resolution_clock::now();
       s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
                      read_options, cfd_->table_cache(), iter.get(),
                      std::move(range_del_iters), &meta_, &blob_file_additions,
@@ -1685,11 +1685,10 @@ Status FlushJob::WriteLevel0Table() {
                      &table_properties_, write_hint, full_history_ts_low,
                      blob_callback_, base_, &num_input_entries,
                      &memtable_payload_bytes, &memtable_garbage_bytes);
-      // auto point_2 = std::chrono::high_resolution_clock::now();
-      // uint64_t buildtable_time =
-      // std::chrono::duration_cast<std::chrono::nanoseconds>(point_2 -
-      // point_1).count(); printf("buildtable_time:%lu\n", buildtable_time /
-      // 1000 / 1000);
+      auto b = std::chrono::high_resolution_clock::now();
+      uint64_t buildtable_time =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
+      printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
 
       // TODO: Cleanup io_status in BuildTable and table builders
       assert(!s.ok() || io_s.ok());
