@@ -1789,16 +1789,18 @@ DEFINE_int64(random_fill_average, 150,
 DEFINE_bool(detailed_running_stats, false,
             "Whether record more detailed information in report agent");
 
-DEFINE_bool(report_csv, false, "Output csv.");
 
-std::string pname = "para.csv";
-std::ofstream outPara(pname, std::ios::app);
-std::string mname = "mem.csv";
-std::ofstream outMem(mname, std::ios::app);
-std::string tname = "throughput.csv";
-std::ofstream outThp(tname, std::ios::app);
-std::string lname = "latency.csv";
-std::ofstream outLat(lname, std::ios::app);
+DEFINE_string(report_csv_report_num, "***", "report_csv_report_num");
+
+DEFINE_bool(report_csv, false, "Output csv.");
+std::string pname;// = "para"+FLAGS_report_csv_report_num+".csv";
+std::ofstream* outPara;//(pname, std::ios::app);
+std::string mname;// = "mem"+FLAGS_report_csv_report_num+".csv";
+std::ofstream* outMem;//(mname, std::ios::app);
+std::string tname;// = "throughput"+FLAGS_report_csv_report_num+".csv";
+std::ofstream* outThp;//(tname, std::ios::app);
+std::string lname;// = "latency"+FLAGS_report_csv_report_num+".csv";
+std::ofstream* outLat;//(lname, std::ios::app);
 
 namespace ROCKSDB_NAMESPACE {
   namespace {
@@ -2352,7 +2354,7 @@ namespace ROCKSDB_NAMESPACE {
       AppendWithSpace(&extra, message_);
       double throughput = (double)done_ / elapsed;
 
-      outPara << FLAGS_threads << "," << FLAGS_max_background_flushes << ","
+      *outPara << FLAGS_threads << "," << FLAGS_max_background_flushes << ","
         << FLAGS_max_write_buffer_number << ","
         << StringToCompressionType(FLAGS_compression_type.c_str()) << ","
         << FLAGS_disable_auto_compactions << "," << FLAGS_unordered_write
@@ -3365,7 +3367,7 @@ namespace ROCKSDB_NAMESPACE {
               total_size += size;
               total_count += count;
             }
-            outMem << (double)total_size / 1024 / 1024 / 1024 << ","
+            *outMem << (double)total_size / 1024 / 1024 / 1024 << ","
               << total_count << std::endl;
             sleep(1);
           }
@@ -4116,8 +4118,16 @@ namespace ROCKSDB_NAMESPACE {
       delete[] arg;
 
       if (FLAGS_report_csv) {
-        uint64_t total_done = FLAGS_num * (n - 1) - 1;
-        std::sort(shared.latencys, shared.latencys + total_done);
+        uint64_t total_done_max = FLAGS_num * (n - 1) - 1;
+        uint64_t total_done=0;
+        for (int temp=0;temp<total_done_max;temp++) {
+          if (shared.latencys[temp] != 0) {
+            total_done++;
+          } else {
+            shared.latencys[temp] =2<<30;
+          }
+        }
+        std::sort(shared.latencys, shared.latencys + total_done_max);
         uint64_t cnt90 = 0.90 * total_done;
         uint64_t cnt99 = 0.99 * total_done;
         uint64_t cnt999 = 0.999 * total_done;
@@ -5861,9 +5871,9 @@ namespace ROCKSDB_NAMESPACE {
           int64_t now_bytes = (value_size_ + key_size_) * now_done;
           double now = (now_time - start_time) * 1e-6;
 
-          outThp.setf(std::ios::fixed);
-          outThp.precision(2);
-          outThp << now << ",s," << (1.0 * ebytes / 1048576.0) / use_time
+          outThp->setf(std::ios::fixed);
+          outThp->precision(2);
+          *outThp << now << ",s," << (1.0 * ebytes / 1048576.0) / use_time
             << ",MB/s," << 1.0 * per_second_done / use_time << ",iops,"
             << "average=," << (1.0 * now_bytes / 1048576.0) / now << ",MB/s,"
             << 1.0 * now_done / now << ",iops" << std::endl;
@@ -5877,9 +5887,9 @@ namespace ROCKSDB_NAMESPACE {
             uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
             uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
 
-            outLat.setf(std::ios::fixed);
-            outLat.precision(2);
-            outLat << now << ",s," << 1.0 * per_second_done / use_time << ",iops,"
+            outLat->setf(std::ios::fixed);
+            outLat->precision(2);
+            *outLat << now << ",s," << 1.0 * per_second_done / use_time << ",iops,"
               << ",p90," << ops_latency[cnt90] << ",p99,"
               << ops_latency[cnt99] << ",p999," << ops_latency[cnt999]
               << ",p9999," << ops_latency[cnt9999] << ",p99999,"
@@ -9527,6 +9537,14 @@ namespace ROCKSDB_NAMESPACE {
       initialized = true;
     }
     ParseCommandLineFlags(&argc, &argv, true);
+    pname = "para"+FLAGS_report_csv_report_num+".csv";
+    outPara = new std::ofstream (pname, std::ios::app);
+    mname = "mem"+FLAGS_report_csv_report_num+".csv";
+    outMem = new std::ofstream(mname, std::ios::app);
+    tname = "throughput"+FLAGS_report_csv_report_num+".csv";
+    outThp = new std::ofstream(tname, std::ios::app);
+    lname = "latency"+FLAGS_report_csv_report_num+".csv";
+    outLat = new std::ofstream(lname, std::ios::app);
     FLAGS_compaction_style_e =
       (ROCKSDB_NAMESPACE::CompactionStyle)FLAGS_compaction_style;
     if (FLAGS_statistics && !FLAGS_statistics_string.empty()) {
@@ -9693,10 +9711,10 @@ namespace ROCKSDB_NAMESPACE {
 
     ROCKSDB_NAMESPACE::Benchmark benchmark;
     benchmark.Run();
-    outPara.close();
-    outMem.close();
-    outThp.close();
-    outLat.close();
+    outPara->close();
+    outMem->close();
+    outThp->close();
+    outLat->close();
 
     if (FLAGS_print_malloc_stats) {
       std::string stats_string;
