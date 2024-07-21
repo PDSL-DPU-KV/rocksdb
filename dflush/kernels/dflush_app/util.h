@@ -73,6 +73,28 @@ static uintptr_t Next_Memtable(uintptr_t current_addr) {
     return host2dev(next);
 }
 
+static struct Slice GetNewFormatKey(uintptr_t addr) {
+    const char* data = (char*)addr + sizeof(uintptr_t);
+    uint32_t key_size = 0, val_size = 0;
+    const char* p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+    const char* q = GetVarint32Ptr(p, p + 5, &val_size);
+    struct Slice result;
+    result.data_ = q;
+    result.size_ = key_size;
+    return result;
+}
+
+static struct Slice GetNewFormatValue(uintptr_t addr) {
+    const char* data = (char*)addr + sizeof(uintptr_t);
+    uint32_t key_size = 0, val_size = 0;
+    const char* p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+    const char* q = GetVarint32Ptr(p, p + 5, &val_size);
+    struct Slice result;
+    result.data_ = q + key_size;
+    result.size_ = val_size;
+    return result;
+}
+
 static struct Slice Key_Memtable(uintptr_t addr) {
     const char* key_data = (char*)addr + sizeof(uintptr_t);
     return GetLengthPrefixedSlice(key_data);

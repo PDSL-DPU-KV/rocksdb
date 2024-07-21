@@ -75,7 +75,8 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->smallest.set_InternalKey(str);
     ptr += n;
     recv_size += n;
-  } else {
+  }
+  else {
     meta->smallest.set_InternalKey(std::string());
   }
 
@@ -88,7 +89,8 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->largest.set_InternalKey(str);
     ptr += n;
     recv_size += n;
-  } else {
+  }
+  else {
     meta->largest.set_InternalKey(std::string());
   }
 
@@ -161,7 +163,8 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->file_checksum = str;
     ptr += n;
     recv_size += n;
-  } else {
+  }
+  else {
     meta->file_checksum = std::string();
   }
 
@@ -174,7 +177,8 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->file_checksum_func_name = str;
     ptr += n;
     recv_size += n;
-  } else {
+  }
+  else {
     meta->file_checksum_func_name = std::string();
   }
 
@@ -352,7 +356,8 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->str_full_history_ts_low = str;
     ptr += n;
-  } else {
+  }
+  else {
     req->str_full_history_ts_low = "";
   }
 
@@ -414,7 +419,8 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->cfd_GetName = str;
     ptr += n;
-  } else {
+  }
+  else {
     req->cfd_GetName = "";
   }
 
@@ -426,7 +432,8 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->dbname = str;
     ptr += n;
-  } else {
+  }
+  else {
     req->dbname = "";
   }
 
@@ -494,18 +501,18 @@ void RunJob(int client_fd) {
   // copy memtable from host
   params_memcpy_t params;
   if (DPA_FLUSH) {
-      params.copy_size = 5 * 1024; // 一个datablock所占有的空间
-      params.region_size = 140 * 1024 * 1024; //总共的空间为140MB
-      params.piece_size = params.region_size / nthreads_flush; // 每个dpa线程占有的空间
-      params.copy_n = params.piece_size / params.copy_size; //每个dpa线程的最大datablock数量
-      req.params.copy_size = 5 * 1024;
-      req.params.region_size = 140 * 1024 * 1024; 
-      req.params.piece_size = req.params.region_size / nthreads_flush; 
-      req.params.copy_n = req.params.piece_size / req.params.copy_size; 
+    params.copy_size = 5 * 1024; // 一个datablock所占有的空间
+    params.region_size = 150 * 1024 * 1024; //总共的空间为140MB
+    params.piece_size = params.region_size / nthreads_flush; // 每个dpa线程占有的空间
+    params.copy_n = params.piece_size / params.copy_size; //每个dpa线程的最大datablock数量
+    req.params.copy_size = 5 * 1024;
+    req.params.region_size = 150 * 1024 * 1024;
+    req.params.piece_size = req.params.region_size / nthreads_flush;
+    req.params.copy_n = req.params.piece_size / req.params.copy_size;
   }
   else {
     params.copy_size = max_dma_buffer_size();  // 单次单线程copy大小为140KB
-    params.region_size = 140 * 1024 * 1024;  // 总共copy大小为140MB
+    params.region_size = 150 * 1024 * 1024;  // 总共copy大小为140MB
     params.piece_size = params.region_size;  // 分给八个线程
     params.copy_n = params.piece_size / params.copy_size;  // 每个线程的copy次数
     params.memcpy_mode = DMA;                              // copy模式
@@ -528,18 +535,18 @@ void RunJob(int client_fd) {
   doca_dpa_dev_buf_arr_t bufarr_handle = 0;
 
   if (DPA_FLUSH) {
-      doca_check(doca_buf_arr_create(1, &bufarr));
-      doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size, start_offset));
-      doca_check(doca_buf_arr_set_target_dpa(bufarr, dpa));
-      doca_check(doca_buf_arr_start(bufarr));
-      doca_check(doca_buf_arr_get_dpa_handle(bufarr, &bufarr_handle));
-      // run_dpa_flush
-      req.params.dst.ptr = params.dst.ptr;
-      printf("params.dst.ptr:%lx\n", params.dst.ptr);
-      DPAThreads_pool.pop(dpathreads);
-      dpathreads->set_params(params, bufarr_handle, req.Node_heads);
-      dpathreads->trigger_all();
-      // run_memcpy_dpa(params); 已弃用
+    doca_check(doca_buf_arr_create(1, &bufarr));
+    doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size, start_offset));
+    doca_check(doca_buf_arr_set_target_dpa(bufarr, dpa));
+    doca_check(doca_buf_arr_start(bufarr));
+    doca_check(doca_buf_arr_get_dpa_handle(bufarr, &bufarr_handle));
+    // run_dpa_flush
+    req.params.dst.ptr = params.dst.ptr;
+    printf("params.dst.ptr:%lx\n", params.dst.ptr);
+    DPAThreads_pool.pop(dpathreads);
+    dpathreads->set_params(params, bufarr_handle, req.Node_heads);
+    dpathreads->trigger_all();
+    // run_memcpy_dpa(params); 已弃用
   }
   else {
     run_memcpy_dma(params, dst_m, src_m);
@@ -555,8 +562,8 @@ void RunJob(int client_fd) {
   rocksdb::BuildTable_new(offset, &req, &result, use_optimized, DPA_FLUSH);
   auto b_point = std::chrono::high_resolution_clock::now();
   uint64_t buildtable_time =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
-          .count();
+    std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
+    .count();
   printf("builder over, buildtable time:%lu\n", buildtable_time / 1000 / 1000);
 
   if (DPA_FLUSH) {
@@ -595,7 +602,7 @@ static int PrepareConn(struct sockaddr_in* server_addr) {
 
   int opt = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
-                 sizeof(opt))) {
+    sizeof(opt))) {
     perror("setsockopt");
     exit(EXIT_FAILURE);
   }
@@ -626,13 +633,13 @@ int main() {
     DPAThreads_pool.setMaxSize(nthreads_task);
     // TODO:产生线程
     for (uint64_t i = 0;i < nthreads_task;++i) {
-        DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
+      DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
     }
   }
   else {
     // DMA COPY
     open_device(&dma_task_is_supported);
-    auto num_dma_tasks = 140 * 1024 * 1024 / max_dma_buffer_size();
+    auto num_dma_tasks = 150 * 1024 * 1024 / max_dma_buffer_size();
     auto max_bufs = num_dma_tasks * 2;
     printf("max_bufs: %ld, dev: %p\n", max_bufs, dev);
     DMAThread_pool.setMaxSize(nthreads_task);
@@ -645,7 +652,7 @@ int main() {
   while (true) {
     socklen_t address_size = sizeof(server_addr);
     auto client_fd =
-        accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
+      accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
     if (client_fd < 0) {
       printf("fail to accept!\n");
       exit(EXIT_FAILURE);
@@ -655,7 +662,8 @@ int main() {
 
   if (DPA_FLUSH) {
     detach_device();
-  } else {
+  }
+  else {
     close_device();
   }
   return 0;

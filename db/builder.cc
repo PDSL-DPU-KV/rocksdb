@@ -487,6 +487,22 @@ class NewMemTable {
   ~NewMemTable() {}
 };
 
+Slice getNewFormatKey(const char* data) {
+  uint32_t key_size = 0, val_size = 0;
+  // data + 1 是为了跳过 shared
+  auto p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+  auto q = GetVarint32Ptr(p, p + 5, &val_size);
+  return Slice(q, key_size);
+}
+
+Slice getNewFormatValue(const char* data) {
+  uint32_t key_size = 0, val_size = 0;
+  // data + 1 是为了跳过 shared
+  auto p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+  auto q = GetVarint32Ptr(p, p + 5, &val_size);
+  return Slice(q + key_size, val_size);
+}
+
 class NewMemTableIterator : public InternalIterator {
  private:
   DynamicBloom* bloom_;
@@ -525,31 +541,12 @@ class NewMemTableIterator : public InternalIterator {
   void Seek(const Slice& k) override { printf("1 该函数尚未实现！\n"); }
   void SeekForPrev(const Slice& k) override { printf("2 该函数尚未实现！\n"); }
   void SeekToFirst() override {
-    // printf("Node_head:%lx, offset:%lx\n", Node_head_, offset_);
     Node_iter_ = Node_head_ + offset_;
-    // printf("SeekToFirst Node_iter_:%lu\n", Node_iter_);
-    // if (*((uintptr_t*)(Node_iter_)) != 0) {
-    //   valid_ = true;
-    // }
-    // else {
-    //   valid_ = false;
-    // }
   }
   void SeekToLast() override { printf("3 该函数尚未实现！\n"); }
   void* Current() override { return this; }
   void Next() override {
-    // static uint64_t time = 0;
-    // auto time0 = std::chrono::high_resolution_clock::now();
     Node_iter_ = *(uintptr_t*)(Node_iter_) + offset_;
-
-    // if (Node_iter_ == offset_) {
-    //   valid_ = false;
-    // }
-    // auto time1 = std::chrono::high_resolution_clock::now();
-    // nexttime += std::chrono::duration<double>(time1 - time0).count();
-    // printf("dram time:%lu\n",
-    // std::chrono::duration_cast<std::chrono::nanoseconds>(time1 -
-    // time0).count());
   }
   bool NextAndGetResult(IterateResult* result) override {
     printf("4 该函数尚未实现！\n");
@@ -561,15 +558,9 @@ class NewMemTableIterator : public InternalIterator {
   }
   Slice key() const override {
     assert(Valid());
-    rocksdb::Slice key = rocksdb::GetLengthPrefixedSlice(
-        (const char*)(Node_iter_ + sizeof(uintptr_t)));
-    // rocksdb::Slice key_and_vallue = rocksdb::GetLengthPrefixedSlice(
+    // rocksdb::Slice key = rocksdb::GetLengthPrefixedSlice(
     //     (const char*)(Node_iter_ + sizeof(uintptr_t)));
-    // rocksdb::GetLengthPrefixedSlice(&key_and_vallue, &key);
-    // auto time1 = std::chrono::high_resolution_clock::now();
-    // getkeytime += std::chrono::duration_cast<std::chrono::nanoseconds>(time1
-    // - time0).count();
-    return key;
+    return getNewFormatKey((const char*)(Node_iter_+sizeof(uintptr_t)));
   }
   Slice user_key() const override {
     printf("6 该函数尚未实现！\n");
@@ -577,13 +568,11 @@ class NewMemTableIterator : public InternalIterator {
   }
   Slice value() const override {
     assert(Valid());
-    rocksdb::Slice key = rocksdb::GetLengthPrefixedSlice(
-        (const char*)(Node_iter_ + sizeof(uintptr_t)));
-    rocksdb::Slice value =
-        rocksdb::GetLengthPrefixedSlice(key.data() + key.size());
-    // rocksdb::GetLengthPrefixedSlice(&key_and_vallue, &key);
-    // rocksdb::GetLengthPrefixedSlice(&key_and_vallue, &value);
-    return value;
+    // rocksdb::Slice key = rocksdb::GetLengthPrefixedSlice(
+    //     (const char*)(Node_iter_ + sizeof(uintptr_t)));
+    // rocksdb::Slice value =
+    //     rocksdb::GetLengthPrefixedSlice(key.data() + key.size());
+    return getNewFormatValue((const char*)(Node_iter_ + sizeof(uintptr_t)));
   }
   Status status() const override { return status_; }
   bool PrepareValue() override {
@@ -905,6 +894,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
       }
     }
     else if (use_dpaflush) {
+      auto a_point = std::chrono::high_resolution_clock::now();
       std::vector<std::thread> dpa_flush_pool;
       std::atomic<uint64_t> counter(0);
       uintptr_t dst_ptr = req->params.dst.ptr;
@@ -919,6 +909,9 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
       }
       builder->merge_prop();
       result->num_input_entries = req->num_entries;
+      auto b_point = std::chrono::high_resolution_clock::now();
+      uint64_t dpaflush_time = std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point).count();
+      printf("\ndpaflush_time:%lu\n\n", dpaflush_time / 1000 / 1000);
     }
     else {
       // native build table

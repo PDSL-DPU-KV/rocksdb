@@ -235,9 +235,11 @@ __dpa_global__ void dpa_flush(uintptr_t ctx_ptr) {
     // 计数用
     uint64_t iter_num = 0;
     uint64_t drop_num = 0;
+    uint64_t add_time = 0, flush_time = 0, props_time = 0;
     while (cur_addr != tail_addr) {
         iter_num++;
-        key = Key_Memtable(cur_addr);
+        // key = Key_Memtable(cur_addr);
+        key = GetNewFormatKey(cur_addr);
         uint8_t drop = 0;
         if (!ParseInternalKey(key, &ikey)) {
             current_user_key.size_ = 0;
@@ -256,8 +258,10 @@ __dpa_global__ void dpa_flush(uintptr_t ctx_ptr) {
             }
         }
         if (!drop) {
-            value = Value_Memtable(key);
+            // value = Value_Memtable(key);
+            value = GetNewFormatValue(cur_addr);
 
+            uint64_t a_point = __dpa_thread_cycles();
             // 执行 add
             if (estimate + key.size_ + value.size_ + 3 * sizeof(uint32_t) > datablock_size) {
                 // 满足一个datablock的条件
@@ -286,21 +290,25 @@ __dpa_global__ void dpa_flush(uintptr_t ctx_ptr) {
 
                 update_dpa_ptr(t->bufarr_handle);
             }
+            uint64_t b_point = __dpa_thread_cycles();
             // 将 key 插入到  Keys 中
-            doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, keys_ptr, t->params.src.handle, dev2host((uintptr_t)key.data_), key.size_, 1);
-            keys_ptr += key.size_;
+            // doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, keys_ptr, t->params.src.handle, dev2host((uintptr_t)key.data_), key.size_, 1);
+            // keys_ptr += key.size_;
             key_nums++;
             // 将 key value插入到 buffer 中
-            uint64_t prefix_length = VarintLength(0) + VarintLength(key.size_) + VarintLength(value.size_);
-            doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)(value.data_ + value.size_)), prefix_length, 1);
-            buffer_ptr += prefix_length;
-            doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)key.data_), key.size_, 1);
-            buffer_ptr += key.size_;
-            doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)value.data_), value.size_, 1);
-            buffer_ptr += value.size_;
+            // uint64_t prefix_length = VarintLength(0) + VarintLength(key.size_) + VarintLength(value.size_);
+            // doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)(value.data_ + value.size_)), prefix_length, 1);
+            // buffer_ptr += prefix_length;
+            // doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)key.data_), key.size_, 1);
+            // buffer_ptr += key.size_;
+            // doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host((uintptr_t)value.data_), value.size_, 1);
+            // buffer_ptr += value.size_;
+            uint64_t copy_size = VarintLength(0) + VarintLength(key.size_) + VarintLength(value.size_) + key.size_ + value.size_;
+            doca_dpa_dev_post_memcpy(t->aops_handle, t->params.dst.handle, buffer_ptr, t->params.src.handle, dev2host(cur_addr + sizeof(uintptr_t)), copy_size, 1);
+            buffer_ptr += copy_size;
 
             // 等待四次memcpy完成
-            while (counter < 4) {
+            while (counter < 1) {
                 int got = doca_dpa_dev_get_completion(t->comp_handle, &e);
                 if (got == 1) {
                     doca_dpa_dev_completion_type_t et = doca_dpa_dev_get_completion_type(e);
@@ -312,9 +320,10 @@ __dpa_global__ void dpa_flush(uintptr_t ctx_ptr) {
                 }
             }
             counter = 0;
+            uint64_t c_point = __dpa_thread_cycles();
 
             // 更新部分数据
-            estimate += prefix_length + key.size_ + value.size_;
+            estimate += copy_size;
             props_num_entries++;
             props_raw_key_size += key.size_;
             props_raw_value_size += value.size_;
@@ -325,10 +334,15 @@ __dpa_global__ void dpa_flush(uintptr_t ctx_ptr) {
             }
             smallest_seqno = smallest_seqno < ikey.sequence ? smallest_seqno : ikey.sequence;
             largest_seqno = largest_seqno > ikey.sequence ? largest_seqno : ikey.sequence;
+            uint64_t d_point = __dpa_thread_cycles();
+            flush_time += b_point - a_point;
+            add_time += c_point - b_point;
+            props_time += d_point - c_point;
         }
         cur_addr = Next_Memtable(cur_addr);
     }
-    LOG_DBG("rank:%u, iter_num:%lu, drop_num:%lu\n", rank, iter_num, drop_num);
+    LOG_DBG("rank:%u, add_time:%lu, flush_time:%lu\n", rank, add_time, flush_time);
+    LOG_DBG("rank:%u, iter_num:%lu, drop_num:%lu, props_time:%lu\n", rank, iter_num, drop_num, props_time);
     memcpy((void*)largest.data_, (void*)key.data_, key.size_);
     largest.size_ = key.size_;
 

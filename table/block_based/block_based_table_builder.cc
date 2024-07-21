@@ -1130,10 +1130,17 @@ void BlockBasedTableBuilder::Flush_dpa(uint64_t index, uint64_t key_nums, uint64
 
   // add 工作
   r->data_block_parallel[index]->setBuffer(buffer_size, buffer_ptr);
+  const char* data = (char*)buffer_ptr;
   for (uint64_t i = 0;i < key_nums;++i) {
-    Slice key((const char*)keys_ptr, key_size);
+    // Slice key((const char*)keys_ptr, key_size);
+    // r->pc_rep->curr_block_keys_parallel[index]->PushBack(key);
+    // keys_ptr += key_size;
+    uint32_t key_size, val_size;
+    data = GetVarint32Ptr(data + 1, data + 6, &key_size);
+    data = GetVarint32Ptr(data, data + 5, &val_size);
+    Slice key(data, key_size);
     r->pc_rep->curr_block_keys_parallel[index]->PushBack(key);
-    keys_ptr += key_size;
+    data += key_size + val_size;
   }
   // flush 工作
   r->first_key_in_next_block_parallel[index] = &first_key_in_next_block;
@@ -1407,14 +1414,10 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& uncompressed_block_data,
   CompressionType type;
   Status compress_status;
   bool is_data_block = block_type == BlockType::kData;
-  auto a = std::chrono::high_resolution_clock::now();
   CompressAndVerifyBlock(uncompressed_block_data, is_data_block,
                          *(r->compression_ctxs[0]), r->verify_ctxs[0].get(),
                          &(r->compressed_output), &(block_contents), &type,
                          &compress_status);
-  auto b = std::chrono::high_resolution_clock::now();
-  compress_time +=
-      std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
   // printf("compress time: %lu\n",
   //        std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count()
   //        /
@@ -1424,12 +1427,8 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& uncompressed_block_data,
     return;
   }
 
-  auto a2 = std::chrono::high_resolution_clock::now();
   WriteMaybeCompressedBlock(block_contents, type, handle, block_type,
                             &uncompressed_block_data);
-  auto b2 = std::chrono::high_resolution_clock::now();
-  write_time +=
-      std::chrono::duration_cast<std::chrono::nanoseconds>(b2 - a2).count();
   // printf("write time: %lu\n",
   //        std::chrono::duration_cast<std::chrono::nanoseconds>(b2 -
   //        a2).count());
@@ -1461,6 +1460,7 @@ void BlockBasedTableBuilder::CompressAndVerifyBlock(
     const CompressionContext& compression_ctx, UncompressionContext* verify_ctx,
     std::string* compressed_output, Slice* block_contents,
     CompressionType* type, Status* out_status) {
+  auto a = std::chrono::high_resolution_clock::now();
   Rep* r = rep_;
   bool is_status_ok = ok();
   if (!r->IsParallelCompressionEnabled()) {
@@ -1581,11 +1581,15 @@ void BlockBasedTableBuilder::CompressAndVerifyBlock(
     RecordTick(r->ioptions.stats, BYTES_COMPRESSED_TO,
                compressed_output->size());
   }
+  auto b = std::chrono::high_resolution_clock::now();
+  compress_time +=
+    std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
 }
 
 void BlockBasedTableBuilder::WriteMaybeCompressedBlock(
     const Slice& block_contents, CompressionType comp_type, BlockHandle* handle,
     BlockType block_type, const Slice* uncompressed_block_data) {
+  auto a2 = std::chrono::high_resolution_clock::now();
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]
   //    compression_type: uint8
@@ -1688,6 +1692,9 @@ void BlockBasedTableBuilder::WriteMaybeCompressedBlock(
       r->pc_rep->file_size_estimator.SetEstimatedFileSize(r->get_offset());
     }
   }
+  auto b2 = std::chrono::high_resolution_clock::now();
+  write_time +=
+    std::chrono::duration_cast<std::chrono::nanoseconds>(b2 - a2).count();
 }
 
 void BlockBasedTableBuilder::BGWorkWriteMaybeCompressedBlock() {
