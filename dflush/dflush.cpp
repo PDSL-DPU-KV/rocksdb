@@ -37,13 +37,13 @@
 doca_dev* dev;
 doca_dpa* dpa;
 
-const uint32_t nthreads_task = 32;
-const uint32_t nthreads_memcpy = 4;
-const bool DPA_MEMCPY = 0;
+const uint32_t nthreads_task = 1;
+const uint32_t nthreads_flush = 4; // 这个值由 host 那边指定更好
+const bool DPA_FLUSH = 1;
 const bool use_optimized = 0;
 
 ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
-ROCKSDB_NAMESPACE::WorkQueue<DPAThreads*> DPAThreads_pool;
+ROCKSDB_NAMESPACE::WorkQueue<DPAFlushThreads*> DPAThreads_pool;
 
 void run_memcpy_dma(params_memcpy_t params, doca_mmap* dst_m,
                     doca_mmap* src_m) {
@@ -54,14 +54,14 @@ void run_memcpy_dma(params_memcpy_t params, doca_mmap* dst_m,
   DMAThread_pool.push(dt);
 }
 
-void run_memcpy_dpa(const params_memcpy_t& params) {
-  DPAThreads* dt = nullptr;
-  DPAThreads_pool.pop(dt);
-  dt->set_params(params);
-  dt->trigger_all();
-  dt->wait_all();
-  DPAThreads_pool.push(dt);
-}
+// void run_memcpy_dpa(const params_memcpy_t& params) {
+//   DPAThreads* dt = nullptr;
+//   DPAThreads_pool.pop(dt);
+//   dt->set_params(params);
+//   dt->trigger_all();
+//   dt->wait_all();
+//   DPAThreads_pool.push(dt);
+// }
 
 int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
   int recv_size = 0;
@@ -299,9 +299,6 @@ int set_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
 void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   char* ptr = buffer;
 
-  int priority = *(int*)ptr;
-  ptr += sizeof(int);
-  printf("priority:%d\n",priority);
   // TrisectionPoint
   req->TrisectionPoint[0] = *(uintptr_t*)ptr;
   ptr += sizeof(uintptr_t);
@@ -481,25 +478,29 @@ int SerializeResult(char* buffer, rocksdb::MetaResult* result) {
   return result_size;
 }
 
-void RunJob(char* buffer,int client_fd) {
+void RunJob(int client_fd) {
   // get and deserialize message from host
   printf("RunJob!\n");
-  // char buffer[1024];
+  char buffer[1024];
   rocksdb::MetaReq req;
   rocksdb::MetaResult result;
-  // auto read_size = read(client_fd, buffer, 1024);
-  // assert(read_size == 1024);
+  auto read_size = read(client_fd, buffer, 1024);
+  assert(read_size == 1024);
   DeSerializeReq(buffer, &req);
 
   // copy memtable from host
   params_memcpy_t params;
-  if (DPA_MEMCPY) {
-    params.copy_size = 140 * 1024;  // 单次单线程copy大小为140KB
-    params.region_size = 140 * 1024 * 1024;  // 总共copy大小为140MB
-    params.piece_size = params.region_size / nthreads_memcpy;  // 分给八个线程
-    params.copy_n = params.piece_size / params.copy_size;  // 每个线程的copy次数
-    params.memcpy_mode = ASYNC;                            // copy模式
-  } else {
+  if (DPA_FLUSH) {
+      params.copy_size = 5 * 1024; // 一个datablock所占有的空间
+      params.region_size = 140 * 1024 * 1024; //总共的空间为140MB
+      params.piece_size = params.region_size / nthreads_flush; // 每个dpa线程占有的空间
+      params.copy_n = params.piece_size / params.copy_size; //每个dpa线程的最大datablock数量
+      req.params.copy_size = 5 * 1024;
+      req.params.region_size = 140 * 1024 * 1024; 
+      req.params.piece_size = req.params.region_size / nthreads_flush; 
+      req.params.copy_n = req.params.piece_size / req.params.copy_size; 
+  }
+  else {
     params.copy_size = max_dma_buffer_size();  // 单次单线程copy大小为140KB
     params.region_size = 140 * 1024 * 1024;  // 总共copy大小为140MB
     params.piece_size = params.region_size;  // 分给八个线程
@@ -507,26 +508,39 @@ void RunJob(char* buffer,int client_fd) {
     params.memcpy_mode = DMA;                              // copy模式
   }
 
+  uint64_t start_offset;
   uint64_t offset;
   doca_mmap* dst_m;
   doca_mmap* src_m;
 
   std::tie(dst_m, params.dst) = alloc_mem(Location::Host, params.region_size);
-  std::tie(src_m, params.src) =
-      alloc_mem_from_export(Location::Host, params.region_size, req.mmap_desc);
+  std::tie(src_m, params.src) = alloc_mem_from_export(Location::Host, params.region_size, req.mmap_desc);
+  start_offset = req.mt_buf - params.src.ptr;
   params.src.ptr = req.mt_buf;
   offset = params.dst.ptr - params.src.ptr;
 
-  auto a = std::chrono::high_resolution_clock::now();
-  if (DPA_MEMCPY) {
-    run_memcpy_dpa(params);
-  } else {
+  // 新 dpa 路径
+  DPAFlushThreads* dpathreads;
+  doca_buf_arr* bufarr;
+  doca_dpa_dev_buf_arr_t bufarr_handle = 0;
+
+  if (DPA_FLUSH) {
+      doca_check(doca_buf_arr_create(1, &bufarr));
+      doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size, start_offset));
+      doca_check(doca_buf_arr_set_target_dpa(bufarr, dpa));
+      doca_check(doca_buf_arr_start(bufarr));
+      doca_check(doca_buf_arr_get_dpa_handle(bufarr, &bufarr_handle));
+      // run_dpa_flush
+      req.params.dst.ptr = params.dst.ptr;
+      printf("params.dst.ptr:%lx\n", params.dst.ptr);
+      DPAThreads_pool.pop(dpathreads);
+      dpathreads->set_params(params, bufarr_handle, req.Node_heads);
+      dpathreads->trigger_all();
+      // run_memcpy_dpa(params); 已弃用
+  }
+  else {
     run_memcpy_dma(params, dst_m, src_m);
   }
-  auto b = std::chrono::high_resolution_clock::now();
-  printf("memcpytime:%lu\n",
-         std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() /
-             1000 / 1000);
 
   // build sstable
   printf("meta.smallest.DebugString:%s\n",
@@ -535,12 +549,17 @@ void RunJob(char* buffer,int client_fd) {
          req.file_meta.largest.DebugString(true).c_str());
 
   auto a_point = std::chrono::high_resolution_clock::now();
-  rocksdb::BuildTable_new(offset, &req, &result, use_optimized);
+  rocksdb::BuildTable_new(offset, &req, &result, use_optimized, DPA_FLUSH);
   auto b_point = std::chrono::high_resolution_clock::now();
   uint64_t buildtable_time =
       std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
           .count();
   printf("builder over, buildtable time:%lu\n", buildtable_time / 1000 / 1000);
+
+  if (DPA_FLUSH) {
+    dpathreads->wait_all();
+    DPAThreads_pool.push(dpathreads);
+  }
 
   printf(
       "Flush_result:   num_input_entries:%ld memtable_payload_bytes:%ld "
@@ -562,7 +581,6 @@ void RunJob(char* buffer,int client_fd) {
   free_mem(params.dst, dst_m);
   doca_check(doca_mmap_stop(src_m));
   doca_check(doca_mmap_destroy(src_m));
-  delete[] buffer;
 }
 
 static int PrepareConn(struct sockaddr_in* server_addr) {
@@ -595,24 +613,20 @@ int main() {
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(10086);
+  server_addr.sin_port = htons(10096);
   auto server_fd = PrepareConn(&server_addr);
 
-  if (DPA_MEMCPY) {
+  if (DPA_FLUSH) {
     // DPA COPY
     attach_device(dflush_app);
     params_memcpy_t params;
-    params.copy_size = 140 * 1024;  // 单次单线程copy大小为140KB
-    params.region_size = 140 * 1024 * 1024;  // 总共copy大小为140MB
-    params.piece_size = params.region_size / nthreads_memcpy;  // 分给八个线程
-    params.copy_n = params.piece_size / params.copy_size;  // 每个线程的copy次数
-    params.memcpy_mode = ASYNC;                            // copy模式
-
     DPAThreads_pool.setMaxSize(nthreads_task);
-    for (uint64_t i = 0; i < nthreads_task; ++i) {
-      DPAThreads_pool.push(new DPAThreads(nthreads_memcpy, params, 1));
+    // TODO:产生线程
+    for (uint64_t i = 0;i < nthreads_task;++i) {
+        DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
     }
-  } else {
+  }
+  else {
     // DMA COPY
     open_device(&dma_task_is_supported);
     auto num_dma_tasks = 140 * 1024 * 1024 / max_dma_buffer_size();
@@ -629,17 +643,14 @@ int main() {
     socklen_t address_size = sizeof(server_addr);
     auto client_fd =
         accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
-    char* buffer = new char[1024];
-    auto read_size = read(client_fd, buffer, 1024);
-    assert(read_size == 1024);
     if (client_fd < 0) {
       printf("fail to accept!\n");
       exit(EXIT_FAILURE);
     }
-    tp.enqueue(RunJob, buffer, client_fd);
+    tp.enqueue(RunJob, client_fd);
   }
 
-  if (DPA_MEMCPY) {
+  if (DPA_FLUSH) {
     detach_device();
   } else {
     close_device();

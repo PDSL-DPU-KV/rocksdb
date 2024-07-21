@@ -59,6 +59,20 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   return Status::OK();
 }
 
+Status FileMetaData::UpdateBoundaries(const Slice& key) {
+  if (smallest.size() == 0) {
+    smallest.DecodeFrom(key);
+  }
+  largest.DecodeFrom(key);
+  return Status::OK();
+}
+
+Status FileMetaData::UpdateBoundaries(SequenceNumber seqno) {
+  fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
+  fd.largest_seqno = std::max(fd.largest_seqno, seqno);
+  return Status::OK();
+}
+
 void VersionEdit::Clear() {
   max_level_ = 0;
   db_id_.clear();

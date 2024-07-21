@@ -1116,7 +1116,7 @@ Status FlushJob::WriteLevel0Table() {
     MemTable* m = mems_[index];
     m->get_table_()->get_skip_list()->PrintNodeCount();
     // 寻找第四层跳表的三个节点，免得以后多线程写很多个函数来找
-    std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list()->FindPoints(4, 4);
+    std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list()->FindPoints(0, 4);
     if (index > 0) {
       edit_ = m->GetEdits();
       edit_->SetPrevLogNumber(0);

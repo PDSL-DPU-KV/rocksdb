@@ -73,6 +73,11 @@ BlockBuilder::BlockBuilder(
   estimate_ = sizeof(uint32_t) + sizeof(uint32_t);
 }
 
+void BlockBuilder::setBuffer(uint64_t buffer_size, uintptr_t buffer_ptr) {
+  estimate_ += buffer_size;
+  buffer_.assign((const char*)buffer_ptr, buffer_size);
+}
+
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.resize(1);  // First restart point is at offset 0

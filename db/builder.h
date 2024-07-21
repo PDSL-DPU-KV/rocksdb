@@ -39,6 +39,16 @@ struct DbPath_struct {
   uint64_t target_size;
 };
 
+typedef struct {
+  region_t dst;
+  region_t src;
+  uint64_t piece_size;
+  uint64_t region_size;
+  uint64_t copy_size;
+  uint64_t copy_n;
+  uint64_t memcpy_mode;
+} params_memcpy_t;
+
 struct MetaReq {
   uintptr_t TrisectionPoint[3];
   uint64_t num_entries;
@@ -63,6 +73,7 @@ struct MetaReq {
   std::string cfd_GetName;
   std::string dbname;
   std::string mmap_desc;
+  params_memcpy_t params;
 };
 
 struct MetaResult {
@@ -115,5 +126,5 @@ extern Status BuildTable(
     uint64_t* memtable_garbage_bytes = nullptr);
 
 void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
-                    bool use_optimized = false);
+                    bool use_optimized = false, bool use_dpaflush = false);
 }  // namespace ROCKSDB_NAMESPACE

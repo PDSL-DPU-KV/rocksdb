@@ -33,6 +33,8 @@ class BlockBuilder {
                         bool persist_user_defined_timestamps = true,
                         bool is_user_key = false);
 
+  void setBuffer(uint64_t buffer_size, uintptr_t buffer_ptr);
+
   // Reset the contents as if the BlockBuilder was just constructed.
   void Reset();
 

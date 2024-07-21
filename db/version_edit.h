@@ -278,6 +278,10 @@ struct FileMetaData {
   Status UpdateBoundaries(const Slice& key, const Slice& value,
                           SequenceNumber seqno, ValueType value_type);
 
+  Status UpdateBoundaries(SequenceNumber seqno);
+
+  Status UpdateBoundaries(const Slice& key);
+
   // Unlike UpdateBoundaries, ranges do not need to be presented in any
   // particular order.
   void UpdateBoundariesForRange(const InternalKey& start,

@@ -23,7 +23,7 @@ typedef union {
 #define h2d(a) ((void *)((a) | (1ull << 63)))
 #define d2h(a) (((uint64_t)(a)) & (~(1ull < 63)))
 
-#ifdef DEBUG
+#ifndef DEBUG
 #define LOG_DBG(fmt, ...)                                                      \
   DOCA_DPA_DEV_LOG_DBG("%s:%d %s: " fmt, __FILE__, __LINE__, __func__,         \
                        __VA_ARGS__)

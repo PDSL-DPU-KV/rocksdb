@@ -32,6 +32,7 @@ extern "C" {
         uint64_t comp_handle;
         uint64_t aops_handle;
         uint64_t notify_handle;
+        uint64_t bufarr_handle;
         uint64_t w_handle;
         uint64_t s_handle;
         uint64_t call_counter;
@@ -39,6 +40,8 @@ extern "C" {
         uint64_t use_atomic;
         region_t result;
         region_t sync;
+        uintptr_t node_head;
+        uintptr_t node_end;
         params_memcpy_t params;
     } ctx_t;
 

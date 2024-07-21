@@ -1116,6 +1116,40 @@ void BlockBasedTableBuilder::merge_prop() {
   }
 }
 
+void BlockBasedTableBuilder::set_props(uint64_t index, uint64_t num_entries, uint64_t raw_key_size, uint64_t raw_value_size) {
+  Rep* r = rep_;
+  r->props_parallel[index].num_entries = num_entries;
+  r->props_parallel[index].raw_key_size = raw_key_size;
+  r->props_parallel[index].raw_value_size = raw_value_size;
+}
+
+void BlockBasedTableBuilder::Flush_dpa(uint64_t index, uint64_t key_nums, uint64_t key_size, uint64_t buffer_size, uintptr_t keys_ptr, uintptr_t buffer_ptr, const Slice first_key_in_next_block) {
+  Rep* r = rep_;
+  assert(r->state != Rep::State::kClosed);
+  if (!ok()) return;
+
+  // add 工作
+  r->data_block_parallel[index]->setBuffer(buffer_size, buffer_ptr);
+  for (uint64_t i = 0;i < key_nums;++i) {
+    Slice key((const char*)keys_ptr, key_size);
+    r->pc_rep->curr_block_keys_parallel[index]->PushBack(key);
+    keys_ptr += key_size;
+  }
+  // flush 工作
+  r->first_key_in_next_block_parallel[index] = &first_key_in_next_block;
+  ParallelCompressionRep::BlockRep* block_rep;
+  r->data_block_parallel[index]->Finish();
+  // printf("first_key_in_next_block.size:%lu\n", first_key_in_next_block.size());
+  block_rep = r->pc_rep->PrepareBlock_parallel(r->compression_type, r->first_key_in_next_block_parallel[index], r->data_block_parallel[index], index);
+  r->pc_rep->file_size_estimator.EmitBlock(block_rep->data->size(), r->get_offset());
+  if (index == 0) {
+    r->pc_rep->EmitBlock(block_rep);
+  }
+  else {
+    r->pc_rep->EmitBlock_Compression(block_rep, index);
+  }
+}
+
 void BlockBasedTableBuilder::Flush_parallel(uint64_t index) {
   Rep* r = rep_;
   assert(rep_->state != Rep::State::kClosed);

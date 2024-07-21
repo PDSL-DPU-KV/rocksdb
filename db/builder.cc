@@ -634,6 +634,73 @@ InternalIterator* NewIterator(NewMemTable* mt, const ReadOptions& read_options,
   return new (mem) NewMemTableIterator(*mt, read_options, c, arena);
 }
 
+void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta, std::atomic<uint64_t>& counter, uintptr_t dst_ptr, uint64_t block_size) {
+  printf("dpa_flush rank:%lu, dst_ptr:%lx, block_size:%lu\n", rank, dst_ptr, block_size);
+  uintptr_t cur_ptr = dst_ptr;
+  uint64_t flag = 0;
+  Slice largest;
+  while (true) {
+    auto flag_addr = (std::atomic_uint64_t*)cur_ptr;
+    flag = flag_addr[0].load(std::memory_order_relaxed);
+    if (flag == 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    else if (flag == 1) {
+      uintptr_t keys_ptr = cur_ptr + 128;
+      uintptr_t buffer_ptr = keys_ptr + 896;
+      uint64_t key_nums = *(uint64_t*)(cur_ptr + 8);
+      uint64_t key_size = *(uint64_t*)(cur_ptr + 16);
+      uint64_t buffer_size = *(uint64_t*)(cur_ptr + 24);
+      Slice first_key_in_next_block((const char*)(cur_ptr + 32), key_size);
+      builder->Flush_dpa(rank, key_nums, key_size, buffer_size, keys_ptr, buffer_ptr, first_key_in_next_block);
+      cur_ptr += block_size;
+    }
+    else if (flag == 2) {
+      uint64_t key_size = *(uint64_t*)(cur_ptr + 8);
+      uint64_t props_num_entries = *(uint64_t*)(cur_ptr + 16);
+      uint64_t props_raw_key_size = *(uint64_t*)(cur_ptr + 24);
+      uint64_t props_raw_value_size = *(uint64_t*)(cur_ptr + 32);
+      uint64_t smallest_seqno = *(uint64_t*)(cur_ptr + 40);
+      uint64_t largest_seqno = *(uint64_t*)(cur_ptr + 48);
+      meta->UpdateBoundaries(smallest_seqno);
+      meta->UpdateBoundaries(largest_seqno);
+      if (rank == 0) {
+        Slice smallest((const char*)(cur_ptr + 56), key_size);
+        uint64_t smallest_num = 0;
+        for (uint64_t i = 0;i < smallest.size();++i) {
+          smallest_num += *(uint8_t*)(smallest.data() + i);
+        }
+        printf("rank:%lu, smallest.size:%lu, smallest_num:%lx\n", rank, smallest.size(), smallest_num);
+        meta->UpdateBoundaries(smallest);
+      }
+      if (rank == parallel_threads - 1) {
+        largest = Slice((const char*)(cur_ptr + 56 + key_size), key_size);
+        uint64_t largest_num = 0;
+        for (uint64_t i = 0;i < largest.size();++i) {
+          largest_num += *(uint8_t*)(largest.data() + i);
+        }
+        printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank, largest.size(), largest_num);
+      }
+      builder->set_props(rank, props_num_entries, props_raw_key_size, props_raw_value_size);
+      break;
+    }
+  }
+
+  while (counter.load(std::memory_order_relaxed) != rank) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  if (rank == parallel_threads - 1) {
+    uint64_t largest_num = 0;
+    for (uint64_t i = 0;i < largest.size();++i) {
+      largest_num += *(uint8_t*)(largest.data() + i);
+    }
+    printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank, largest.size(), largest_num);
+    meta->UpdateBoundaries(largest);
+  }
+  if (rank > 0) builder->EmitRemainOpts(rank);
+  counter.store(rank + 1, std::memory_order_relaxed);
+}
+
 void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
                    CompactionIterator* c_iter, std::atomic<uint64_t>& counter) {
   auto a_point = std::chrono::high_resolution_clock::now();
@@ -677,7 +744,7 @@ void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
 }
 
 void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
-                    bool use_optimized) {
+                    bool use_optimized, bool use_dpaflush) {
   // 1. initialize options for building table
   ImmutableDBOptions db_options;
   Env::IOPriority io_priority;
@@ -701,7 +768,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
   std::string tboptions_db_session_id =
       "tboptions->db_session_id";  // tboptions->db_session_id
   CompressionOptions compression_opts;
-  compression_opts.parallel_threads = 1;
+  compression_opts.parallel_threads = 8;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
   TableBuilderOptions tboptions(
@@ -786,7 +853,74 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
 
     // 3.2 use iterator to build table
     auto a = std::chrono::high_resolution_clock::now();
-    if (!use_optimized) {
+    if (use_optimized) {
+      // optimized build table
+      std::vector<std::thread> flush_thread_pool;
+      std::vector<InternalIterator*> iters(parallel_threads);
+      std::vector<CompactionIterator*> c_iters;
+      std::vector<Arena> arenas(parallel_threads);
+      std::vector<NewMemTable*> new_mems(parallel_threads);
+      std::atomic<uint64_t> counter(0);
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        new_mems[i] =
+          new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
+                          offset, cfd_internal_comparator);
+        iters[i] =
+          NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
+        iters[i]->SeekToFirst();
+        c_iters.push_back(new CompactionIterator(
+          iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
+          req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
+          env, ShouldReportDetailedTime(env, ioptions.stats),
+          true
+          /* internal key corruption is not ok */,
+          range_del_agg.get(), nullptr,
+          // blob_file_builder.get(),
+          ioptions.allow_data_in_errors,
+          ioptions.enforce_single_del_contracts,
+          /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+          /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
+          /*shutting_down=*/nullptr, db_options.info_log, nullptr));
+      }
+      for (uint64_t i = 0; i < parallel_threads; i++) {
+        flush_thread_pool.emplace_back(iter_parallel, i, builder,
+                                       &req->file_meta, c_iters[i],
+                                       std::ref(counter));
+      }
+      for (uint64_t i = 0; i < flush_thread_pool.size(); i++) {
+        flush_thread_pool[i].join();
+      }
+      builder->merge_prop();
+
+      result->num_input_entries = 0;
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        result->num_input_entries += c_iters[i]->num_input_entry_scanned();
+      }
+      if (result->num_input_entries != req->num_entries) {
+        printf("nums error!\n");
+      }
+      for (uint64_t i = 0; i < parallel_threads; ++i) {
+        delete new_mems[i];
+        delete c_iters[i];
+      }
+    }
+    else if (use_dpaflush) {
+      std::vector<std::thread> dpa_flush_pool;
+      std::atomic<uint64_t> counter(0);
+      uintptr_t dst_ptr = req->params.dst.ptr;
+      uint64_t block_size = req->params.copy_size;
+      uint64_t piece_size = req->params.piece_size;
+      printf("dst_ptr:%lx, block_size:%lu, piece_size:%lu\n", dst_ptr, block_size, piece_size);
+      for (uint64_t i = 0;i < parallel_threads;++i) {
+        dpa_flush_pool.emplace_back(dpa_flush, i, builder, &req->file_meta, std::ref(counter), dst_ptr + i * piece_size, block_size);
+      }
+      for (uint64_t i = 0;i < parallel_threads;++i) {
+        dpa_flush_pool[i].join();
+      }
+      builder->merge_prop();
+      result->num_input_entries = req->num_entries;
+    }
+    else {
       // native build table
       CompactionIterator c_iter(
           iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
@@ -816,63 +950,14 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
 
       if (!s.ok()) {
         c_iter.status().PermitUncheckedError();
-      } else if (!c_iter.status().ok()) {
+      }
+      else if (!c_iter.status().ok()) {
         s = c_iter.status();
       }
 
       result->num_input_entries = c_iter.num_input_entry_scanned();
       if (result->num_input_entries != req->num_entries) {
         printf("nums error!\n");
-      }
-    } else {
-      // optimized build table
-      std::vector<std::thread> flush_thread_pool;
-      std::vector<InternalIterator*> iters(parallel_threads);
-      std::vector<CompactionIterator*> c_iters;
-      std::vector<Arena> arenas(parallel_threads);
-      std::vector<NewMemTable*> new_mems(parallel_threads);
-      std::atomic<uint64_t> counter(0);
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
-        new_mems[i] =
-            new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
-                            offset, cfd_internal_comparator);
-        iters[i] =
-            NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
-        iters[i]->SeekToFirst();
-        c_iters.push_back(new CompactionIterator(
-            iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
-            req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
-            env, ShouldReportDetailedTime(env, ioptions.stats),
-            true
-            /* internal key corruption is not ok */,
-            range_del_agg.get(), nullptr,
-            // blob_file_builder.get(),
-            ioptions.allow_data_in_errors,
-            ioptions.enforce_single_del_contracts,
-            /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
-            /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-            /*shutting_down=*/nullptr, db_options.info_log, nullptr));
-      }
-      for (uint64_t i = 0; i < parallel_threads; i++) {
-        flush_thread_pool.emplace_back(iter_parallel, i, builder,
-                                       &req->file_meta, c_iters[i],
-                                       std::ref(counter));
-      }
-      for (uint64_t i = 0; i < flush_thread_pool.size(); i++) {
-        flush_thread_pool[i].join();
-      }
-      builder->merge_prop();
-
-      result->num_input_entries = 0;
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
-        result->num_input_entries += c_iters[i]->num_input_entry_scanned();
-      }
-      if (result->num_input_entries != req->num_entries) {
-        printf("nums error!\n");
-      }
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
-        delete new_mems[i];
-        delete c_iters[i];
       }
     }
     auto b = std::chrono::high_resolution_clock::now();
