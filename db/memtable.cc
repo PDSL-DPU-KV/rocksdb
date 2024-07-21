@@ -32,6 +32,7 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/memtablerep.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/types.h"
@@ -484,12 +485,14 @@ class MemTableIterator : public InternalIterator {
   }
   Slice key() const override {
     assert(Valid());
-    return GetLengthPrefixedSlice(iter_->key());
+    // return GetLengthPrefixedSlice(iter_->key());
+    return GetNewFormatKey(iter_->key());
   }
   Slice value() const override {
     assert(Valid());
-    Slice key_slice = GetLengthPrefixedSlice(iter_->key());
-    return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
+    // Slice key_slice = GetLengthPrefixedSlice(iter_->key());
+    // return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
+    return GetNewFormatValue(iter_->key());
   }
 
   Status status() const override { return status_; }
@@ -702,26 +705,36 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
                                val_size + moptions_.protection_bytes_per_key;
   char* buf = nullptr;
   std::unique_ptr<MemTableRep>& table =
-      type == kTypeRangeDeletion ? range_del_table_ : table_;
-  KeyHandle handle = table->Allocate(encoded_len + VarintLength(0) + VarintLength(internal_key_size) + VarintLength(val_size), &buf);
+    type == kTypeRangeDeletion ? range_del_table_ : table_;
 
-  char* p = EncodeVarint32(buf, internal_key_size);
+  // 原生
+  // KeyHandle handle = table->Allocate(encoded_len, &buf);
+
+  // char* p = EncodeVarint32(buf, internal_key_size);
+  // memcpy(p, key.data(), key_size);
+  // Slice key_slice(p, key_size);
+  // p += key_size;
+  // uint64_t packed = PackSequenceAndType(s, type);
+  // EncodeFixed64(p, packed);
+  // p += 8;
+  // p = EncodeVarint32(p, val_size);
+  // memcpy(p, value.data(), val_size);
+  // assert((unsigned)(p + val_size - buf + moptions_.protection_bytes_per_key) ==
+  //        (unsigned)encoded_len);
+
+  // 新修改的 | shared | nonshared(key_size) | val_size | key | value
+  KeyHandle handle = table->Allocate(encoded_len + VarintLength(0), &buf);
+  
+  char* p = EncodeVarint32(buf, 0);
+  p = EncodeVarint32(p, internal_key_size);
+  p = EncodeVarint32(p, val_size);
   memcpy(p, key.data(), key_size);
   Slice key_slice(p, key_size);
   p += key_size;
   uint64_t packed = PackSequenceAndType(s, type);
   EncodeFixed64(p, packed);
   p += 8;
-  p = EncodeVarint32(p, val_size);
   memcpy(p, value.data(), val_size);
-  assert((unsigned)(p + val_size - buf + moptions_.protection_bytes_per_key) ==
-         (unsigned)encoded_len);
-
-  // add | shared | nonshared(key_size) | val_size | after value
-  p += val_size;
-  p = EncodeVarint32(p, 0);
-  p = EncodeVarint32(p, VarintLength(internal_key_size));
-  p = EncodeVarint32(p, VarintLength(val_size));
 
   UpdateEntryChecksum(kv_prot_info, key, value, type, s,
                       buf + encoded_len - moptions_.protection_bytes_per_key);

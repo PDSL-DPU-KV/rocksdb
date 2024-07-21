@@ -492,8 +492,8 @@ namespace ROCKSDB_NAMESPACE {
 
 #ifdef DFLUSH
       char* AllocateMT(size_t mt_bytes) override {
-        assert(mt_bytes == 140 * (1U << 20));
-        if (mt_bytes != 140 * (1U << 20)) {
+        assert(mt_bytes == 150 * (1U << 20));
+        if (mt_bytes != 150 * (1U << 20)) {
           printf("mt_bytes is not 140MB!\n");
           std::abort();
         }
@@ -585,14 +585,14 @@ namespace ROCKSDB_NAMESPACE {
       thread_status_updater_ = CreateThreadStatusUpdater();
 #ifdef DFLUSH
       open_device(&dma_task_is_supported);
-      size_t buf_size = 20 * 140 * (1U << 20); // 20个 140M 空间
+      size_t buf_size = 20 * 150 * (1U << 20); // 20个 140M 空间
       mt_buf = (char*)aligned_alloc(64, buf_size);
       mmap_ = alloc_mem(buf_size, (uintptr_t)mt_buf);
       const void* addr;
       size_t size;
       doca_check(doca_mmap_export_pci(mmap_, dev, &addr, &size));
       mmap_export_desc = std::string((const char*)addr, size);
-      uint64_t mt_bytes = 140*(1U<<20);
+      uint64_t mt_bytes = 150 * (1U << 20);
       for (int i = 0; i < 20; ++i) {
         free_chunks_.push(mt_buf + i * mt_bytes);
       }

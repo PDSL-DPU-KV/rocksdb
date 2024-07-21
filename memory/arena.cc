@@ -40,7 +40,7 @@ namespace ROCKSDB_NAMESPACE {
     TEST_SYNC_POINT_CALLBACK("Arena::Arena:0", const_cast<size_t*>(&kBlockSize));
 #ifdef DFLUSH
     if (mt_flag_) {
-      mt_buf_ = FLAGS_env->AllocateMT(140 * kBlockSize);
+      mt_buf_ = FLAGS_env->AllocateMT(150 * kBlockSize);
       alloc_bytes_remaining_ = kBlockSize;
       blocks_memory_ += alloc_bytes_remaining_;
       aligned_alloc_ptr_ = mt_buf_;
