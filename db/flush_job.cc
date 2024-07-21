@@ -1072,21 +1072,51 @@ int ConnectToServer() {
   }
   return client_fd;
 }
+std::chrono::high_resolution_clock::time_point host_time[8] = {
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now()
+};
+double average_duration[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 Status FlushJob::WriteLevel0Table() {
 #ifdef DFLUSH
+  int host_id = dbname_[5] - '0';
+  printf("host_id:%d %lf\n", host_id, average_duration[host_id]);
+  // int priority = v/h-(p-1)*v/k;
+  auto now_time = std::chrono::high_resolution_clock::now();
+  if(average_duration[host_id]!=0)
+    average_duration[host_id] = average_duration[host_id] * 0.9 +
+                              0.1 * std::chrono::duration_cast<std::chrono::nanoseconds>(now_time - host_time[host_id]).count();
+  else
+    average_duration[host_id] = std::chrono::duration_cast<std::chrono::nanoseconds>(now_time - host_time[host_id]).count();
+                              
+  host_time[host_id] = now_time;
+  int priority = -7*average_duration[host_id]/1000000000;
+  printf("priority:%d\n", priority);
+
+  int num_unflushed_memtables = cfd_->imm()->NumNotFlushed();
+  if (num_unflushed_memtables > 6)
+    priority = 0;
+  MemTable* tmp = mems_[0];
+  tmp->get_table_()->get_skip_list()->PrintNodeCount();
+  auto TrisectionPoint_1 =
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1);
+  auto TrisectionPoint_2 =
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2);
+  auto TrisectionPoint_3 =
+      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3);
   Status s;
   for (uint64_t index = 0; index < mems_.size(); index++) {
     MemTable* m = mems_[index];
-    printf("------------------------------------------------------------------\n");
-    printf("------------------------------------------------------------------\n");
     m->get_table_()->get_skip_list()->PrintNodeCount();
     // 寻找第四层跳表的三个节点，免得以后多线程写很多个函数来找
     std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list()->FindPoints(4, 4);
-    printf(
-        "------------------------------------------------------------------\n");
-    printf(
-        "------------------------------------------------------------------\n");
     if (index > 0) {
       edit_ = m->GetEdits();
       edit_->SetPrevLogNumber(0);
@@ -1226,7 +1256,10 @@ Status FlushJob::WriteLevel0Table() {
         char buffer[1024];
         char* ptr = buffer;
         uint64_t total_size = 0;
-
+        // priority
+        *(int*)ptr = (int)priority;
+        ptr += sizeof(int);
+        total_size += sizeof(int);
         // TrisectionPoint
         *(uintptr_t*)ptr = (uintptr_t)startpoints[0];
         ptr += sizeof(uintptr_t);

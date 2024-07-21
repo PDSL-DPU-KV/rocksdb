@@ -40,7 +40,7 @@ doca_dpa* dpa;
 const uint32_t nthreads_task = 32;
 const uint32_t nthreads_memcpy = 4;
 const bool DPA_MEMCPY = 0;
-const bool use_optimized = 1;
+const bool use_optimized = 0;
 
 ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
 ROCKSDB_NAMESPACE::WorkQueue<DPAThreads*> DPAThreads_pool;
@@ -299,6 +299,9 @@ int set_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
 void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   char* ptr = buffer;
 
+  int priority = *(int*)ptr;
+  ptr += sizeof(int);
+  printf("priority:%d\n",priority);
   // TrisectionPoint
   req->TrisectionPoint[0] = *(uintptr_t*)ptr;
   ptr += sizeof(uintptr_t);
@@ -478,14 +481,14 @@ int SerializeResult(char* buffer, rocksdb::MetaResult* result) {
   return result_size;
 }
 
-void RunJob(int client_fd) {
+void RunJob(char* buffer,int client_fd) {
   // get and deserialize message from host
   printf("RunJob!\n");
-  char buffer[1024];
+  // char buffer[1024];
   rocksdb::MetaReq req;
   rocksdb::MetaResult result;
-  auto read_size = read(client_fd, buffer, 1024);
-  assert(read_size == 1024);
+  // auto read_size = read(client_fd, buffer, 1024);
+  // assert(read_size == 1024);
   DeSerializeReq(buffer, &req);
 
   // copy memtable from host
@@ -559,6 +562,7 @@ void RunJob(int client_fd) {
   free_mem(params.dst, dst_m);
   doca_check(doca_mmap_stop(src_m));
   doca_check(doca_mmap_destroy(src_m));
+  delete[] buffer;
 }
 
 static int PrepareConn(struct sockaddr_in* server_addr) {
@@ -625,11 +629,14 @@ int main() {
     socklen_t address_size = sizeof(server_addr);
     auto client_fd =
         accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
+    char* buffer = new char[1024];
+    auto read_size = read(client_fd, buffer, 1024);
+    assert(read_size == 1024);
     if (client_fd < 0) {
       printf("fail to accept!\n");
       exit(EXIT_FAILURE);
     }
-    tp.enqueue(RunJob, client_fd);
+    tp.enqueue(RunJob, buffer, client_fd);
   }
 
   if (DPA_MEMCPY) {

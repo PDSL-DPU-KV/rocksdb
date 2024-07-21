@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
-
+#define TASKLIST
 class ThreadPool {
 #ifdef  TASKLIST
     struct task_node {
@@ -148,11 +148,11 @@ auto ThreadPool::enqueue(F&& f, Args &&...args)
         char* char_pointer =
             std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
         // 生成随机整数
-        int priority = std::rand() % 100 + 1;  // int priority = v/h      -(p-1)*v/k;
+        int priority = *(int*)char_pointer;//std::rand() % 100 + 1;  // int priority = v/h      -(p-1)*v/k;
         // int priority = *(int*)char_pointer;
         task_node* add_task = new task_node{[task]() { (*task)(); }, nullptr,priority,std::chrono::high_resolution_clock::now()};// TODO
         this->emplace(add_task);
-        // printList();
+        printList();
         #endif
         
     }
