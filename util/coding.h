@@ -339,6 +339,22 @@ inline Slice GetLengthPrefixedSlice(const char* data) {
   return Slice(p, len);
 }
 
+inline Slice GetNewFormatKey(const char* data) {
+  uint32_t key_size = 0, val_size = 0;
+  // data + 1 是为了跳过 shared
+  auto p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+  auto q = GetVarint32Ptr(p, p + 5, &val_size);
+  return Slice(q, key_size);
+}
+
+inline Slice GetNewFormatValue(const char* data) {
+  uint32_t key_size = 0, val_size = 0;
+  // data + 1 是为了跳过 shared
+  auto p = GetVarint32Ptr(data + 1, data + 6, &key_size);
+  auto q = GetVarint32Ptr(p, p + 5, &val_size);
+  return Slice(q + key_size, val_size);
+}
+
 inline Slice GetSliceUntil(Slice* slice, char delimiter) {
   uint32_t len = 0;
   for (len = 0; len < slice->size() && slice->data()[len] != delimiter; ++len) {
