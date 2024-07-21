@@ -298,7 +298,10 @@ int set_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
 
 void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   char* ptr = buffer;
-
+  // priority
+  int priority = *(int*)ptr;
+  ptr += sizeof(int);
+  printf("priority:%d\n", priority);
   // TrisectionPoint
   req->TrisectionPoint[0] = *(uintptr_t*)ptr;
   ptr += sizeof(uintptr_t);
@@ -306,7 +309,7 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   ptr += sizeof(uintptr_t);
   req->TrisectionPoint[2] = *(uintptr_t*)ptr;
   ptr += sizeof(uintptr_t);
-  printf("TrisectionPoint: %lu %lu %lu\n", req->TrisectionPoint[0],
+  printf("TrisectionPoint: %lx %lx %lx\n", req->TrisectionPoint[0],
          req->TrisectionPoint[1], req->TrisectionPoint[2]);
 
   // mems
