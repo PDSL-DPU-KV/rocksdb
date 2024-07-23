@@ -27,7 +27,9 @@
 
 namespace ROCKSDB_NAMESPACE {
 
-extern uint64_t compress_time, write_time, checksum_time;
+extern uint64_t compress_time, write_time, checksum_time, write_thread_time,
+    write_thread_wait_time, write_thread_do_time, compress_thread_time,
+    compress_thread_do_time, flush_dpa_time, dpa_threads;
 
 class Slice;
 class Status;
@@ -183,9 +185,13 @@ class TableBuilder {
 
   virtual void Flush_parallel(uint64_t index) {}
 
-  virtual void Flush_dpa(uint64_t index, uint64_t key_nums, uint64_t key_size, uint64_t buffer_size, uintptr_t keys_ptr, uintptr_t buffer_ptr, const Slice first_key_in_next_block) {}
+  virtual void Flush_dpa(uint64_t index, uint64_t key_nums, uint64_t key_size,
+                         uint64_t buffer_size, uintptr_t keys_ptr,
+                         uintptr_t buffer_ptr,
+                         const Slice first_key_in_next_block) {}
 
-  virtual void set_props(uint64_t index, uint64_t num_entries, uint64_t raw_key_size, uint64_t raw_value_size) {}
+  virtual void set_props(uint64_t index, uint64_t num_entries,
+                         uint64_t raw_key_size, uint64_t raw_value_size) {}
 
   virtual void merge_prop() {}
 

@@ -10,6 +10,7 @@
 #include "db/builder.h"
 
 #include <atomic>
+#include <cstdio>
 #include <vector>
 
 #include "db/blob/blob_file_builder.h"
@@ -24,7 +25,6 @@
 #include "db/range_del_aggregator.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
-#include "dflush/common.h"
 #include "file/file_util.h"
 #include "file/filename.h"
 #include "file/read_write_util.h"
@@ -39,10 +39,10 @@
 #include "table/format.h"
 #include "table/internal_iterator.h"
 #include "table/merging_iterator.h"
+#include "table/table_builder.h"
 #include "table/unique_id_impl.h"
 #include "test_util/sync_point.h"
 #include "util/stop_watch.h"
-#include "util/work_queue.h"
 
 namespace ROCKSDB_NAMESPACE {
 std::chrono::milliseconds meta_send_time_sum(0);
@@ -462,8 +462,6 @@ Status BuildTable(
   return s;
 }
 
-const uint64_t parallel_threads = 4;
-
 class NewMemTable {
  private:
  public:
@@ -540,14 +538,10 @@ class NewMemTableIterator : public InternalIterator {
   }
   void Seek(const Slice& k) override { printf("1 该函数尚未实现！\n"); }
   void SeekForPrev(const Slice& k) override { printf("2 该函数尚未实现！\n"); }
-  void SeekToFirst() override {
-    Node_iter_ = Node_head_ + offset_;
-  }
+  void SeekToFirst() override { Node_iter_ = Node_head_ + offset_; }
   void SeekToLast() override { printf("3 该函数尚未实现！\n"); }
   void* Current() override { return this; }
-  void Next() override {
-    Node_iter_ = *(uintptr_t*)(Node_iter_) + offset_;
-  }
+  void Next() override { Node_iter_ = *(uintptr_t*)(Node_iter_) + offset_; }
   bool NextAndGetResult(IterateResult* result) override {
     printf("4 该函数尚未实现！\n");
     return true;
@@ -560,7 +554,7 @@ class NewMemTableIterator : public InternalIterator {
     assert(Valid());
     // rocksdb::Slice key = rocksdb::GetLengthPrefixedSlice(
     //     (const char*)(Node_iter_ + sizeof(uintptr_t)));
-    return getNewFormatKey((const char*)(Node_iter_+sizeof(uintptr_t)));
+    return getNewFormatKey((const char*)(Node_iter_ + sizeof(uintptr_t)));
   }
   Slice user_key() const override {
     printf("6 该函数尚未实现！\n");
@@ -623,8 +617,11 @@ InternalIterator* NewIterator(NewMemTable* mt, const ReadOptions& read_options,
   return new (mem) NewMemTableIterator(*mt, read_options, c, arena);
 }
 
-void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta, std::atomic<uint64_t>& counter, uintptr_t dst_ptr, uint64_t block_size) {
-  printf("dpa_flush rank:%lu, dst_ptr:%lx, block_size:%lu\n", rank, dst_ptr, block_size);
+void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta,
+               std::atomic<uint64_t>& counter, uintptr_t dst_ptr,
+               uint64_t block_size) {
+  printf("dpa_flush rank:%lu, dst_ptr:%lx, block_size:%lu\n", rank, dst_ptr,
+         block_size);
   uintptr_t cur_ptr = dst_ptr;
   uint64_t flag = 0;
   Slice largest;
@@ -632,19 +629,23 @@ void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta, std::at
     auto flag_addr = (std::atomic_uint64_t*)cur_ptr;
     flag = flag_addr[0].load(std::memory_order_relaxed);
     if (flag == 0) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    else if (flag == 1) {
+      std::this_thread::sleep_for(std::chrono::microseconds(1));
+    } else if (flag == 1) {
+      auto a_point = std::chrono::high_resolution_clock::now();
       uintptr_t keys_ptr = cur_ptr + 128;
       uintptr_t buffer_ptr = keys_ptr + 896;
       uint64_t key_nums = *(uint64_t*)(cur_ptr + 8);
       uint64_t key_size = *(uint64_t*)(cur_ptr + 16);
       uint64_t buffer_size = *(uint64_t*)(cur_ptr + 24);
       Slice first_key_in_next_block((const char*)(cur_ptr + 32), key_size);
-      builder->Flush_dpa(rank, key_nums, key_size, buffer_size, keys_ptr, buffer_ptr, first_key_in_next_block);
+      builder->Flush_dpa(rank, key_nums, key_size, buffer_size, keys_ptr,
+                         buffer_ptr, first_key_in_next_block);
       cur_ptr += block_size;
-    }
-    else if (flag == 2) {
+      auto b_point = std::chrono::high_resolution_clock::now();
+      flush_dpa_time += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            b_point - a_point)
+                            .count();
+    } else if (flag == 2) {
       uint64_t key_size = *(uint64_t*)(cur_ptr + 8);
       uint64_t props_num_entries = *(uint64_t*)(cur_ptr + 16);
       uint64_t props_raw_key_size = *(uint64_t*)(cur_ptr + 24);
@@ -656,21 +657,24 @@ void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta, std::at
       if (rank == 0) {
         Slice smallest((const char*)(cur_ptr + 56), key_size);
         uint64_t smallest_num = 0;
-        for (uint64_t i = 0;i < smallest.size();++i) {
+        for (uint64_t i = 0; i < smallest.size(); ++i) {
           smallest_num += *(uint8_t*)(smallest.data() + i);
         }
-        printf("rank:%lu, smallest.size:%lu, smallest_num:%lx\n", rank, smallest.size(), smallest_num);
+        printf("rank:%lu, smallest.size:%lu, smallest_num:%lx\n", rank,
+               smallest.size(), smallest_num);
         meta->UpdateBoundaries(smallest);
       }
-      if (rank == parallel_threads - 1) {
+      if (rank == dpa_threads - 1) {
         largest = Slice((const char*)(cur_ptr + 56 + key_size), key_size);
         uint64_t largest_num = 0;
-        for (uint64_t i = 0;i < largest.size();++i) {
+        for (uint64_t i = 0; i < largest.size(); ++i) {
           largest_num += *(uint8_t*)(largest.data() + i);
         }
-        printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank, largest.size(), largest_num);
+        printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank,
+               largest.size(), largest_num);
       }
-      builder->set_props(rank, props_num_entries, props_raw_key_size, props_raw_value_size);
+      builder->set_props(rank, props_num_entries, props_raw_key_size,
+                         props_raw_value_size);
       break;
     }
   }
@@ -678,12 +682,13 @@ void dpa_flush(uint64_t rank, TableBuilder* builder, FileMetaData* meta, std::at
   while (counter.load(std::memory_order_relaxed) != rank) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  if (rank == parallel_threads - 1) {
+  if (rank == dpa_threads - 1) {
     uint64_t largest_num = 0;
-    for (uint64_t i = 0;i < largest.size();++i) {
+    for (uint64_t i = 0; i < largest.size(); ++i) {
       largest_num += *(uint8_t*)(largest.data() + i);
     }
-    printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank, largest.size(), largest_num);
+    printf("rank:%u, largest.size:%lu, largest_num:%lx\n", rank, largest.size(),
+           largest_num);
     meta->UpdateBoundaries(largest);
   }
   if (rank > 0) builder->EmitRemainOpts(rank);
@@ -712,7 +717,7 @@ void iter_parallel(uint64_t index, TableBuilder* builder, FileMetaData* meta,
   }
   auto d_point = std::chrono::high_resolution_clock::now();
   if (index > 0) builder->EmitRemainOpts(index);
-  if (index == parallel_threads - 1) {
+  if (index == dpa_threads - 1) {
     const Slice& key = c_iter->key();
     const Slice& value = c_iter->value();
     const ParsedInternalKey& ikey = c_iter->ikey();
@@ -758,6 +763,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
       "tboptions->db_session_id";  // tboptions->db_session_id
   CompressionOptions compression_opts;
   compression_opts.parallel_threads = 8;
+  dpa_threads = req->tp_num + 1;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
   TableBuilderOptions tboptions(
@@ -845,33 +851,33 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
     if (use_optimized) {
       // optimized build table
       std::vector<std::thread> flush_thread_pool;
-      std::vector<InternalIterator*> iters(parallel_threads);
+      std::vector<InternalIterator*> iters(dpa_threads);
       std::vector<CompactionIterator*> c_iters;
-      std::vector<Arena> arenas(parallel_threads);
-      std::vector<NewMemTable*> new_mems(parallel_threads);
+      std::vector<Arena> arenas(dpa_threads);
+      std::vector<NewMemTable*> new_mems(dpa_threads);
       std::atomic<uint64_t> counter(0);
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
+      for (uint64_t i = 0; i < dpa_threads; ++i) {
         new_mems[i] =
-          new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
-                          offset, cfd_internal_comparator);
+            new NewMemTable(req->Node_heads[i], offset + req->Node_heads[i + 1],
+                            offset, cfd_internal_comparator);
         iters[i] =
-          NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
+            NewIterator(new_mems[i], ro, &arenas[i], cfd_internal_comparator);
         iters[i]->SeekToFirst();
         c_iters.push_back(new CompactionIterator(
-          iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
-          req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
-          env, ShouldReportDetailedTime(env, ioptions.stats),
-          true
-          /* internal key corruption is not ok */,
-          range_del_agg.get(), nullptr,
-          // blob_file_builder.get(),
-          ioptions.allow_data_in_errors,
-          ioptions.enforce_single_del_contracts,
-          /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
-          /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
-          /*shutting_down=*/nullptr, db_options.info_log, nullptr));
+            iters[i], ucmp, &merge, kMaxSequenceNumber, &snapshots,
+            req->earliest_write_conflict_snapshot, req->job_snapshot, nullptr,
+            env, ShouldReportDetailedTime(env, ioptions.stats),
+            true
+            /* internal key corruption is not ok */,
+            range_del_agg.get(), nullptr,
+            // blob_file_builder.get(),
+            ioptions.allow_data_in_errors,
+            ioptions.enforce_single_del_contracts,
+            /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+            /*compaction=*/nullptr, nullptr,  // compaction_filter.get(),
+            /*shutting_down=*/nullptr, db_options.info_log, nullptr));
       }
-      for (uint64_t i = 0; i < parallel_threads; i++) {
+      for (uint64_t i = 0; i < dpa_threads; i++) {
         flush_thread_pool.emplace_back(iter_parallel, i, builder,
                                        &req->file_meta, c_iters[i],
                                        std::ref(counter));
@@ -882,38 +888,42 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
       builder->merge_prop();
 
       result->num_input_entries = 0;
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
+      for (uint64_t i = 0; i < dpa_threads; ++i) {
         result->num_input_entries += c_iters[i]->num_input_entry_scanned();
       }
       if (result->num_input_entries != req->num_entries) {
         printf("nums error!\n");
       }
-      for (uint64_t i = 0; i < parallel_threads; ++i) {
+      for (uint64_t i = 0; i < dpa_threads; ++i) {
         delete new_mems[i];
         delete c_iters[i];
       }
-    }
-    else if (use_dpaflush) {
+    } else if (use_dpaflush) {
       auto a_point = std::chrono::high_resolution_clock::now();
       std::vector<std::thread> dpa_flush_pool;
       std::atomic<uint64_t> counter(0);
       uintptr_t dst_ptr = req->params.dst.ptr;
       uint64_t block_size = req->params.copy_size;
       uint64_t piece_size = req->params.piece_size;
-      printf("dst_ptr:%lx, block_size:%lu, piece_size:%lu\n", dst_ptr, block_size, piece_size);
-      for (uint64_t i = 0;i < parallel_threads;++i) {
-        dpa_flush_pool.emplace_back(dpa_flush, i, builder, &req->file_meta, std::ref(counter), dst_ptr + i * piece_size, block_size);
+      printf("dst_ptr:%lx, block_size:%lu, piece_size:%lu\n", dst_ptr,
+             block_size, piece_size);
+      for (uint64_t i = 0; i < dpa_threads; ++i) {
+        dpa_flush_pool.emplace_back(dpa_flush, i, builder, &req->file_meta,
+                                    std::ref(counter), dst_ptr + i * piece_size,
+                                    block_size);
       }
-      for (uint64_t i = 0;i < parallel_threads;++i) {
+      for (uint64_t i = 0; i < dpa_threads; ++i) {
         dpa_flush_pool[i].join();
       }
       builder->merge_prop();
       result->num_input_entries = req->num_entries;
       auto b_point = std::chrono::high_resolution_clock::now();
-      uint64_t dpaflush_time = std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point).count();
+      uint64_t dpaflush_time =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(b_point -
+                                                               a_point)
+              .count();
       printf("\ndpaflush_time:%lu\n\n", dpaflush_time / 1000 / 1000);
-    }
-    else {
+    } else {
       // native build table
       CompactionIterator c_iter(
           iter, ucmp, &merge, kMaxSequenceNumber, &snapshots,
@@ -943,8 +953,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
 
       if (!s.ok()) {
         c_iter.status().PermitUncheckedError();
-      }
-      else if (!c_iter.status().ok()) {
+      } else if (!c_iter.status().ok()) {
         s = c_iter.status();
       }
 
@@ -956,16 +965,30 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
     auto b = std::chrono::high_resolution_clock::now();
     printf(
         "iter time:%lu, compress time: %lu, write time: %lu, checksum time: "
-        "%lu\n",
+        "%lu, compress thread time: %lu, compress thread do time: %lu, write "
+        "thread time: %lu, write thread "
+        "wait time: %lu, write thread do time: %lu, flush dpa "
+        "time: %lu\n",
         std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count() /
             1000 / 1000,
         compress_time / 1000 / 1000, write_time / 1000 / 1000,
-        checksum_time / 1000 / 1000);
+        checksum_time / 1000 / 1000, compress_thread_time / 1000 / 1000,
+        compress_thread_do_time / 1000 / 1000, write_thread_time / 1000 / 1000,
+        write_thread_wait_time / 1000 / 1000,
+        write_thread_do_time / 1000 / 1000,
+        flush_dpa_time / 1000 / 1000 / dpa_threads);
     compress_time = 0;
     write_time = 0;
     checksum_time = 0;
+    write_thread_time = 0;
+    write_thread_wait_time = 0;
+    write_thread_do_time = 0;
+    compress_thread_time = 0;
+    compress_thread_do_time = 0;
+    flush_dpa_time = 0;
 
     // 3.3 sync and close writable file
+    auto c = std::chrono::high_resolution_clock::now();
     const bool empty = builder->IsEmpty();
     if (!s.ok() || empty) {
       builder->Abandon();
@@ -991,9 +1014,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
       req->file_meta.marked_for_compaction = builder->NeedCompact();
       assert(DPU_fd.GetFileSize() > 0);
     }
-    delete builder;
     if (s.ok() && !empty) {
-      StopWatch sw(ioptions.clock, ioptions.stats, TABLE_SYNC_MICROS);
       io_status = file_writer->Sync(ioptions.use_fsync);
     }
     if (s.ok() && io_status.ok() && !empty) {
@@ -1022,6 +1043,11 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
     if (s.ok()) {
       s = io_status;
     }
+    auto d = std::chrono::high_resolution_clock::now();
+    uint64_t sync_time =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(d - c).count();
+    printf("\nclose_and_sync_time:%lu\n\n", sync_time / 1000 / 1000);
+    delete builder;
   } else {
     printf("no valid!\n");
   }

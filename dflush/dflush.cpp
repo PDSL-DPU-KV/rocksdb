@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
@@ -38,9 +39,9 @@ doca_dev* dev;
 doca_dpa* dpa;
 
 const uint32_t nthreads_task = 1;
-const uint32_t nthreads_flush = 4; // 这个值由 host 那边指定更好
-const bool DPA_FLUSH = 1;
-const bool use_optimized = 0;
+const uint32_t nthreads_flush = 8;  // 这个值由 host 那边指定更好
+const bool DPA_FLUSH = 0;
+const bool use_optimized = 1;
 
 ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
 ROCKSDB_NAMESPACE::WorkQueue<DPAFlushThreads*> DPAThreads_pool;
@@ -75,8 +76,7 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->smallest.set_InternalKey(str);
     ptr += n;
     recv_size += n;
-  }
-  else {
+  } else {
     meta->smallest.set_InternalKey(std::string());
   }
 
@@ -89,8 +89,7 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->largest.set_InternalKey(str);
     ptr += n;
     recv_size += n;
-  }
-  else {
+  } else {
     meta->largest.set_InternalKey(std::string());
   }
 
@@ -163,8 +162,7 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->file_checksum = str;
     ptr += n;
     recv_size += n;
-  }
-  else {
+  } else {
     meta->file_checksum = std::string();
   }
 
@@ -177,8 +175,7 @@ int parse_file_meta(rocksdb::FileMetaData* meta, char* ptr) {
     meta->file_checksum_func_name = str;
     ptr += n;
     recv_size += n;
-  }
-  else {
+  } else {
     meta->file_checksum_func_name = std::string();
   }
 
@@ -307,14 +304,15 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   ptr += sizeof(int);
   printf("priority:%d\n", priority);
   // TrisectionPoint
-  req->TrisectionPoint[0] = *(uintptr_t*)ptr;
-  ptr += sizeof(uintptr_t);
-  req->TrisectionPoint[1] = *(uintptr_t*)ptr;
-  ptr += sizeof(uintptr_t);
-  req->TrisectionPoint[2] = *(uintptr_t*)ptr;
-  ptr += sizeof(uintptr_t);
-  printf("TrisectionPoint: %lx %lx %lx\n", req->TrisectionPoint[0],
-         req->TrisectionPoint[1], req->TrisectionPoint[2]);
+  req->tp_num = *(uint64_t*)ptr;
+  ptr += sizeof(uint64_t);
+  for (uint64_t i = 0; i < req->tp_num; i++) {
+    req->TrisectionPoint[i] = *(uintptr_t*)ptr;
+    ptr += sizeof(uintptr_t);
+  }
+  printf("Num: %lu, TrisectionPoint: %lu %lu %lu\n", req->tp_num,
+         req->TrisectionPoint[0], req->TrisectionPoint[1],
+         req->TrisectionPoint[2]);
 
   // mems
   req->num_entries = *(uint64_t*)ptr;
@@ -326,9 +324,9 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   printf("total_size after mems: %ld\n", ptr - buffer);
 
   req->Node_heads.push_back(req->Node_head);
-  req->Node_heads.push_back(req->TrisectionPoint[0]);
-  req->Node_heads.push_back(req->TrisectionPoint[1]);
-  req->Node_heads.push_back(req->TrisectionPoint[2]);
+  for (uint64_t i = 0; i < req->tp_num; i++) {
+    req->Node_heads.push_back(req->TrisectionPoint[i]);
+  }
   req->Node_heads.push_back(0);
 
   // meta_
@@ -356,8 +354,7 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->str_full_history_ts_low = str;
     ptr += n;
-  }
-  else {
+  } else {
     req->str_full_history_ts_low = "";
   }
 
@@ -419,8 +416,7 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->cfd_GetName = str;
     ptr += n;
-  }
-  else {
+  } else {
     req->cfd_GetName = "";
   }
 
@@ -432,8 +428,7 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
     str.push_back('\0');
     req->dbname = str;
     ptr += n;
-  }
-  else {
+  } else {
     req->dbname = "";
   }
 
@@ -488,29 +483,33 @@ int SerializeResult(char* buffer, rocksdb::MetaResult* result) {
   return result_size;
 }
 
-void RunJob(int client_fd) {
+std::chrono::time_point<std::chrono::high_resolution_clock> t1, t2;
+
+void RunJob(int client_fd, int task_id) {
+  printf("RunJob! id: %d\n", task_id);
+  auto start = std::chrono::high_resolution_clock::now();
   // get and deserialize message from host
-  printf("RunJob!\n");
-  char buffer[1024];
+  char buffer[2048];
   rocksdb::MetaReq req;
   rocksdb::MetaResult result;
-  auto read_size = read(client_fd, buffer, 1024);
-  assert(read_size == 1024);
+  auto read_size = read(client_fd, buffer, 2048);
+  assert(read_size == 2048);
   DeSerializeReq(buffer, &req);
 
   // copy memtable from host
   params_memcpy_t params;
   if (DPA_FLUSH) {
-    params.copy_size = 5 * 1024; // 一个datablock所占有的空间
-    params.region_size = 150 * 1024 * 1024; //总共的空间为140MB
-    params.piece_size = params.region_size / nthreads_flush; // 每个dpa线程占有的空间
-    params.copy_n = params.piece_size / params.copy_size; //每个dpa线程的最大datablock数量
+    params.copy_size = 5 * 1024;  // 一个datablock所占有的空间
+    params.region_size = 150 * 1024 * 1024;  // 总共的空间为140MB
+    params.piece_size =
+        params.region_size / nthreads_flush;  // 每个dpa线程占有的空间
+    params.copy_n =
+        params.piece_size / params.copy_size;  // 每个dpa线程的最大datablock数量
     req.params.copy_size = 5 * 1024;
     req.params.region_size = 150 * 1024 * 1024;
     req.params.piece_size = req.params.region_size / nthreads_flush;
     req.params.copy_n = req.params.piece_size / req.params.copy_size;
-  }
-  else {
+  } else {
     params.copy_size = max_dma_buffer_size();  // 单次单线程copy大小为140KB
     params.region_size = 150 * 1024 * 1024;  // 总共copy大小为140MB
     params.piece_size = params.region_size;  // 分给八个线程
@@ -523,11 +522,17 @@ void RunJob(int client_fd) {
   doca_mmap* dst_m;
   doca_mmap* src_m;
 
+  t1 = std::chrono::high_resolution_clock::now();
   std::tie(dst_m, params.dst) = alloc_mem(Location::Host, params.region_size);
-  std::tie(src_m, params.src) = alloc_mem_from_export(Location::Host, params.region_size, req.mmap_desc);
+  std::tie(src_m, params.src) =
+      alloc_mem_from_export(Location::Host, params.region_size, req.mmap_desc);
   start_offset = req.mt_buf - params.src.ptr;
   params.src.ptr = req.mt_buf;
   offset = params.dst.ptr - params.src.ptr;
+  t2 = std::chrono::high_resolution_clock::now();
+  printf("alloc memory time: %lu\n",
+         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() /
+             1000 / 1000);
 
   // 新 dpa 路径
   DPAFlushThreads* dpathreads;
@@ -536,7 +541,8 @@ void RunJob(int client_fd) {
 
   if (DPA_FLUSH) {
     doca_check(doca_buf_arr_create(1, &bufarr));
-    doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size, start_offset));
+    doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size,
+                                       start_offset));
     doca_check(doca_buf_arr_set_target_dpa(bufarr, dpa));
     doca_check(doca_buf_arr_start(bufarr));
     doca_check(doca_buf_arr_get_dpa_handle(bufarr, &bufarr_handle));
@@ -547,8 +553,7 @@ void RunJob(int client_fd) {
     dpathreads->set_params(params, bufarr_handle, req.Node_heads);
     dpathreads->trigger_all();
     // run_memcpy_dpa(params); 已弃用
-  }
-  else {
+  } else {
     run_memcpy_dma(params, dst_m, src_m);
   }
 
@@ -562,8 +567,8 @@ void RunJob(int client_fd) {
   rocksdb::BuildTable_new(offset, &req, &result, use_optimized, DPA_FLUSH);
   auto b_point = std::chrono::high_resolution_clock::now();
   uint64_t buildtable_time =
-    std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
-    .count();
+      std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
+          .count();
   printf("builder over, buildtable time:%lu\n", buildtable_time / 1000 / 1000);
 
   if (DPA_FLUSH) {
@@ -584,9 +589,15 @@ void RunJob(int client_fd) {
          result.file_meta.largest.DebugString(true).c_str());
 
   // serialize and return result to host
-  char result_buffer[1024];
+  char result_buffer[2048];
   auto result_size = SerializeResult(result_buffer, &result);
   auto send_size = send(client_fd, result_buffer, result_size, 0);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  uint64_t dpu_time =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("builder over, dpu time:%lu\n", dpu_time / 1000 / 1000);
+
   assert(send_size == result_size);
   free_mem(params.dst, dst_m);
   doca_check(doca_mmap_stop(src_m));
@@ -602,7 +613,7 @@ static int PrepareConn(struct sockaddr_in* server_addr) {
 
   int opt = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
-    sizeof(opt))) {
+                 sizeof(opt))) {
     perror("setsockopt");
     exit(EXIT_FAILURE);
   }
@@ -623,7 +634,7 @@ int main() {
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(10096);
+  server_addr.sin_port = htons(18888);
   auto server_fd = PrepareConn(&server_addr);
 
   if (DPA_FLUSH) {
@@ -632,11 +643,10 @@ int main() {
     params_memcpy_t params;
     DPAThreads_pool.setMaxSize(nthreads_task);
     // TODO:产生线程
-    for (uint64_t i = 0;i < nthreads_task;++i) {
+    for (uint64_t i = 0; i < nthreads_task; ++i) {
       DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
     }
-  }
-  else {
+  } else {
     // DMA COPY
     open_device(&dma_task_is_supported);
     auto num_dma_tasks = 150 * 1024 * 1024 / max_dma_buffer_size();
@@ -648,22 +658,22 @@ int main() {
     }
   }
 
+  std::atomic_uint32_t task_id = 0;
   ThreadPool tp(nthreads_task);
   while (true) {
     socklen_t address_size = sizeof(server_addr);
     auto client_fd =
-      accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
+        accept(server_fd, (struct sockaddr*)&server_addr, &address_size);
     if (client_fd < 0) {
       printf("fail to accept!\n");
       exit(EXIT_FAILURE);
     }
-    tp.enqueue(RunJob, client_fd);
+    tp.enqueue(RunJob, client_fd, task_id++);
   }
 
   if (DPA_FLUSH) {
     detach_device();
-  }
-  else {
+  } else {
     close_device();
   }
   return 0;

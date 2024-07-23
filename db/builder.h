@@ -50,7 +50,8 @@ typedef struct {
 } params_memcpy_t;
 
 struct MetaReq {
-  uintptr_t TrisectionPoint[3];
+  uint64_t tp_num;
+  uintptr_t TrisectionPoint[200];
   uint64_t num_entries;
   uintptr_t Node_head;
   std::vector<uint64_t> Node_heads;
