@@ -1059,8 +1059,8 @@ int ConnectToServer() {
 
   struct sockaddr_in serv_addr;
   serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(10086);
-  if (inet_pton(AF_INET, "192.168.2.21", &serv_addr.sin_addr) <= 0) {
+  serv_addr.sin_port = htons(18888);
+  if (inet_pton(AF_INET, "192.168.2.20", &serv_addr.sin_addr) <= 0) {
     printf("\nInvalid address/ Address not supported \n");
     return -1;
   }
@@ -1080,8 +1080,7 @@ std::chrono::high_resolution_clock::time_point host_time[8] = {
     std::chrono::high_resolution_clock::now(),
     std::chrono::high_resolution_clock::now(),
     std::chrono::high_resolution_clock::now(),
-    std::chrono::high_resolution_clock::now()
-};
+    std::chrono::high_resolution_clock::now()};
 double average_duration[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 Status FlushJob::WriteLevel0Table() {
@@ -1090,33 +1089,56 @@ Status FlushJob::WriteLevel0Table() {
   printf("host_id:%d %lf\n", host_id, average_duration[host_id]);
   // int priority = v/h-(p-1)*v/k;
   auto now_time = std::chrono::high_resolution_clock::now();
-  if(average_duration[host_id]!=0)
-    average_duration[host_id] = average_duration[host_id] * 0.9 +
-                              0.1 * std::chrono::duration_cast<std::chrono::nanoseconds>(now_time - host_time[host_id]).count();
+  if (average_duration[host_id] != 0)
+    average_duration[host_id] =
+        average_duration[host_id] * 0.9 +
+        0.1 * std::chrono::duration_cast<std::chrono::nanoseconds>(
+                  now_time - host_time[host_id])
+                  .count();
   else
-    average_duration[host_id] = std::chrono::duration_cast<std::chrono::nanoseconds>(now_time - host_time[host_id]).count();
-                              
+    average_duration[host_id] =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now_time -
+                                                             host_time[host_id])
+            .count();
+
   host_time[host_id] = now_time;
-  int priority = -7*average_duration[host_id]/1000000000;
+  int priority = -7 * average_duration[host_id] / 1000000000;
   printf("priority:%d\n", priority);
 
   int num_unflushed_memtables = cfd_->imm()->NumNotFlushed();
-  if (num_unflushed_memtables > 6)
-    priority = 0;
-  MemTable* tmp = mems_[0];
-  tmp->get_table_()->get_skip_list()->PrintNodeCount();
-  auto TrisectionPoint_1 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1);
-  auto TrisectionPoint_2 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2);
-  auto TrisectionPoint_3 =
-      tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3);
+  if (num_unflushed_memtables > 6) priority = 0;
+  // MemTable* tmp = mems_[0];
+  // tmp->get_table_()->get_skip_list()->PrintNodeCount();
+  // auto TrisectionPoint_1 =
+  //     tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1);
+  // auto TrisectionPoint_2 =
+  //     tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2);
+  // auto TrisectionPoint_3 =
+  //     tmp->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3);
   Status s;
   for (uint64_t index = 0; index < mems_.size(); index++) {
     MemTable* m = mems_[index];
-    m->get_table_()->get_skip_list()->PrintNodeCount();
+    // m->get_table_()->get_skip_list()->PrintNodeCount();
     // 寻找第四层跳表的三个节点，免得以后多线程写很多个函数来找
-    std::vector<uintptr_t> startpoints = m->get_table_()->get_skip_list()->FindPoints(0, 4);
+    // std::vector<uintptr_t> startpoints =
+    //     m->get_table_()->get_skip_list()->FindPoints(4, 8);
+    // std::vector<uintptr_t> startpoints =
+    //     m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 8);
+    std::vector<uintptr_t> startpoints;
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 4));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 5));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 6));
+    startpoints.push_back(
+        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 7));
     if (index > 0) {
       edit_ = m->GetEdits();
       edit_->SetPrevLogNumber(0);
@@ -1247,13 +1269,14 @@ Status FlushJob::WriteLevel0Table() {
         const ReadOptions read_options(Env::IOActivity::kFlush);
 
         // buildtable_new
+        auto a = std::chrono::high_resolution_clock::now();
         uintptr_t node_head;
         uintptr_t mt_buf;
         node_head = (uintptr_t)memtables[memtables.size() - 1]->Current();
         mt_buf = (uintptr_t)m->get_mt_buf_();
 
         // 把必要信息传到 DPU 端
-        char buffer[1024];
+        char buffer[2048];
         char* ptr = buffer;
         uint64_t total_size = 0;
         // priority
@@ -1261,15 +1284,16 @@ Status FlushJob::WriteLevel0Table() {
         ptr += sizeof(int);
         total_size += sizeof(int);
         // TrisectionPoint
-        *(uintptr_t*)ptr = (uintptr_t)startpoints[0];
-        ptr += sizeof(uintptr_t);
-        *(uintptr_t*)ptr = (uintptr_t)startpoints[1];
-        ptr += sizeof(uintptr_t);
-        *(uintptr_t*)ptr = (uintptr_t)startpoints[2];
-        ptr += sizeof(uintptr_t);
-        total_size += 3 * sizeof(uintptr_t);
-        printf("TrisectionPoint: %lx %lx %lx\n", startpoints[0],
-               startpoints[1], startpoints[2]);
+        *(uint64_t*)ptr = startpoints.size();
+        ptr += sizeof(uint64_t);
+        total_size += sizeof(uint64_t);
+        for (size_t i = 0; i < startpoints.size(); i++) {
+          *(uintptr_t*)ptr = (uintptr_t)startpoints[i];
+          ptr += sizeof(uintptr_t);
+        }
+        total_size += startpoints.size() * sizeof(uintptr_t);
+        printf("TrisectionPoint: %lx %lx %lx\n", startpoints[0], startpoints[1],
+               startpoints[2]);
 
         // mems
         *(uint64_t*)ptr = total_num_entries;
@@ -1422,10 +1446,17 @@ Status FlushJob::WriteLevel0Table() {
         auto client_fd = ConnectToServer();
         // printf("mt_buf_head:%lx, key_head:%lx, mt_flag_:%d\n", mt_buf_head,
         // Node_head, mt_flag_);
+
+        auto c = std::chrono::high_resolution_clock::now();
         send(client_fd, buffer, total_size, 0);
         read(client_fd, buffer, 1024);  // 通过 read 阻塞
-        ptr = buffer;
+        auto d = std::chrono::high_resolution_clock::now();
+        printf("dpu build table time: %lu\n",
+               std::chrono::duration_cast<std::chrono::nanoseconds>(d - c)
+                       .count() /
+                   1000 / 1000);
 
+        ptr = buffer;
         meta_size = recv_meta(&meta_, ptr);
         ptr += meta_size;
         printf("RECV: total_size after meta_: %ld\n", ptr - buffer);
@@ -1458,6 +1489,12 @@ Status FlushJob::WriteLevel0Table() {
                meta_.smallest.DebugString(true).c_str());
         printf("meta.largest.DebugString:%s\n",
                meta_.largest.DebugString(true).c_str());
+
+        auto b = std::chrono::high_resolution_clock::now();
+        printf("total time: %lu\n",
+               std::chrono::duration_cast<std::chrono::nanoseconds>(b - a)
+                       .count() /
+                   1000 / 1000);
 
         assert(!s.ok() || io_s.ok());
         io_s.PermitUncheckedError();

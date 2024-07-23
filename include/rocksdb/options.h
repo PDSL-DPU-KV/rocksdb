@@ -2113,11 +2113,11 @@ struct OpenAndCompactOptions {
 
   int32_t check_time_interval = 1;
 
-  int64_t csa_max_concurrent_tasks = 16;
+  int64_t csa_max_concurrent_tasks = 64;
 
-  uint64_t max_accumulation_in_procp = 16;
+  uint64_t max_accumulation_in_procp = 64;
 
-  uint64_t max_reschedule = 16;
+  uint64_t max_reschedule = 64;
 #else
   std::string csa_address = "192.168.202.14:8010";
 

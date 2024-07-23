@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <type_traits>
 
 #include "memory/allocator.h"
@@ -145,10 +146,11 @@ class InlineSkipList {
 
   // Validate correctness of the skip-list.
   void TEST_Validate() const;
-  
+
   int LevelNodeCount(int level);
   Node* FindTrisectionPoint(int level, int num);
   Node* FindQuatilenPoint(int level, int num);
+  std::vector<uintptr_t> FindQuatilenPoints(int level, int num);
   std::vector<uintptr_t> FindPoints(int level, int num);
   void PrintNodeCount();
   // Iteration over the contents of a skip list
@@ -1062,7 +1064,7 @@ void InlineSkipList<Comparator>::TEST_Validate() const {
 template <class Comparator>
 int InlineSkipList<Comparator>::LevelNodeCount(int level) {
   Node* temp_node_ = this->head_;
-  int num =0;
+  int num = 0;
   while (temp_node_ != nullptr) {
     temp_node_ = temp_node_->Next(level);
     num++;
@@ -1071,18 +1073,21 @@ int InlineSkipList<Comparator>::LevelNodeCount(int level) {
 }
 
 template <class Comparator>
-typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindTrisectionPoint(int level,int num) {
+typename InlineSkipList<Comparator>::Node*
+InlineSkipList<Comparator>::FindTrisectionPoint(int level, int num) {
   int node_count = LevelNodeCount(level);
   Node* temp_node_ = this->head_;
-  // printf("level: %d num: %d node_count*num/3: %d\n ",level,num,node_count * num / 3);
-  for (int i = 0; i < node_count * num / 3;i++) {
+  // printf("level: %d num: %d node_count*num/3: %d\n ",level,num,node_count *
+  // num / 3);
+  for (int i = 0; i < node_count * num / 3; i++) {
     temp_node_ = temp_node_->Next(level);
   }
   return temp_node_;
 }
 
 template <class Comparator>
-typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuatilenPoint(int level,int num) {
+typename InlineSkipList<Comparator>::Node*
+InlineSkipList<Comparator>::FindQuatilenPoint(int level, int num) {
   int node_count = LevelNodeCount(level);
   Node* temp_node_ = this->head_;
 
@@ -1090,25 +1095,67 @@ typename InlineSkipList<Comparator>::Node* InlineSkipList<Comparator>::FindQuati
   // x+y   num=1:x
   // x+2y  num=2:2x+y
   // x+3y  num=3:3x+3y
-  
-  int x = 0.23 * node_count;// arg <0.25
-  int y = (node_count - 4 * x) / 6;
-  
-  for (int i = 0; i < x * num + num*(num-1)*y/2;i++) {
+
+  int x = 0.12 * node_count;  // arg <0.25
+  int y = (node_count - 8 * x) / 28;
+
+  for (int i = 0; i < x * num + num * (num - 1) * y / 2; i++) {
     temp_node_ = temp_node_->Next(level);
   }
   return temp_node_;
 }
 
 template <class Comparator>
+std::vector<uintptr_t> InlineSkipList<Comparator>::FindQuatilenPoints(int level,
+                                                                      int num) {
+  int node_count = LevelNodeCount(level);
+  Node* temp_node_ = this->head_;
+
+  // x
+  // x+y   num=1:x
+  // x+2y  num=2:2x+y
+  // x+3y  num=3:3x+3y
+
+  int total = 0;
+  for (int i = 1; i < num; i++) {
+    total += i;
+  }
+
+  double arg = (double)1 / num - 0.005;
+  int x = arg * node_count;
+  int y = (node_count - num * x) / total;
+  printf("total: %d, arg: %f, num: %d\n", total, arg, num);
+  // int x = 0.23 * node_count;// arg <0.25
+  // int x = 0.12 * node_count;  // arg <0.25
+  // int y = (node_count - 8 * x) / 28;
+
+  int start = 1;
+  int times = num - 1;
+  int counter = 0;
+  std::vector<uintptr_t> result;
+  while (times) {
+    printf("start: %d, counter: %d, times: %d\n", start, counter, times);
+    temp_node_ = temp_node_->Next(level);
+    counter++;
+    if (counter == (x * start + start * (start - 1) * y / 2)) {
+      result.push_back((uintptr_t)temp_node_);
+      start++;
+      times--;
+    }
+  }
+  return result;
+}
+
+template <class Comparator>
 void InlineSkipList<Comparator>::PrintNodeCount() {
-  for (int i = 0; i <GetMaxHeight() ; i++) {
-    printf("level: %d,node num: %d\n",i,LevelNodeCount(i));
+  for (int i = 0; i < GetMaxHeight(); i++) {
+    printf("level: %d,node num: %d\n", i, LevelNodeCount(i));
   }
 }
 
 template <class Comparator>
-std::vector<uintptr_t> InlineSkipList<Comparator>::FindPoints(int level, int num) {
+std::vector<uintptr_t> InlineSkipList<Comparator>::FindPoints(int level,
+                                                              int num) {
   int node_count = LevelNodeCount(level);
   Node* temp_node_ = this->head_;
   std::vector<uintptr_t> result;
