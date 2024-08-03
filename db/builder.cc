@@ -255,6 +255,7 @@ Status BuildTable(
       s = c_iter.status();
     }
 
+    auto c = std::chrono::high_resolution_clock::now();
     if (s.ok()) {
       auto range_del_it = range_del_agg->NewIterator();
       Slice last_tombstone_start_user_key{};
@@ -416,6 +417,10 @@ Status BuildTable(
         }
       }
     }
+    auto d = std::chrono::high_resolution_clock::now();
+    uint64_t sync_time =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(d - c).count();
+    printf("\nclose_and_sync_time:%lu\n\n", sync_time / 1000 / 1000);
   }
 
   // Check for input iterator errors

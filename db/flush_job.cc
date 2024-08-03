@@ -1085,8 +1085,14 @@ double average_duration[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 Status FlushJob::WriteLevel0Table() {
 #ifdef DFLUSH
-  int host_id = dbname_[5] - '0';
-  printf("host_id:%d %lf\n", host_id, average_duration[host_id]);
+  int host_id;
+  if (dbname_[5] > '0') {
+    host_id = (dbname_[4] - '0') * 10 + dbname_[5] - '0';
+  } else {
+    host_id = dbname_[4] - '0';
+  }
+  printf("dbname: %s, host_id:%d %lf\n", dbname_.c_str(), host_id,
+         average_duration[host_id]);
   // int priority = v/h-(p-1)*v/k;
   auto now_time = std::chrono::high_resolution_clock::now();
   if (average_duration[host_id] != 0)
@@ -1107,6 +1113,8 @@ Status FlushJob::WriteLevel0Table() {
 
   int num_unflushed_memtables = cfd_->imm()->NumNotFlushed();
   if (num_unflushed_memtables > 6) priority = 0;
+  bool use_dpa = host_id > 7 ? 1 : 0;
+  printf("host id: %d, use_dpa: %d\n", host_id, use_dpa);
   // MemTable* tmp = mems_[0];
   // tmp->get_table_()->get_skip_list()->PrintNodeCount();
   // auto TrisectionPoint_1 =
@@ -1120,25 +1128,12 @@ Status FlushJob::WriteLevel0Table() {
     MemTable* m = mems_[index];
     // m->get_table_()->get_skip_list()->PrintNodeCount();
     // 寻找第四层跳表的三个节点，免得以后多线程写很多个函数来找
-    // std::vector<uintptr_t> startpoints =
-    //     m->get_table_()->get_skip_list()->FindPoints(4, 8);
-    // std::vector<uintptr_t> startpoints =
-    //     m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 8);
     std::vector<uintptr_t> startpoints;
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 1));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 2));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 3));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 4));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 5));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 6));
-    startpoints.push_back(
-        (uintptr_t)m->get_table_()->get_skip_list()->FindQuatilenPoint(4, 7));
+    if (use_dpa) {
+      startpoints = m->get_table_()->get_skip_list()->FindPoints(0, 32);
+    } else {
+      startpoints = m->get_table_()->get_skip_list()->FindQuatilenPoints(4, 8);
+    }
     if (index > 0) {
       edit_ = m->GetEdits();
       edit_->SetPrevLogNumber(0);
@@ -1283,6 +1278,10 @@ Status FlushJob::WriteLevel0Table() {
         *(int*)ptr = (int)priority;
         ptr += sizeof(int);
         total_size += sizeof(int);
+        // use dpa
+        *(int*)ptr = (int)use_dpa;
+        ptr += sizeof(int);
+        total_size += sizeof(int);
         // TrisectionPoint
         *(uint64_t*)ptr = startpoints.size();
         ptr += sizeof(uint64_t);
@@ -1292,8 +1291,9 @@ Status FlushJob::WriteLevel0Table() {
           ptr += sizeof(uintptr_t);
         }
         total_size += startpoints.size() * sizeof(uintptr_t);
-        printf("TrisectionPoint: %lx %lx %lx\n", startpoints[0], startpoints[1],
-               startpoints[2]);
+        // printf("TrisectionPoint: %lx %lx %lx\n", startpoints[0],
+        // startpoints[1],
+        //        startpoints[2]);
 
         // mems
         *(uint64_t*)ptr = total_num_entries;

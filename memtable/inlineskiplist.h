@@ -1096,8 +1096,8 @@ InlineSkipList<Comparator>::FindQuatilenPoint(int level, int num) {
   // x+2y  num=2:2x+y
   // x+3y  num=3:3x+3y
 
-  int x = 0.12 * node_count;  // arg <0.25
-  int y = (node_count - 8 * x) / 28;
+  int x = 0.46 * node_count;  // arg <0.25
+  int y = (node_count - 2 * x) / 1;
 
   for (int i = 0; i < x * num + num * (num - 1) * y / 2; i++) {
     temp_node_ = temp_node_->Next(level);
@@ -1121,7 +1121,7 @@ std::vector<uintptr_t> InlineSkipList<Comparator>::FindQuatilenPoints(int level,
     total += i;
   }
 
-  double arg = (double)1 / num - 0.005;
+  double arg = (double)1 / num - 0.05;
   int x = arg * node_count;
   int y = (node_count - num * x) / total;
   printf("total: %d, arg: %f, num: %d\n", total, arg, num);
@@ -1134,7 +1134,7 @@ std::vector<uintptr_t> InlineSkipList<Comparator>::FindQuatilenPoints(int level,
   int counter = 0;
   std::vector<uintptr_t> result;
   while (times) {
-    printf("start: %d, counter: %d, times: %d\n", start, counter, times);
+    // printf("start: %d, counter: %d, times: %d\n", start, counter, times);
     temp_node_ = temp_node_->Next(level);
     counter++;
     if (counter == (x * start + start * (start - 1) * y / 2)) {

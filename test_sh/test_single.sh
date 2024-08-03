@@ -11,18 +11,19 @@ t_array=("16")
 db_array=("1")
 
 ### Benchmark parameters
-db="/yzk-$1"
+db="/dc/$1"
 num_multi_db="1"
-wal_dir="/yzk-$1"
+wal_dir="/dc/$1"
 use_existing_db="true"
 threads="32"
 benchmarks="fillrandom,stats,wait,readrandom,stats"
 num="100000000"
 reads="10000000"
 writes="10000000"
+readwritepercent="50"
 key_size="16"
 value_size="100"
-batch_size="4"
+batch_size="1"
 
 ### MemTable parameters
 memtablerep="skip_list"
@@ -36,9 +37,10 @@ compression_type="none" #"none,zlib,lz4,dpu"
 #min_level_to_compress="2"
 #compression_per_level="none,none,lz4,lz4,zstd"
 #checksum_type="1"
+compression_parallel_threads="1"
 
 ### Compaction parameters
-allow_remote_compaction="true"
+allow_remote_compaction="false"
 #max_background_jobs="2"
 max_background_flushes="8"
 max_background_compactions="16"
@@ -52,13 +54,13 @@ level0_stop_writes_trigger="36"
 
 ### Write optimization parameters
 disable_wal="true"
-unordered_write="false"
-enable_pipelined_write="true"
+unordered_write="true"
+enable_pipelined_write="false"
 allow_concurrent_memtable_write="true"
 
 ### Read optimization parameters
 bloom_bits=10
-#cache_size=1073741824
+# cache_size=1073741824
 
 ### BlobDB parameters
 # enable_blob_files="true"
@@ -73,7 +75,7 @@ fs_svr_addr="ofi+verbs://192.168.2.21:12345"
 #target_net="enp134s0f1np1"
 report_bg_io_stats="true"
 report_interval_seconds="1"
-report_csv="false"
+report_csv="true"
 statistics="true"
 #stats_level="3"
 #stats_dump_period_sec="10"
@@ -139,12 +141,20 @@ function FILL_PARAMS() {
         const_params=$const_params"--num=$num "
     fi
     
+    if [ -n "$seek_nexts" ];then
+        const_params=$const_params"--seek_nexts=$seek_nexts "
+    fi
+
     if [ -n "$reads" ];then
         const_params=$const_params"--reads=$reads "
     fi
 
     if [ -n "$writes" ];then
         const_params=$const_params"--writes=$writes "
+    fi
+
+    if [ -n "$readwritepercent" ];then
+        const_params=$const_params"--readwritepercent=$readwritepercent "
     fi
 
     if [ -n "$key_size" ];then
@@ -177,6 +187,10 @@ function FILL_PARAMS() {
 
     if [ -n "$compression_per_level" ];then
         const_params=$const_params"--compression_per_level=$compression_per_level "
+    fi
+
+    if [ -n "$compression_parallel_threads" ];then
+        const_params=$const_params"--compression_parallel_threads=$compression_parallel_threads "
     fi
 
     if [ -n "$level_compaction_dynamic_level_bytes" ];then
@@ -325,13 +339,14 @@ function FILL_PARAMS() {
 }
 
 function MONITOR_CPU() {
-    sleep 1
+
     while [ -z "$(pidof $1)" ]
     do
         sleep 0.5
     done
-    awk_str="\$1==\"top\",\$1==\"MiB\"&&\$2==\"Swap:\";\$1==\"PID\"||\$1~/^[0-9]*$/{print \$9,\$10,\$11,\$12}"
-    top -Hp "$(pidof $1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
+    awk_str="\$1==\"top\";\$1==\"PID\"||\$1~/^[0-9]*$/{print \$12,\$9}"
+    # top -Hp "$(pidof $1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
+    top -Hp "$(ps aux | grep dc/$3 | awk '{print $2}' | head -n 1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
     echo $!
 }
 
@@ -357,6 +372,7 @@ RUN_ONE_TEST() {
     #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params | tee -a out.out"
     if [ "$1" == "numa" ];then
         cmd="numactl -C $begin_numactl-$end_numactl  $bench_file_path $const_params"
+        # cmd="numactl -C 0-63 $bench_file_path $const_params"
         # cmd=" $bench_file_path $const_params | tee -a out.out"
         #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params"
     fi
@@ -385,10 +401,13 @@ COPY_OUT_FILE() {
     mkdir $bench_file_dir/result_overall_$tdate > /dev/null 2>&1
     res_dir=$bench_file_dir/result_overall_$tdate/$1_$2
     mkdir $res_dir > /dev/null 2>&1
+    ./a.exe
     \cp -f $bench_file_dir/out.out $res_dir/
     \cp -f $bench_file_dir/*.csv $res_dir/
+    \cp -f $bench_file_dir/*.log $res_dir/
     \rm -f $bench_file_dir/out.out
     \rm -f $bench_file_dir/*.csv
+    \rm -f $bench_file_dir/*.log
     # \cp -f $bench_file_dir/cpu.log $res_dir/
     # \cp -f $bench_file_dir/net.log $res_dir/
     # \cp -f $bench_file_dir/io.log $res_dir/
@@ -400,15 +419,30 @@ COPY_OUT_FILE() {
 }
 
 LOAD() {
-    benchmarks="fillrandom,stats,wait,stats"
-    num="$1"
+    benchmarks="fillrandom,stats"
+    writes="$1"
     threads="$2"
+    allow_remote_compaction="$3"
 
     RUN_ONE_TEST
     if [ $? -ne 0 ];then
         exit 1
     fi
     sleep 5
+}
+
+FILLSEQ() {
+    benchmarks="fillseq,stats"
+    writes="$1"
+    use_existing_db="$2"
+
+    RUN_ONE_TEST numa "0-32"
+    #RUN_ONE_TEST
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE threads $3
 }
 
 FILLRANDOM() {
@@ -438,6 +472,61 @@ READRANDOM() {
     COPY_OUT_FILE readrandom $3
 }
 
+SEEKRANDOM() {
+    benchmarks="seekrandom,stats"
+    reads="$1"
+    seek_nexts="100"
+    use_existing_db="$2"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE readrandom $3
+}
+
+READSEQ() {
+    benchmarks="readseq,stats"
+    reads="$1"
+    use_existing_db="$2"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE readseq $3
+}
+
+READRANDOMWRITERANDOM() {
+    benchmarks="readrandomwriterandom,stats"
+    reads="$1"
+    writes="$2"
+    use_existing_db="$3"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE readrandomwriterandom $4
+}
+
+READWHILEWRITING() {
+    benchmarks="readwhilewriting,stats"
+    reads="$1"
+    writes="$2"
+    use_existing_db="$3"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE readwhilewriting $4
+}
+
 RUN_ALL_TEST() {
     for op in ${op_array[@]}; do
         for t in ${t_array[@]}; do
@@ -452,13 +541,21 @@ RUN_ALL_TEST() {
                         max_background_flushes="$fth"
                         max_write_buffer_number="$wn"
                         num_multi_db="$ndb"
-                        # # load data
-                        # LOAD 200000000 1
                         # run benchmark
                         threads="$t"
                         writes=$(((100000000/$threads)/$num_multi_db))
+                        # load data
+                        # LOAD 12500000 8 false
+                        MONITOR_CPU db_bench cpu-$1.log $1 &
                         FILLRANDOM $writes false $t
-                        # READRANDOM 1000000 true $op
+                        # allow_remote_compaction="true"
+                        # threads="16"
+                        # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                        # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                        # READWHILEWRITING 200000 1000000 true $op
+                        # READRANDOM 100000 true $op
+                        # READSEQ 10000000 true $op
+                        # SEEKRANDOM 10000 true $op
                         sleep 5
                     done
                 done
