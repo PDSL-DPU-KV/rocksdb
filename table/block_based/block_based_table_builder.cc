@@ -71,6 +71,7 @@ uint64_t write_thread_wait_time = 0;
 uint64_t write_thread_do_time = 0;
 uint64_t flush_dpa_time = 0;
 uint64_t dpa_threads = 0;
+uint64_t dma_threads = 0;
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
 namespace {
@@ -618,12 +619,12 @@ struct BlockBasedTableBuilder::Rep {
     // todo(optimize)
     auto a = std::chrono::high_resolution_clock::now();
     // compression_opts.parallel_threads
-    props_parallel.resize(dpa_threads);
-    data_block_parallel.resize(dpa_threads);
-    last_key_parallel.resize(dpa_threads);
-    first_key_in_next_block_parallel.resize(dpa_threads);
-    flush_block_policy_parallel.resize(dpa_threads);
-    for (uint32_t i = 0; i < dpa_threads; ++i) {
+    props_parallel.resize(32);
+    data_block_parallel.resize(32);
+    last_key_parallel.resize(32);
+    first_key_in_next_block_parallel.resize(32);
+    flush_block_policy_parallel.resize(32);
+    for (uint32_t i = 0; i < 32; ++i) {
       props_parallel[i].column_family_id = tbo.column_family_id;
       props_parallel[i].column_family_name = tbo.column_family_name;
       props_parallel[i].oldest_key_time = tbo.oldest_key_time;
@@ -910,7 +911,7 @@ struct BlockBasedTableBuilder::ParallelCompressionRep {
       block_rep_pool.push(&block_rep_buf[i]);
     }
 
-    for (uint32_t i = 0; i < dpa_threads; i++) {
+    for (uint32_t i = 0; i < 32; i++) {
       curr_block_keys_parallel.push_back(std::make_unique<Keys>());
       block_rep_buf_parallel.push_back(std::vector<BlockRep*>());
     }
@@ -1090,7 +1091,7 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   // Catch errors where caller forgot to call Finish()
   assert(rep_->state == Rep::State::kClosed);
   auto r = rep_;
-  for (uint32_t i = 0; i < dpa_threads; ++i) {
+  for (uint32_t i = 0; i < 32; ++i) {
     delete r->data_block_parallel[i];
     delete r->flush_block_policy_parallel[i];
   }
@@ -1106,7 +1107,7 @@ void BlockBasedTableBuilder::EmitRemainOpts(uint64_t index) {
 
 void BlockBasedTableBuilder::merge_prop() {
   Rep* r = rep_;
-  for (uint32_t i = 0; i < dpa_threads; ++i) {
+  for (uint32_t i = 0; i < 32; ++i) {
     r->props.Add(r->props_parallel[i]);
   }
 }

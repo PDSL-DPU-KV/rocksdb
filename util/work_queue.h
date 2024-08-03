@@ -17,6 +17,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdio>
 #include <functional>
 #include <mutex>
 #include <queue>
@@ -98,7 +99,13 @@ class WorkQueue {
     {
       std::unique_lock<std::mutex> lock(mutex_);
       while (queue_.empty() && !done_) {
+        // auto a = std::chrono::high_resolution_clock::now();
         readerCv_.wait(lock);
+        // auto b = std::chrono::high_resolution_clock::now();
+        // auto pop_time =
+        //     std::chrono::duration_cast<std::chrono::nanoseconds>(b -
+        //     a).count();
+        // printf("pop wait time: %lu\n", pop_time);
       }
       if (queue_.empty()) {
         assert(done_);
@@ -111,6 +118,7 @@ class WorkQueue {
     return true;
   }
 
+  std::size_t Size() { return queue_.size(); }
   /**
    * Sets the maximum queue size.  If `maxSize == 0` then it is unbounded.
    *

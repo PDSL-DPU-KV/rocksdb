@@ -50,6 +50,7 @@ typedef struct {
 } params_memcpy_t;
 
 struct MetaReq {
+  bool use_dpa;
   uint64_t tp_num;
   uintptr_t TrisectionPoint[200];
   uint64_t num_entries;

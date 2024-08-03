@@ -29,7 +29,7 @@ namespace ROCKSDB_NAMESPACE {
 
 extern uint64_t compress_time, write_time, checksum_time, write_thread_time,
     write_thread_wait_time, write_thread_do_time, compress_thread_time,
-    compress_thread_do_time, flush_dpa_time, dpa_threads;
+    compress_thread_do_time, flush_dpa_time, dpa_threads, dma_threads;
 
 class Slice;
 class Status;

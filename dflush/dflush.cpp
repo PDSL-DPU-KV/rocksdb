@@ -38,10 +38,12 @@
 doca_dev* dev;
 doca_dpa* dpa;
 
-const uint32_t nthreads_task = 1;
-const uint32_t nthreads_flush = 8;  // 这个值由 host 那边指定更好
+const uint32_t nthreads_dpa = 4;
+const uint32_t nthreads_dma = 8;
+// const uint32_t nthreads_task = 8;
+const uint32_t nthreads_flush = 32;
 const bool DPA_FLUSH = 0;
-const bool use_optimized = 1;
+const bool use_optimized = 0;
 
 ROCKSDB_NAMESPACE::WorkQueue<DMAThread*> DMAThread_pool;
 ROCKSDB_NAMESPACE::WorkQueue<DPAFlushThreads*> DPAThreads_pool;
@@ -303,6 +305,10 @@ void DeSerializeReq(char* buffer, rocksdb::MetaReq* req) {
   int priority = *(int*)ptr;
   ptr += sizeof(int);
   printf("priority:%d\n", priority);
+  // use dpa
+  req->use_dpa = *(int*)ptr;
+  ptr += sizeof(int);
+  printf("use dpa: %d\n", req->use_dpa);
   // TrisectionPoint
   req->tp_num = *(uint64_t*)ptr;
   ptr += sizeof(uint64_t);
@@ -498,7 +504,7 @@ void RunJob(int client_fd, int task_id) {
 
   // copy memtable from host
   params_memcpy_t params;
-  if (DPA_FLUSH) {
+  if (req.use_dpa) {
     params.copy_size = 5 * 1024;  // 一个datablock所占有的空间
     params.region_size = 150 * 1024 * 1024;  // 总共的空间为140MB
     params.piece_size =
@@ -511,7 +517,7 @@ void RunJob(int client_fd, int task_id) {
     req.params.copy_n = req.params.piece_size / req.params.copy_size;
   } else {
     params.copy_size = max_dma_buffer_size();  // 单次单线程copy大小为140KB
-    params.region_size = 150 * 1024 * 1024;  // 总共copy大小为140MB
+    params.region_size = 140 * 1024 * 1024;  // 总共copy大小为140MB
     params.piece_size = params.region_size;  // 分给八个线程
     params.copy_n = params.piece_size / params.copy_size;  // 每个线程的copy次数
     params.memcpy_mode = DMA;                              // copy模式
@@ -539,7 +545,7 @@ void RunJob(int client_fd, int task_id) {
   doca_buf_arr* bufarr;
   doca_dpa_dev_buf_arr_t bufarr_handle = 0;
 
-  if (DPA_FLUSH) {
+  if (req.use_dpa) {
     doca_check(doca_buf_arr_create(1, &bufarr));
     doca_check(doca_buf_arr_set_params(bufarr, src_m, params.region_size,
                                        start_offset));
@@ -564,14 +570,14 @@ void RunJob(int client_fd, int task_id) {
          req.file_meta.largest.DebugString(true).c_str());
 
   auto a_point = std::chrono::high_resolution_clock::now();
-  rocksdb::BuildTable_new(offset, &req, &result, use_optimized, DPA_FLUSH);
+  rocksdb::BuildTable_new(offset, &req, &result, use_optimized, req.use_dpa);
   auto b_point = std::chrono::high_resolution_clock::now();
   uint64_t buildtable_time =
       std::chrono::duration_cast<std::chrono::nanoseconds>(b_point - a_point)
           .count();
   printf("builder over, buildtable time:%lu\n", buildtable_time / 1000 / 1000);
 
-  if (DPA_FLUSH) {
+  if (req.use_dpa) {
     dpathreads->wait_all();
     DPAThreads_pool.push(dpathreads);
   }
@@ -637,27 +643,44 @@ int main() {
   server_addr.sin_port = htons(18888);
   auto server_fd = PrepareConn(&server_addr);
 
-  if (DPA_FLUSH) {
-    // DPA COPY
-    attach_device(dflush_app);
-    params_memcpy_t params;
-    DPAThreads_pool.setMaxSize(nthreads_task);
-    // TODO:产生线程
-    for (uint64_t i = 0; i < nthreads_task; ++i) {
-      DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
-    }
-  } else {
-    // DMA COPY
-    open_device(&dma_task_is_supported);
-    auto num_dma_tasks = 150 * 1024 * 1024 / max_dma_buffer_size();
-    auto max_bufs = num_dma_tasks * 2;
-    printf("max_bufs: %ld, dev: %p\n", max_bufs, dev);
-    DMAThread_pool.setMaxSize(nthreads_task);
-    for (uint32_t i = 0; i < nthreads_task; ++i) {
-      DMAThread_pool.push(new DMAThread(max_bufs, num_dma_tasks));
-    }
+  // SET DPA
+  attach_device(dflush_app);
+  // params_memcpy_t params;
+  // DPAThreads_pool.setMaxSize(nthreads_dpa);
+  // for (uint64_t i = 0; i < nthreads_dpa; ++i) {
+  //   DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
+  // }
+  // SET DMA
+  auto num_dma_tasks = 140 * 1024 * 1024 / max_dma_buffer_size();
+  auto max_bufs = num_dma_tasks * 2;
+  printf("max_bufs: %ld, dev: %p\n", max_bufs, dev);
+  DMAThread_pool.setMaxSize(nthreads_dma);
+  for (uint32_t i = 0; i < nthreads_dma; ++i) {
+    DMAThread_pool.push(new DMAThread(max_bufs, num_dma_tasks));
   }
 
+  // if (DPA_FLUSH) {
+  //   // DPA COPY
+  //   attach_device(dflush_app);
+  //   params_memcpy_t params;
+  //   DPAThreads_pool.setMaxSize(nthreads_task);
+  //   // TODO:产生线程
+  //   for (uint64_t i = 0; i < nthreads_task; ++i) {
+  //     DPAThreads_pool.push(new DPAFlushThreads(nthreads_flush, params));
+  //   }
+  // } else {
+  //   // DMA COPY
+  //   open_device(&dma_task_is_supported);
+  //   auto num_dma_tasks = 140 * 1024 * 1024 / max_dma_buffer_size();
+  //   auto max_bufs = num_dma_tasks * 2;
+  //   printf("max_bufs: %ld, dev: %p\n", max_bufs, dev);
+  //   DMAThread_pool.setMaxSize(nthreads_task);
+  //   for (uint32_t i = 0; i < nthreads_task; ++i) {
+  //     DMAThread_pool.push(new DMAThread(max_bufs, num_dma_tasks));
+  //   }
+  // }
+
+  auto nthreads_task = nthreads_dpa + nthreads_dma;
   std::atomic_uint32_t task_id = 0;
   ThreadPool tp(nthreads_task);
   while (true) {
@@ -671,10 +694,11 @@ int main() {
     tp.enqueue(RunJob, client_fd, task_id++);
   }
 
-  if (DPA_FLUSH) {
-    detach_device();
-  } else {
-    close_device();
-  }
+  detach_device();
+  // if (DPA_FLUSH) {
+  //   detach_device();
+  // } else {
+  //   close_device();
+  // }
   return 0;
 }
