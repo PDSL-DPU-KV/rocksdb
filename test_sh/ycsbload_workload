@@ -1,0 +1,16 @@
+readproportion=0
+updateproportion=0
+scanproportion=0
+insertproportion=1
+
+# key的大小
+zeropadding=16
+
+# 生成的key的范围
+recordcount=100000000
+
+# 请求分布，uniform, zipfian, latest
+requestdistribution=uniform
+
+# 和 zipfian 的一个参数有关
+operationcount=0

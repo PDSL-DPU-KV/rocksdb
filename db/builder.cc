@@ -536,7 +536,7 @@ class NewMemTableIterator : public InternalIterator {
   // No copying allowed
   NewMemTableIterator(const NewMemTableIterator&) = delete;
   void operator=(const NewMemTableIterator&) = delete;
-  ~NewMemTableIterator() override {};
+  ~NewMemTableIterator() override{};
 
   bool Valid() const override {
     return (Node_iter_ != End_iter_) && (Node_iter_ != offset_) && status_.ok();
@@ -755,6 +755,9 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
   MutableCFOptions tboptions_moptions;  // = tboptions->moptions;
   ImmutableOptions ioptions;            //= tboptions->ioptions;
   ioptions.cf_paths = req->tboptions_ioptions_cf_paths;
+  BlockBasedTableOptions table_options;
+  table_options.filter_policy.reset(NewBloomFilterPolicy(10));
+  ioptions.table_factory.reset(NewBlockBasedTableFactory(table_options));
   InternalKeyComparator internal_comparatortboptions(
       TestComparator(req->timestamp_size)
           .cmp_without_ts_);                // tboptions->internal_comparator
@@ -800,6 +803,7 @@ void BuildTable_new(uint64_t offset, MetaReq* req, MetaResult* result,
                                        nullptr));
   std::string fname =
       TableFileName(ioptions.cf_paths, DPU_fd.GetNumber(), DPU_fd.GetPathId());
+  std::cout << "fname:" << fname << std::endl;
   std::vector<std::string> blob_file_paths;
   std::string file_checksum = kUnknownFileChecksum;
   std::string file_checksum_func_name = kUnknownFileChecksumFuncName;

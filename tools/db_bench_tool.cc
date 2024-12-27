@@ -11,6 +11,7 @@
 #include <pthread.h>
 
 #include <algorithm>
+#include <cstdint>
 
 #include "plugin/nas/nas_env.h"
 #include "rocksdb/compression_type.h"
@@ -3217,7 +3218,6 @@ class Benchmark {
       }
       pos += prefix_size_;
     }
-
     int bytes_to_fill = std::min(key_size_ - static_cast<int>(pos - start), 8);
     if (port::kLittleEndian) {
       for (int i = 0; i < bytes_to_fill; ++i) {
@@ -3443,6 +3443,9 @@ class Benchmark {
       } else if (name == "fillseq") {
         fresh_db = true;
         method = &Benchmark::WriteSeq;
+      } else if (name == "fillseq_v2") {
+        fresh_db = true;
+        method = &Benchmark::WriteSeq_v2;
       } else if (name == "fillbatch") {
         fresh_db = true;
         entries_per_batch_ = 1000;
@@ -3941,9 +3944,7 @@ class Benchmark {
       }
     }
 
-    if ((method == &Benchmark::WriteRandom ||
-         method == &Benchmark::ReadWhileWriting) &&
-        FLAGS_report_csv) {
+    if (FLAGS_report_csv) {
       shared.latencys = new uint64_t[FLAGS_num * n];
       n = n + 1;
       shared.total =
@@ -5016,6 +5017,8 @@ class Benchmark {
 
   void WriteSeq(ThreadState* thread) { DoWrite(thread, SEQUENTIAL); }
 
+  void WriteSeq_v2(ThreadState* thread) { DoWrite_v2(thread, SEQUENTIAL); }
+
   void WriteRandom(ThreadState* thread) { DoWrite(thread, RANDOM); }
 
   void WriteUniqueRandom(ThreadState* thread) {
@@ -5024,6 +5027,66 @@ class Benchmark {
 
   void YCSBWorking(ThreadState* thread, ycsbc::CoreWorkload* workload, int load,
                    int run) {
+    if (FLAGS_report_csv &&
+        thread->tid == thread->shared->total -
+                           1) {  // record latency and throughput per second
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(78, &cpuset);
+      pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
+      uint64_t start_time = thread->stats.GetStart();
+      uint64_t last_ops = 0;
+      uint64_t last_time = start_time;
+      uint64_t now_done = 0;
+      uint64_t per_second_done;
+      uint64_t now_time;
+
+      while (true) {
+        if (thread->shared->num_done >= thread->shared->total - 1) break;
+        sleep(1);
+
+        now_time = FLAGS_env->NowMicros();
+        now_done = thread->shared->ops_num;
+
+        per_second_done = now_done - last_ops;
+        double use_time = (now_time - last_time) * 1e-6;
+        int64_t ebytes = (value_size_ + key_size_) * per_second_done;
+        int64_t now_bytes = (value_size_ + key_size_) * now_done;
+        double now = (now_time - start_time) * 1e-6;
+
+        outThp->setf(std::ios::fixed);
+        outThp->precision(2);
+        *outThp << now << ",s," << (1.0 * ebytes / 1048576.0) / use_time
+                << ",MB/s," << 1.0 * per_second_done / use_time << ",iops,"
+                << "average=," << (1.0 * now_bytes / 1048576.0) / now
+                << ",MB/s," << 1.0 * now_done / now << ",iops" << std::endl;
+
+        uint64_t* ops_latency = thread->shared->latencys;
+        std::sort(ops_latency + last_ops, ops_latency + now_done);
+        if (per_second_done > 2) {
+          uint64_t cnt90 = 0.90 * per_second_done - 1 + last_ops;
+          uint64_t cnt99 = 0.99 * per_second_done - 1 + last_ops;
+          uint64_t cnt999 = 0.999 * per_second_done - 1 + last_ops;
+          uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
+          uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
+
+          outLat->setf(std::ios::fixed);
+          outLat->precision(2);
+          *outLat << now << ",s," << 1.0 * per_second_done / use_time
+                  << ",iops,"
+                  << ",p90," << ops_latency[cnt90] << ",p99,"
+                  << ops_latency[cnt99] << ",p999," << ops_latency[cnt999]
+                  << ",p9999," << ops_latency[cnt9999] << ",p99999,"
+                  << ops_latency[cnt99999] << std::endl;
+        }
+
+        last_ops = now_done;
+        last_time = now_time;
+      }
+      return;
+    }
+
     int remain_loading = FLAGS_load_num;
     int remain_running = FLAGS_running_num;
     const int test_duration = FLAGS_duration;
@@ -5041,9 +5104,13 @@ class Benchmark {
     Duration duration = loading_duration;
     rocksdb::ReadOptions r_op;
     rocksdb::WriteOptions w_op;
+    WriteBatch batch(/*reserved_bytes=*/0, /*max_bytes=*/0,
+                     FLAGS_write_batch_protection_bytes_per_key,
+                     user_timestamp_size_);
+    batch.Clear();
 
     if (load) {
-      while (!duration.Done(entries_per_batch_)) {
+      while (!duration.Done(1)) {
         DB* db = SelectDB(thread);
         if (duration.GetStage() != stage) {
           stage = duration.GetStage();
@@ -5055,23 +5122,54 @@ class Benchmark {
             }
           }
         }
-        std::string key = workload->BuildKeyName();
-        Slice val = gen.Generate();
-        db_.db->Put(w_op, key, val);
-
-        int64_t batch_bytes = 0;
-        for (int64_t j = 0; j < entries_per_batch_; j++) {
-          batch_bytes += val.size() + key.size();
+        if (entries_per_batch_ > 1) {
+          batch.Clear();
+          for (int64_t j = 0; j < entries_per_batch_; j++) {
+            // int64_t key_num = GetRandomKey(&thread->rand);
+            // std::string key = workload->BuildKeyName(key_num);
+            std::string key = workload->BuildKeyName();
+            Slice val = gen.Generate();
+            batch.Put(key, val);
+            bytes += val.size() + key.size();
+          }
+          uint64_t per_write_start_time = 0;
+          if (FLAGS_report_csv) {
+            per_write_start_time = FLAGS_env->NowMicros();
+          }
+          s = db->Write(write_options_, &batch);
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_write_start_time;
+          }
+          thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
+        } else {
+          int64_t key_num = GetRandomKey(&thread->rand);
+          std::string key = workload->BuildKeyName(key_num);
+          Slice val = gen.Generate();
+          uint64_t per_write_start_time = 0;
+          if (FLAGS_report_csv) {
+            per_write_start_time = FLAGS_env->NowMicros();
+          }
+          db_.db->Put(w_op, key, val);
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_write_start_time;
+          }
+          // int64_t batch_bytes = 0;
+          // for (int64_t j = 0; j < entries_per_batch_; j++) {
+          //   batch_bytes += val.size() + key.size();
+          //   bytes += val.size() + key.size();
+          // }
           bytes += val.size() + key.size();
+          if (thread->shared->write_rate_limiter.get() != nullptr) {
+            thread->shared->write_rate_limiter->Request(
+                val.size() + key.size(), Env::IO_HIGH, nullptr /* stats */,
+                RateLimiter::OpType::kWrite);
+            thread->stats.ResetLastOpTime();
+          }
+          thread->stats.FinishedOps(nullptr, db, 1, kWrite);
         }
-        if (thread->shared->write_rate_limiter.get() != nullptr) {
-          thread->shared->write_rate_limiter->Request(
-              batch_bytes, Env::IO_HIGH, nullptr /* stats */,
-              RateLimiter::OpType::kWrite);
-          thread->stats.ResetLastOpTime();
         }
-        thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
-      }
       thread->stats.AddBytes(bytes);
     }
 
@@ -5081,7 +5179,10 @@ class Benchmark {
       Status op_status;
       int read_count = 0;
       int found_count = 0;
+      int put_count = 0;
       int blind_updates = 0;
+      int cur_batch_num = 0;
+      DB* db = SelectDB(thread);
       while (!duration.Done(1)) {
         if (duration.GetStage() != stage) {
           stage = duration.GetStage();
@@ -5096,41 +5197,100 @@ class Benchmark {
         std::string data;
         uint64_t key_num = workload->NextTransactionKeyNum();
         const std::string key = workload->BuildKeyName(key_num);
-        DB* db = SelectDB(thread);
         switch (workload->NextOp()) {
           case ycsbc::READ: {
+            uint64_t per_write_start_time = 0;
+            if (FLAGS_report_csv) {
+              per_write_start_time = FLAGS_env->NowMicros();
+            }
             op_status = db_.db->Get(r_op, key, &data);
+            if (FLAGS_report_csv) {
+              thread->shared->latencys[thread->shared->ops_num++] =
+                  FLAGS_env->NowMicros() - per_write_start_time;
+            }
             if (op_status.ok()) {
               found_count++;
-              bytes += key.size() + data.size();
             }
+            bytes += key.size() + data.size();
             read_count++;
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kRead);
+            thread->stats.FinishedOps(nullptr, db, 1, kRead);
+          } break;
+          case ycsbc::INSERT: {
+            put_count++;
+            if (entries_per_batch_ > 1) {
+              Slice val = gen.Generate();
+              batch.Put(key, val);
+              bytes += key.size() + val.size();
+              cur_batch_num++;
+              if (cur_batch_num >= entries_per_batch_) {
+                uint64_t per_write_start_time = 0;
+                if (FLAGS_report_csv) {
+                  per_write_start_time = FLAGS_env->NowMicros();
+                }
+                op_status = db_.db->Write(w_op, &batch);
+                if (FLAGS_report_csv) {
+                  thread->shared->latencys[thread->shared->ops_num++] =
+                      FLAGS_env->NowMicros() - per_write_start_time;
+                }
+                thread->stats.FinishedOps(nullptr, db, entries_per_batch_,
+                                          kWrite);
+                batch.Clear();
+                cur_batch_num = 0;
+              }
+            } else {
+              Slice val = gen.Generate();
+              // In rocksdb, update is just another put operation.
+              uint64_t per_write_start_time = 0;
+              if (FLAGS_report_csv) {
+                per_write_start_time = FLAGS_env->NowMicros();
+              }
+              op_status = db_.db->Put(w_op, key, val);
+              if (FLAGS_report_csv) {
+                thread->shared->latencys[thread->shared->ops_num++] =
+                    FLAGS_env->NowMicros() - per_write_start_time;
+              }
+              bytes += key.size() + val.size();
+              thread->stats.FinishedOps(nullptr, db, cur_batch_num, kWrite);
+            }
           } break;
           case ycsbc::UPDATE: {
             Slice val = gen.Generate();
             // In rocksdb, update is just another put operation.
+            uint64_t per_write_start_time = 0;
+            if (FLAGS_report_csv) {
+              per_write_start_time = FLAGS_env->NowMicros();
+            }
             op_status = db_.db->Put(w_op, key, val);
+            if (FLAGS_report_csv) {
+              thread->shared->latencys[thread->shared->ops_num++] =
+                  FLAGS_env->NowMicros() - per_write_start_time;
+            }
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
-          } break;
-          case ycsbc::INSERT: {
-            Slice val = gen.Generate();
-            // In rocksdb, update is just another put operation.
-            op_status = db_.db->Put(w_op, key, val);
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
           } break;
           case ycsbc::SCAN: {
             Iterator* db_iter = db_.db->NewIterator(rocksdb::ReadOptions());
+            uint64_t per_write_start_time = 0;
+            if (FLAGS_report_csv) {
+              per_write_start_time = FLAGS_env->NowMicros();
+            }
             db_iter->Seek(key);
             int len = workload->scan_len_chooser_->Next();
             for (int i = 0; db_iter->Valid() && i < len; i++) {
               data = db_iter->value().ToString();
               db_iter->Next();
             }
+            if (FLAGS_report_csv) {
+              thread->shared->latencys[thread->shared->ops_num++] =
+                  FLAGS_env->NowMicros() - per_write_start_time;
+            }
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kSeek);
             delete db_iter;
           } break;
           case ycsbc::READMODIFYWRITE: {
+            uint64_t per_write_start_time = 0;
+            if (FLAGS_report_csv) {
+              per_write_start_time = FLAGS_env->NowMicros();
+            }
             op_status = db_.db->Get(r_op, key, &data);
             read_count++;
             if (op_status.IsNotFound()) {
@@ -5138,20 +5298,46 @@ class Benchmark {
             }
             Slice val = gen.Generate();
             op_status = db_.db->Put(w_op, key, val);
+            if (FLAGS_report_csv) {
+              thread->shared->latencys[thread->shared->ops_num++] =
+                  FLAGS_env->NowMicros() - per_write_start_time;
+            }
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
           } break;
           case ycsbc::DELETE: {
+            uint64_t per_write_start_time = 0;
+            if (FLAGS_report_csv) {
+              per_write_start_time = FLAGS_env->NowMicros();
+            }
             op_status = db_.db->Delete(w_op, key);
+            if (FLAGS_report_csv) {
+              thread->shared->latencys[thread->shared->ops_num++] =
+                  FLAGS_env->NowMicros() - per_write_start_time;
+            }
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete);
           } break;
           case ycsbc::MAXOPTYPE:
             throw ycsbc::utils::Exception(
                 "Operation request is not recognized!");
         }
-        thread->stats.AddBytes(bytes);
       }
+      if (cur_batch_num > 0) {
+        uint64_t per_write_start_time = 0;
+        if (FLAGS_report_csv) {
+          per_write_start_time = FLAGS_env->NowMicros();
+        }
+        op_status = db_.db->Write(w_op, &batch);
+        if (FLAGS_report_csv) {
+          thread->shared->latencys[thread->shared->ops_num++] =
+              FLAGS_env->NowMicros() - per_write_start_time;
+        }
+        thread->stats.FinishedOps(nullptr, db, cur_batch_num, kWrite);
+        batch.Clear();
+      }
+      thread->stats.AddBytes(bytes);
       std::cout << "found count / read count " << found_count << " / "
                 << read_count << std::endl;
+      std::cout << "put count " << put_count << std::endl;
     }
   }
 
@@ -5160,8 +5346,6 @@ class Benchmark {
       std::ifstream input(FLAGS_ycsb_workload);
       props.Load(input);
     }
-    props.SetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY,
-                      std::to_string(FLAGS_load_num));
     props.SetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY,
                       std::to_string(FLAGS_running_num));
     wl.Init(props);
@@ -5680,6 +5864,54 @@ class Benchmark {
     std::vector<uint64_t> values_;
   };
 
+  class KeyGenerator_v2 {
+   public:
+    KeyGenerator_v2(Random64* rand, WriteMode mode, uint64_t num,
+                    uint64_t num_per_set = 64 * 1024, uint64_t start_next = 0)
+        : rand_(rand), mode_(mode), num_(num), next_(start_next) {
+      if (mode_ == UNIQUE_RANDOM) {
+        // NOTE: if memory consumption of this approach becomes a concern,
+        // we can either break it into pieces and only random shuffle a
+        // section each time. Alternatively, use a bit map implementation
+        // (https://reviews.facebook.net/differential/diff/54627/)
+        values_.resize(num_);
+        for (uint64_t i = 0; i < num_; ++i) {
+          values_[i] = i;
+        }
+        RandomShuffle(values_.begin(), values_.end(),
+                      static_cast<uint32_t>(*seed_base));
+      }
+    }
+
+    uint64_t Next() {
+      switch (mode_) {
+        case SEQUENTIAL:
+          return next_++ % num_;
+        case RANDOM:
+          return rand_->Next() % num_;
+        case UNIQUE_RANDOM:
+          assert(next_ < num_);
+          return values_[next_++];
+      }
+      assert(false);
+      return std::numeric_limits<uint64_t>::max();
+    }
+
+    // Only available for UNIQUE_RANDOM mode.
+    uint64_t Fetch(uint64_t index) {
+      assert(mode_ == UNIQUE_RANDOM);
+      assert(index < values_.size());
+      return values_[index];
+    }
+
+   private:
+    Random64* rand_;
+    WriteMode mode_;
+    const uint64_t num_;
+    uint64_t next_;
+    std::vector<uint64_t> values_;
+  };
+
   DB* SelectDB(ThreadState* thread) { return SelectDBWithCfh(thread)->db; }
 
   DBWithColumnFamilies* SelectDBWithCfh(ThreadState* thread) {
@@ -5767,6 +5999,7 @@ class Benchmark {
       num_key_gens = multi_dbs_.size();
     }
     std::vector<std::unique_ptr<KeyGenerator>> key_gens(num_key_gens);
+    // std::vector<std::unique_ptr<KeyGenerator_v2>> key_gens(num_key_gens);
     int64_t max_ops = num_ops * num_key_gens;
     int64_t ops_per_stage = max_ops;
     if (FLAGS_num_column_families > 1 && FLAGS_num_hot_column_families > 0) {
@@ -5780,6 +6013,11 @@ class Benchmark {
     for (size_t i = 0; i < num_key_gens; i++) {
       key_gens[i].reset(new KeyGenerator(&(thread->rand), write_mode,
                                          num_per_key_gen, ops_per_stage));
+      // fprintf(stderr, "next:%lu\n",
+      //         thread->tid * num_ops / thread->shared->total);
+      // key_gens[i].reset(new KeyGenerator_v2(
+      //     &(thread->rand), write_mode, num_per_key_gen, ops_per_stage,
+      //     thread->tid * num_ops / thread->shared->total));
     }
 
     if (num_ != FLAGS_num) {
@@ -5924,6 +6162,547 @@ class Benchmark {
           }
         }
       }
+      DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(id);
+
+      batch.Clear();
+      int64_t batch_bytes = 0;
+
+      for (int64_t j = 0; j < entries_per_batch_; j++) {
+        int64_t rand_num = 0;
+        if ((write_mode == UNIQUE_RANDOM) && (p > 0.0)) {
+          if ((inserted_key_window.size() > 0) &&
+              overwrite_decider(overwrite_gen)) {
+            num_overwrites++;
+            rand_num = inserted_key_window[reservoir_id_gen.Next() %
+                                           inserted_key_window.size()];
+          } else {
+            num_unique_keys++;
+            rand_num = key_gens[id]->Next();
+            if (inserted_key_window.size() < FLAGS_overwrite_window_size) {
+              inserted_key_window.push_back(rand_num);
+            } else {
+              inserted_key_window.pop_front();
+              inserted_key_window.push_back(rand_num);
+            }
+          }
+        } else if (kNumDispAndPersEntries > 0) {
+          // Check if queue is non-empty and if we need to insert
+          // 'persistent' KV entries (KV entries that are never deleted)
+          // and delete disposable entries previously inserted.
+          if (!disposable_entries_q[id].empty() &&
+              (disposable_entries_q[id].front().first <
+               FLAGS_env->NowMicros())) {
+            // If we need to perform a "merge op" pattern,
+            // we first write all the persistent KV entries not targeted
+            // by deletes, and then we write the disposable entries deletes.
+            if (persistent_ent_and_del_index[id] <
+                FLAGS_persistent_entries_batch_size) {
+              // Generate key to insert.
+              rand_num =
+                  key_gens[id]->Fetch(disposable_entries_q[id].front().second +
+                                      FLAGS_disposable_entries_batch_size +
+                                      persistent_ent_and_del_index[id]);
+              persistent_ent_and_del_index[id]++;
+              is_disposable_entry = false;
+              skip_for_loop = false;
+            } else if (persistent_ent_and_del_index[id] <
+                       kNumDispAndPersEntries) {
+              // Find key of the entry to delete.
+              rand_num =
+                  key_gens[id]->Fetch(disposable_entries_q[id].front().second +
+                                      (persistent_ent_and_del_index[id] -
+                                       FLAGS_persistent_entries_batch_size));
+              persistent_ent_and_del_index[id]++;
+              GenerateKeyFromInt(rand_num, FLAGS_num, &key);
+              // For the delete operation, everything happens here and we
+              // skip the rest of the for-loop, which is designed for
+              // inserts.
+              if (FLAGS_num_column_families <= 1) {
+                batch.Delete(key);
+              } else {
+                // We use same rand_num as seed for key and column family so
+                // that we can deterministically find the cfh corresponding to
+                // a particular key while reading the key.
+                batch.Delete(db_with_cfh->GetCfh(rand_num), key);
+              }
+              // A delete only includes Key+Timestamp (no value).
+              batch_bytes += key_size_ + user_timestamp_size_;
+              bytes += key_size_ + user_timestamp_size_;
+              num_selective_deletes++;
+              // Skip rest of the for-loop (j=0, j<entries_per_batch_,j++).
+              skip_for_loop = true;
+            } else {
+              assert(false);  // should never reach this point.
+            }
+            // If disposable_entries_q needs to be updated (ie: when a
+            // selective insert+delete was successfully completed, pop the job
+            // out of the queue).
+            if (!disposable_entries_q[id].empty() &&
+                (disposable_entries_q[id].front().first <
+                 FLAGS_env->NowMicros()) &&
+                persistent_ent_and_del_index[id] == kNumDispAndPersEntries) {
+              disposable_entries_q[id].pop();
+              persistent_ent_and_del_index[id] = 0;
+            }
+
+            // If we are deleting disposable entries, skip the rest of the
+            // for-loop since there is no key-value inserts at this moment in
+            // time.
+            if (skip_for_loop) {
+              continue;
+            }
+
+          }
+          // If no job is in the queue, then we keep inserting disposable KV
+          // entries that will be deleted later by a series of deletes.
+          else {
+            rand_num = key_gens[id]->Fetch(disposable_entries_index[id]);
+            disposable_entries_index[id]++;
+            is_disposable_entry = true;
+            if ((disposable_entries_index[id] %
+                 FLAGS_disposable_entries_batch_size) == 0) {
+              // Skip the persistent KV entries inserts for now
+              disposable_entries_index[id] +=
+                  FLAGS_persistent_entries_batch_size;
+            }
+          }
+        } else {
+          rand_num = key_gens[id]->Next();
+        }
+        GenerateKeyFromInt(rand_num, FLAGS_num, &key);
+        Slice val;
+        if (kNumDispAndPersEntries > 0) {
+          random_value = rnd_disposable_entry.RandomString(
+              is_disposable_entry ? FLAGS_disposable_entries_value_size
+                                  : FLAGS_persistent_entries_value_size);
+          val = Slice(random_value);
+          num_unique_keys++;
+        } else {
+          val = gen.Generate();
+        }
+        if (use_blob_db_) {
+          // Stacked BlobDB
+          blob_db::BlobDB* blobdb =
+              static_cast<blob_db::BlobDB*>(db_with_cfh->db);
+          if (FLAGS_blob_db_max_ttl_range > 0) {
+            int ttl = rand() % FLAGS_blob_db_max_ttl_range;
+            s = blobdb->PutWithTTL(write_options_, key, val, ttl);
+          } else {
+            s = blobdb->Put(write_options_, key, val);
+          }
+        } else if (FLAGS_num_column_families <= 1) {
+          batch.Put(key, val);
+        } else {
+          // We use same rand_num as seed for key and column family so that we
+          // can deterministically find the cfh corresponding to a particular
+          // key while reading the key.
+          batch.Put(db_with_cfh->GetCfh(rand_num), key, val);
+        }
+        batch_bytes += val.size() + key_size_ + user_timestamp_size_;
+        bytes += val.size() + key_size_ + user_timestamp_size_;
+        ++num_written;
+        // If all disposable entries have been inserted, then we need to
+        // add in the job queue a call for 'persistent entry insertions +
+        // disposable entry deletions'.
+        if (kNumDispAndPersEntries > 0 && is_disposable_entry &&
+            ((disposable_entries_index[id] % kNumDispAndPersEntries) == 0)) {
+          // Queue contains [timestamp, starting_idx],
+          // timestamp = current_time + delay (minimum aboslute time when to
+          // start inserting the selective deletes) starting_idx = index in
+          // the keygen of the rand_num to generate the key of the first KV
+          // entry to delete (= key of the first selective delete).
+          disposable_entries_q[id].push(std::make_pair(
+              FLAGS_env->NowMicros() +
+                  FLAGS_disposable_entries_delete_delay /* timestamp */,
+              disposable_entries_index[id] - kNumDispAndPersEntries
+              /*starting idx*/));
+        }
+        if (writes_per_range_tombstone_ > 0 &&
+            num_written > writes_before_delete_range_ &&
+            (num_written - writes_before_delete_range_) /
+                    writes_per_range_tombstone_ <=
+                max_num_range_tombstones_ &&
+            (num_written - writes_before_delete_range_) %
+                    writes_per_range_tombstone_ ==
+                0) {
+          num_range_deletions++;
+          int64_t begin_num = key_gens[id]->Next();
+          if (FLAGS_expand_range_tombstones) {
+            for (int64_t offset = 0; offset < range_tombstone_width_;
+                 ++offset) {
+              GenerateKeyFromInt(begin_num + offset, FLAGS_num,
+                                 &expanded_keys[offset]);
+              if (use_blob_db_) {
+                // Stacked BlobDB
+                s = db_with_cfh->db->Delete(write_options_,
+                                            expanded_keys[offset]);
+              } else if (FLAGS_num_column_families <= 1) {
+                batch.Delete(expanded_keys[offset]);
+              } else {
+                batch.Delete(db_with_cfh->GetCfh(rand_num),
+                             expanded_keys[offset]);
+              }
+            }
+          } else {
+            GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key);
+            GenerateKeyFromInt(begin_num + range_tombstone_width_, FLAGS_num,
+                               &end_key);
+            if (use_blob_db_) {
+              // Stacked BlobDB
+              s = db_with_cfh->db->DeleteRange(
+                  write_options_, db_with_cfh->db->DefaultColumnFamily(),
+                  begin_key, end_key);
+            } else if (FLAGS_num_column_families <= 1) {
+              batch.DeleteRange(begin_key, end_key);
+            } else {
+              batch.DeleteRange(db_with_cfh->GetCfh(rand_num), begin_key,
+                                end_key);
+            }
+          }
+        }
+      }
+      if (thread->shared->write_rate_limiter.get() != nullptr) {
+        thread->shared->write_rate_limiter->Request(
+            batch_bytes, Env::IO_HIGH, nullptr /* stats */,
+            RateLimiter::OpType::kWrite);
+        // Set time at which last op finished to Now() to hide latency and
+        // sleep from rate limiter. Also, do the check once per batch, not
+        // once per write.
+        thread->stats.ResetLastOpTime();
+      }
+      if (user_timestamp_size_ > 0) {
+        Slice user_ts = mock_app_clock_->Allocate(ts_guard.get());
+        s = batch.UpdateTimestamps(
+            user_ts, [this](uint32_t) { return user_timestamp_size_; });
+        if (!s.ok()) {
+          fprintf(stderr, "assign timestamp to write batch: %s\n",
+                  s.ToString().c_str());
+          ErrorExit();
+        }
+      }
+      if (!use_blob_db_) {
+        // Not stacked BlobDB
+        uint64_t per_write_start_time = 0;
+        if (FLAGS_report_csv) {
+          per_write_start_time = FLAGS_env->NowMicros();
+        }
+        s = db_with_cfh->db->Write(write_options_, &batch);
+        if (!s.ok()) {
+          fprintf(stderr, "write error: %s\n", s.ToString().c_str());
+          // ErrorExit();
+        }
+        if (FLAGS_report_csv) {
+          thread->shared->latencys[thread->shared->ops_num++] =
+              FLAGS_env->NowMicros() - per_write_start_time;
+        }
+      }
+      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
+                                entries_per_batch_, kWrite);
+      if (FLAGS_sine_write_rate) {
+        uint64_t now = FLAGS_env->NowMicros();
+
+        uint64_t usecs_since_last;
+        if (now > thread->stats.GetSineInterval()) {
+          usecs_since_last = now - thread->stats.GetSineInterval();
+        } else {
+          usecs_since_last = 0;
+        }
+
+        if (usecs_since_last >
+            (FLAGS_sine_write_rate_interval_milliseconds * uint64_t{1000})) {
+          double usecs_since_start =
+              static_cast<double>(now - thread->stats.GetStart());
+          thread->stats.ResetSineInterval();
+          uint64_t write_rate =
+              static_cast<uint64_t>(SineRate(usecs_since_start / 1000000.0));
+          thread->shared->write_rate_limiter.reset(
+              NewGenericRateLimiter(write_rate));
+        }
+      }
+      if (!s.ok()) {
+        s = listener_->WaitForRecovery(600000000) ? Status::OK() : s;
+      }
+
+      if (!s.ok()) {
+        fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+        ErrorExit();
+      }
+    }
+    if ((write_mode == UNIQUE_RANDOM) && (p > 0.0)) {
+      fprintf(stdout,
+              "Number of unique keys inserted: %" PRIu64
+              ".\nNumber of overwrites: %" PRIu64 "\n",
+              num_unique_keys, num_overwrites);
+    } else if (kNumDispAndPersEntries > 0) {
+      fprintf(stdout,
+              "Number of unique keys inserted (disposable+persistent): %" PRIu64
+              ".\nNumber of 'disposable entry delete': %" PRIu64 "\n",
+              num_written, num_selective_deletes);
+    }
+    if (num_range_deletions > 0) {
+      std::cout << "Number of range deletions: " << num_range_deletions
+                << std::endl;
+    }
+    thread->stats.AddBytes(bytes);
+  }
+
+  void DoWrite_v2(ThreadState* thread, WriteMode write_mode) {
+    if (FLAGS_report_csv &&
+        thread->tid == thread->shared->total -
+                           1) {  // record latency and throughput per second
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(78, &cpuset);
+      pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
+      uint64_t start_time = thread->stats.GetStart();
+      uint64_t last_ops = 0;
+      uint64_t last_time = start_time;
+      uint64_t now_done = 0;
+      uint64_t per_second_done;
+      uint64_t now_time;
+
+      while (true) {
+        if (thread->shared->num_done >= thread->shared->total - 1) break;
+        sleep(1);
+
+        now_time = FLAGS_env->NowMicros();
+        now_done = thread->shared->ops_num;
+
+        per_second_done = now_done - last_ops;
+        double use_time = (now_time - last_time) * 1e-6;
+        int64_t ebytes = (value_size_ + key_size_) * per_second_done;
+        int64_t now_bytes = (value_size_ + key_size_) * now_done;
+        double now = (now_time - start_time) * 1e-6;
+
+        outThp->setf(std::ios::fixed);
+        outThp->precision(2);
+        *outThp << now << ",s," << (1.0 * ebytes / 1048576.0) / use_time
+                << ",MB/s," << 1.0 * per_second_done / use_time << ",iops,"
+                << "average=," << (1.0 * now_bytes / 1048576.0) / now
+                << ",MB/s," << 1.0 * now_done / now << ",iops" << std::endl;
+
+        uint64_t* ops_latency = thread->shared->latencys;
+        std::sort(ops_latency + last_ops, ops_latency + now_done);
+        if (per_second_done > 2) {
+          uint64_t cnt90 = 0.90 * per_second_done - 1 + last_ops;
+          uint64_t cnt99 = 0.99 * per_second_done - 1 + last_ops;
+          uint64_t cnt999 = 0.999 * per_second_done - 1 + last_ops;
+          uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
+          uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
+
+          outLat->setf(std::ios::fixed);
+          outLat->precision(2);
+          *outLat << now << ",s," << 1.0 * per_second_done / use_time
+                  << ",iops,"
+                  << ",p90," << ops_latency[cnt90] << ",p99,"
+                  << ops_latency[cnt99] << ",p999," << ops_latency[cnt999]
+                  << ",p9999," << ops_latency[cnt9999] << ",p99999,"
+                  << ops_latency[cnt99999] << std::endl;
+        }
+
+        last_ops = now_done;
+        last_time = now_time;
+      }
+      return;
+    }
+
+    const int test_duration = write_mode == RANDOM ? FLAGS_duration : 0;
+    int64_t num_ops = writes_ == 0 ? num_ : writes_;
+
+    size_t num_key_gens = 1;
+    std::vector<int> ids;
+    if (db_.db == nullptr) {
+      int thread_nums = thread->shared->total;
+      int multi_dbs_size = multi_dbs_.size();
+      fprintf(stderr, "thread_nums: %d, multi_dbs_size: %d, thread_tid:%d\n",
+              thread_nums, multi_dbs_size, thread->tid);
+      if (thread_nums >= multi_dbs_size) {
+        ids.push_back(thread->tid % multi_dbs_size);
+      } else {
+        int nums = multi_dbs_size / thread_nums;
+        for (int i = 0; i < nums; i++) {
+          ids.push_back(thread->tid + thread_nums * i);
+        }
+        num_key_gens = nums;
+      }
+    } else {
+      ids.push_back(0);
+    }
+    std::vector<std::unique_ptr<KeyGenerator>> key_gens(multi_dbs_.size());
+    int64_t max_ops = num_ops;
+    int64_t ops_per_stage = max_ops;
+    num_ops /= num_key_gens;
+    if (FLAGS_num_column_families > 1 && FLAGS_num_hot_column_families > 0) {
+      ops_per_stage = (max_ops - 1) / (FLAGS_num_column_families /
+                                       FLAGS_num_hot_column_families) +
+                      1;
+    }
+
+    Duration duration(test_duration, max_ops, ops_per_stage);
+    const uint64_t num_per_key_gen = num_ / num_key_gens;
+    for (size_t i = 0; i < multi_dbs_.size(); i++) {
+      key_gens[i].reset(new KeyGenerator(&(thread->rand), write_mode,
+                                         num_per_key_gen, ops_per_stage));
+    }
+
+    if (num_ != FLAGS_num) {
+      char msg[100];
+      snprintf(msg, sizeof(msg), "(%" PRIu64 " ops)", num_);
+      thread->stats.AddMessage(msg);
+    }
+
+    RandomGenerator gen;
+    WriteBatch batch(/*reserved_bytes=*/0, /*max_bytes=*/0,
+                     FLAGS_write_batch_protection_bytes_per_key,
+                     user_timestamp_size_);
+    Status s;
+    int64_t bytes = 0;
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+    std::unique_ptr<const char[]> begin_key_guard;
+    Slice begin_key = AllocateKey(&begin_key_guard);
+    std::unique_ptr<const char[]> end_key_guard;
+    Slice end_key = AllocateKey(&end_key_guard);
+    double p = 0.0;
+    uint64_t num_overwrites = 0, num_unique_keys = 0, num_selective_deletes = 0;
+    // If user set overwrite_probability flag,
+    // check if value is in [0.0,1.0].
+    if (FLAGS_overwrite_probability > 0.0) {
+      p = FLAGS_overwrite_probability > 1.0 ? 1.0 : FLAGS_overwrite_probability;
+      // If overwrite set by user, and UNIQUE_RANDOM mode on,
+      // the overwrite_window_size must be > 0.
+      if (write_mode == UNIQUE_RANDOM && FLAGS_overwrite_window_size == 0) {
+        fprintf(stderr,
+                "Overwrite_window_size must be  strictly greater than 0.\n");
+        ErrorExit();
+      }
+    }
+
+    // Default_random_engine provides slightly
+    // improved throughput over mt19937.
+    std::default_random_engine overwrite_gen{
+        static_cast<unsigned int>(*seed_base)};
+    std::bernoulli_distribution overwrite_decider(p);
+
+    // Inserted key window is filled with the last N
+    // keys previously inserted into the DB (with
+    // N=FLAGS_overwrite_window_size).
+    // We use a deque struct because:
+    // - random access is O(1)
+    // - insertion/removal at beginning/end is also O(1).
+    std::deque<int64_t> inserted_key_window;
+    Random64 reservoir_id_gen(*seed_base);
+
+    // --- Variables used in disposable/persistent keys simulation:
+    // The following variables are used when
+    // disposable_entries_batch_size is >0. We simualte a workload
+    // where the following sequence is repeated multiple times:
+    // "A set of keys S1 is inserted ('disposable entries'), then after
+    // some delay another set of keys S2 is inserted ('persistent entries')
+    // and the first set of keys S1 is deleted. S2 artificially represents
+    // the insertion of hypothetical results from some undefined computation
+    // done on the first set of keys S1. The next sequence can start as soon
+    // as the last disposable entry in the set S1 of this sequence is
+    // inserted, if the delay is non negligible"
+    bool skip_for_loop = false, is_disposable_entry = true;
+    std::vector<uint64_t> disposable_entries_index(num_key_gens, 0);
+    std::vector<uint64_t> persistent_ent_and_del_index(num_key_gens, 0);
+    const uint64_t kNumDispAndPersEntries =
+        FLAGS_disposable_entries_batch_size +
+        FLAGS_persistent_entries_batch_size;
+    if (kNumDispAndPersEntries > 0) {
+      if ((write_mode != UNIQUE_RANDOM) || (writes_per_range_tombstone_ > 0) ||
+          (p > 0.0)) {
+        fprintf(stderr,
+                "Disposable/persistent deletes are not compatible with "
+                "overwrites "
+                "and DeleteRanges; and are only supported in "
+                "filluniquerandom.\n");
+        ErrorExit();
+      }
+      if (FLAGS_disposable_entries_value_size < 0 ||
+          FLAGS_persistent_entries_value_size < 0) {
+        fprintf(
+            stderr,
+            "disposable_entries_value_size and persistent_entries_value_size"
+            "have to be positive.\n");
+        ErrorExit();
+      }
+    }
+    Random rnd_disposable_entry(static_cast<uint32_t>(*seed_base));
+    std::string random_value;
+    // Queue that stores scheduled timestamp of disposable entries deletes,
+    // along with starting index of disposable entry keys to delete.
+    std::vector<std::queue<std::pair<uint64_t, uint64_t>>> disposable_entries_q(
+        num_key_gens);
+    // --- End of variables used in disposable/persistent keys simulation.
+
+    std::vector<std::unique_ptr<const char[]>> expanded_key_guards;
+    std::vector<Slice> expanded_keys;
+    if (FLAGS_expand_range_tombstones) {
+      expanded_key_guards.resize(range_tombstone_width_);
+      for (auto& expanded_key_guard : expanded_key_guards) {
+        expanded_keys.emplace_back(AllocateKey(&expanded_key_guard));
+      }
+    }
+
+    std::unique_ptr<char[]> ts_guard;
+    if (user_timestamp_size_ > 0) {
+      ts_guard.reset(new char[user_timestamp_size_]);
+    }
+
+    int64_t stage = 0;
+    int64_t num_written = 0;
+    size_t id_index = 0;
+    size_t id = ids[id_index];
+    int64_t next_seq_db_at = num_ops;
+    int64_t num_range_deletions = 0;
+
+    while ((num_per_key_gen != 0) && !duration.Done(entries_per_batch_)) {
+      if (duration.GetStage() != stage) {
+        stage = duration.GetStage();
+        if (db_.db != nullptr) {
+          db_.CreateNewCf(open_options_, stage);
+        } else {
+          for (auto& db : multi_dbs_) {
+            db.CreateNewCf(open_options_, stage);
+          }
+        }
+      }
+
+      // if (write_mode != SEQUENTIAL) {
+      //   id = thread->rand.Next() % num_key_gens;
+      // } else {
+      //   // When doing a sequential load with multiple databases, load them in
+      //   // order rather than all at the same time to avoid:
+      //   // 1) long delays between flushing memtables
+      //   // 2) flushing memtables for all of them at the same point in time
+      //   // 3) not putting the same number of keys in each database
+      //   if (num_written >= next_seq_db_at) {
+      //     next_seq_db_at += num_ops;
+      //     id++;
+      //     if (id >= num_key_gens) {
+      //       fprintf(stderr, "Logic error. Filled all databases\n");
+      //       ErrorExit();
+      //     }
+      //   }
+      // }
+      if (write_mode != SEQUENTIAL) {
+        id = thread->rand.Next() % num_key_gens;
+      } else {
+        if (num_written >= next_seq_db_at) {
+          next_seq_db_at += num_ops;
+          id_index++;
+          if (id_index >= num_key_gens) {
+            fprintf(stderr, "Logic error. Filled all databases\n");
+            ErrorExit();
+          }
+          id = ids[id_index];
+        }
+      }
+
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(id);
 
       batch.Clear();
@@ -7269,6 +8048,65 @@ class Benchmark {
   // needs to decide the ratio between Get, Put, Iterator queries before
   // starting the benchmark.
   void MixGraph(ThreadState* thread) {
+    if (FLAGS_report_csv &&
+        thread->tid == thread->shared->total -
+                           1) {  // record latency and throughput per second
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(78, &cpuset);
+      pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
+      uint64_t start_time = thread->stats.GetStart();
+      uint64_t last_ops = 0;
+      uint64_t last_time = start_time;
+      uint64_t now_done = 0;
+      uint64_t per_second_done;
+      uint64_t now_time;
+
+      while (true) {
+        if (thread->shared->num_done >= thread->shared->total - 2) break;
+        sleep(1);
+
+        now_time = FLAGS_env->NowMicros();
+        now_done = thread->shared->ops_num;
+
+        per_second_done = now_done - last_ops;
+        double use_time = (now_time - last_time) * 1e-6;
+        int64_t ebytes = (value_size_ + key_size_) * per_second_done;
+        int64_t now_bytes = (value_size_ + key_size_) * now_done;
+        double now = (now_time - start_time) * 1e-6;
+
+        outThp->setf(std::ios::fixed);
+        outThp->precision(2);
+        *outThp << now << ",s," << (1.0 * ebytes / 1048576.0) / use_time
+                << ",MB/s," << 1.0 * per_second_done / use_time << ",iops,"
+                << "average=," << (1.0 * now_bytes / 1048576.0) / now
+                << ",MB/s," << 1.0 * now_done / now << ",iops" << std::endl;
+
+        uint64_t* ops_latency = thread->shared->latencys;
+        std::sort(ops_latency + last_ops, ops_latency + now_done);
+        if (per_second_done > 2) {
+          uint64_t cnt90 = 0.90 * per_second_done - 1 + last_ops;
+          uint64_t cnt99 = 0.99 * per_second_done - 1 + last_ops;
+          uint64_t cnt999 = 0.999 * per_second_done - 1 + last_ops;
+          uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
+          uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
+
+          outLat->setf(std::ios::fixed);
+          outLat->precision(2);
+          *outLat << now << ",s," << 1.0 * per_second_done / use_time
+                  << ",iops,"
+                  << ",p90," << ops_latency[cnt90] << ",p99,"
+                  << ops_latency[cnt99] << ",p999," << ops_latency[cnt999]
+                  << ",p9999," << ops_latency[cnt9999] << ",p99999,"
+                  << ops_latency[cnt99999] << std::endl;
+        }
+
+        last_ops = now_done;
+        last_time = now_time;
+      }
+      return;
+    }
     int64_t gets = 0;
     int64_t puts = 0;
     int64_t get_found = 0;
@@ -7290,6 +8128,13 @@ class Benchmark {
     char value_buffer[default_value_max];
     QueryDecider query;
     RandomGenerator gen;
+    if (entries_per_batch_ > 1) {
+      ratio[1] /= entries_per_batch_;
+    }
+    WriteBatch batch(/*reserved_bytes=*/0, /*max_bytes=*/0,
+                     FLAGS_write_batch_protection_bytes_per_key,
+                     user_timestamp_size_);
+    batch.Clear();
     Status s;
     if (value_max > FLAGS_mix_max_value_size) {
       value_max = FLAGS_mix_max_value_size;
@@ -7376,13 +8221,29 @@ class Benchmark {
         // the Get query
         gets++;
         if (FLAGS_num_column_families > 1) {
+          uint64_t per_read_start_time = 0;
+          if (FLAGS_report_csv) {
+            per_read_start_time = FLAGS_env->NowMicros();
+          }
           s = db_with_cfh->db->Get(read_options_, db_with_cfh->GetCfh(key_rand),
                                    key, &pinnable_val);
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_read_start_time;
+          }
         } else {
+          uint64_t per_read_start_time = 0;
+          if (FLAGS_report_csv) {
+            per_read_start_time = FLAGS_env->NowMicros();
+          }
           pinnable_val.Reset();
           s = db_with_cfh->db->Get(read_options_,
                                    db_with_cfh->db->DefaultColumnFamily(), key,
                                    &pinnable_val);
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_read_start_time;
+          }
         }
 
         if (s.ok()) {
@@ -7400,19 +8261,55 @@ class Benchmark {
         thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
       } else if (query_type == 1) {
         // the Put query
-        puts++;
-        int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
-                                              FLAGS_value_k, FLAGS_value_sigma);
+        // int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
+        //                                       FLAGS_value_k,
+        //                                       FLAGS_value_sigma);
+        int64_t val_size = FLAGS_value_size;
         if (val_size < 10) {
           val_size = 10;
         } else if (val_size > value_max) {
           val_size = val_size % value_max;
         }
         total_val_size += val_size;
-
-        s = db_with_cfh->db->Put(
-            write_options_, key,
-            gen.Generate(static_cast<unsigned int>(val_size)));
+        uint64_t per_read_start_time = 0;
+        if (entries_per_batch_ > 1) {
+          puts += entries_per_batch_;
+          batch.Clear();
+          for (int64_t j = 0; j < entries_per_batch_; j++) {
+            if (j > 0) duration.Done(1);
+            int64_t rand_num = 0;
+            rand_num = GetRandomKey(&thread->rand);
+            GenerateKeyFromInt(rand_num, FLAGS_num, &key);
+            Slice val;
+            val = gen.Generate(static_cast<unsigned int>(val_size));
+            s = batch.Put(db_with_cfh->db->DefaultColumnFamily(), key, val);
+            bytes += key.size() + val_size;
+          }
+          if (FLAGS_report_csv) {
+            per_read_start_time = FLAGS_env->NowMicros();
+          }
+          s = db_with_cfh->db->Write(write_options_, &batch);
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_read_start_time;
+          }
+          thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
+                                    entries_per_batch_, kWrite);
+        } else {
+          puts++;
+          if (FLAGS_report_csv) {
+            per_read_start_time = FLAGS_env->NowMicros();
+          }
+          s = db_with_cfh->db->Put(
+              write_options_, key,
+              gen.Generate(static_cast<unsigned int>(val_size)));
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_read_start_time;
+          }
+          thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite);
+          bytes += key.size() + val_size;
+        }
         if (!s.ok()) {
           fprintf(stderr, "put error: %s\n", s.ToString().c_str());
           ErrorExit();
@@ -7422,11 +8319,14 @@ class Benchmark {
           thread->shared->write_rate_limiter->Request(100, Env::IO_HIGH,
                                                       nullptr /*stats*/);
         }
-        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite);
       } else if (query_type == 2) {
         // Seek query
         if (db_with_cfh->db != nullptr) {
           Iterator* single_iter = nullptr;
+          uint64_t per_read_start_time = 0;
+          if (FLAGS_report_csv) {
+            per_read_start_time = FLAGS_env->NowMicros();
+          }
           single_iter = db_with_cfh->db->NewIterator(read_options_);
           if (single_iter != nullptr) {
             single_iter->Seek(key);
@@ -7447,6 +8347,10 @@ class Benchmark {
               assert(single_iter->status().ok());
               total_scan_length++;
             }
+          }
+          if (FLAGS_report_csv) {
+            thread->shared->latencys[thread->shared->ops_num++] =
+                FLAGS_env->NowMicros() - per_read_start_time;
           }
           delete single_iter;
         }

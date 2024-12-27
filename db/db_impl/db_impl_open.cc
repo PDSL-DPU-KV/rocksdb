@@ -1839,11 +1839,14 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
                            log::Writer** new_log) {
   IOStatus io_s;
   std::unique_ptr<FSWritableFile> lfile;
+  auto fs = FileSystem::Default();
 
   DBOptions db_options =
       BuildDBOptions(immutable_db_options_, mutable_db_options_);
+  // FileOptions opt_file_options =
+  //     fs_->OptimizeForLogWrite(file_options_, db_options);
   FileOptions opt_file_options =
-      fs_->OptimizeForLogWrite(file_options_, db_options);
+      fs->OptimizeForLogWrite(file_options_, db_options);
   std::string wal_dir = immutable_db_options_.GetWalDir();
   std::string log_fname = LogFileName(wal_dir, log_file_num);
 
@@ -1854,10 +1857,13 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
     std::string old_log_fname = LogFileName(wal_dir, recycle_log_number);
     TEST_SYNC_POINT("DBImpl::CreateWAL:BeforeReuseWritableFile1");
     TEST_SYNC_POINT("DBImpl::CreateWAL:BeforeReuseWritableFile2");
-    io_s = fs_->ReuseWritableFile(log_fname, old_log_fname, opt_file_options,
-                                  &lfile, /*dbg=*/nullptr);
+    // io_s = fs_->ReuseWritableFile(log_fname, old_log_fname, opt_file_options,
+    //                               &lfile, /*dbg=*/nullptr);
+    io_s = fs->ReuseWritableFile(log_fname, old_log_fname, opt_file_options,
+                                 &lfile, /*dbg=*/nullptr);
   } else {
-    io_s = NewWritableFile(fs_.get(), log_fname, &lfile, opt_file_options);
+    // io_s = NewWritableFile(fs_.get(), log_fname, &lfile, opt_file_options);
+    io_s = NewWritableFile(fs.get(), log_fname, &lfile, opt_file_options);
   }
 
   if (io_s.ok()) {

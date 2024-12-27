@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cinttypes>
 #include <cstdio>
+// #include <glaze/glaze.hpp>
 #include <vector>
 
 #include "db/builder.h"
@@ -1085,36 +1086,38 @@ double average_duration[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 Status FlushJob::WriteLevel0Table() {
 #ifdef DFLUSH
-  int host_id;
-  if (dbname_[5] > '0') {
-    host_id = (dbname_[4] - '0') * 10 + dbname_[5] - '0';
-  } else {
-    host_id = dbname_[4] - '0';
-  }
-  printf("dbname: %s, host_id:%d %lf\n", dbname_.c_str(), host_id,
-         average_duration[host_id]);
-  // int priority = v/h-(p-1)*v/k;
-  auto now_time = std::chrono::high_resolution_clock::now();
-  if (average_duration[host_id] != 0)
-    average_duration[host_id] =
-        average_duration[host_id] * 0.9 +
-        0.1 * std::chrono::duration_cast<std::chrono::nanoseconds>(
-                  now_time - host_time[host_id])
-                  .count();
-  else
-    average_duration[host_id] =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(now_time -
-                                                             host_time[host_id])
-            .count();
+  // int host_id;
+  // if (dbname_[5] > '0') {
+  //   host_id = (dbname_[4] - '0') * 10 + dbname_[5] - '0';
+  // } else {
+  //   host_id = dbname_[4] - '0';
+  // }
+  // printf("dbname: %s, host_id:%d %lf\n", dbname_.c_str(), host_id,
+  //        average_duration[host_id]);
+  // // int priority = v/h-(p-1)*v/k;
+  // auto now_time = std::chrono::high_resolution_clock::now();
+  // if (average_duration[host_id] != 0)
+  //   average_duration[host_id] =
+  //       average_duration[host_id] * 0.9 +
+  //       0.1 * std::chrono::duration_cast<std::chrono::nanoseconds>(
+  //                 now_time - host_time[host_id])
+  //                 .count();
+  // else
+  //   average_duration[host_id] =
+  //       std::chrono::duration_cast<std::chrono::nanoseconds>(now_time -
+  //                                                            host_time[host_id])
+  //           .count();
 
-  host_time[host_id] = now_time;
-  int priority = -7 * average_duration[host_id] / 1000000000;
-  printf("priority:%d\n", priority);
+  // host_time[host_id] = now_time;
+  // int priority = -7 * average_duration[host_id] / 1000000000;
+  int priority = 0;
+  // printf("priority:%d\n", priority);
 
-  int num_unflushed_memtables = cfd_->imm()->NumNotFlushed();
-  if (num_unflushed_memtables > 6) priority = 0;
-  bool use_dpa = host_id > 7 ? 1 : 0;
-  printf("host id: %d, use_dpa: %d\n", host_id, use_dpa);
+  // int num_unflushed_memtables = cfd_->imm()->NumNotFlushed();
+  // if (num_unflushed_memtables > 6) priority = 0;
+  // bool use_dpa = host_id > 7 ? 1 : 0;
+  bool use_dpa = 0;
+  // printf("host id: %d, use_dpa: %d\n", host_id, use_dpa);
   // MemTable* tmp = mems_[0];
   // tmp->get_table_()->get_skip_list()->PrintNodeCount();
   // auto TrisectionPoint_1 =
@@ -1318,8 +1321,7 @@ Status FlushJob::WriteLevel0Table() {
         total_size += sizeof(uint64_t);
 
         // seqno_to_time_mapping_
-        memcpy((SeqnoToTimeMapping*)ptr, &seqno_to_time_mapping_,
-               sizeof(SeqnoToTimeMapping));
+        memcpy((void*)ptr, &seqno_to_time_mapping_, sizeof(SeqnoToTimeMapping));
         ptr += sizeof(SeqnoToTimeMapping);
         total_size += sizeof(SeqnoToTimeMapping);
 
@@ -1395,8 +1397,8 @@ Status FlushJob::WriteLevel0Table() {
         total_size += sizeof(uint32_t);
 
         if ((uint32_t)tboptions.ioptions.cf_paths.size() > 0) {
-          DbPath_struct send_tboptions_ioptions_cf_paths
-              [(uint32_t)tboptions.ioptions.cf_paths.size()];
+          std::vector<DbPath_struct> send_tboptions_ioptions_cf_paths(
+              (uint32_t)tboptions.ioptions.cf_paths.size());
           for (uint32_t i = 0; i < tboptions.ioptions.cf_paths.size(); i++) {
             std::strcpy(send_tboptions_ioptions_cf_paths[i].path,
                         tboptions.ioptions.cf_paths[i].path.c_str());
@@ -1450,12 +1452,39 @@ Status FlushJob::WriteLevel0Table() {
         auto c = std::chrono::high_resolution_clock::now();
         send(client_fd, buffer, total_size, 0);
         read(client_fd, buffer, 1024);  // 通过 read 阻塞
-        auto d = std::chrono::high_resolution_clock::now();
-        printf("dpu build table time: %lu\n",
-               std::chrono::duration_cast<std::chrono::nanoseconds>(d - c)
-                       .count() /
-                   1000 / 1000);
 
+        // char buf[4096*1024];
+        // std::string buf;
+        // auto ec =
+        //     glz::write<glz::opts{.prettify = true}>(tboptions.ioptions, buf);
+
+        // MetaReq req;
+        // MetaResult result;
+        // DeSerializeReq(buffer, &req);
+
+        // BuildTable_new_new(
+        //     dbname_, versions_, db_options_, tboptions, file_options_,
+        //     read_options, cfd_->table_cache(), iter.get(),
+        //     std::move(range_del_iters), &meta_, &blob_file_additions,
+        //     existing_snapshots_, earliest_write_conflict_snapshot_,
+        //     job_snapshot_seq, snapshot_checker_,
+        //     mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
+        //     &io_s, io_tracer_, BlobFileCreationReason::kFlush,
+        //     seqno_to_time_mapping_, event_logger_, job_context_->job_id,
+        //     io_priority, &table_properties_, write_hint, full_history_ts_low,
+        //     blob_callback_, base_, &num_input_entries,
+        //     &memtable_payload_bytes, &memtable_garbage_bytes, offset, &req,
+        //     &result, 0, req.use_dpa);
+
+        // char* result_buffer = (char *)malloc(4096);
+        // auto result_size = SerializeResult(result_buffer, &result);
+
+        // auto d = std::chrono::high_resolution_clock::now();
+        // // printf("dpu build table time: %lu\n",
+        // //        std::chrono::duration_cast<std::chrono::nanoseconds>(d
+        // - c)
+        // //                .count() /
+        // //            1000 / 1000);
         ptr = buffer;
         meta_size = recv_meta(&meta_, ptr);
         ptr += meta_size;
@@ -1484,6 +1513,38 @@ Status FlushJob::WriteLevel0Table() {
 
         meta_.fd.largest_seqno = *(rocksdb::SequenceNumber*)ptr;
         ptr += sizeof(rocksdb::SequenceNumber);
+
+        // meta_.smallest.set_InternalKey(
+        //     result.file_meta.smallest.get_InternalKey());
+        // meta_.largest.set_InternalKey(
+        //     result.file_meta.largest.get_InternalKey());
+        // meta_.compensated_file_size = result.file_meta.compensated_file_size;
+        // meta_.num_entries = result.file_meta.num_entries;
+        // meta_.raw_key_size = result.file_meta.raw_key_size;
+        // meta_.raw_value_size = result.file_meta.raw_value_size;
+        // meta_.num_range_deletions = result.file_meta.num_range_deletions;
+        // meta_.compensated_range_deletion_size =
+        //     result.file_meta.compensated_range_deletion_size;
+        // meta_.refs = result.file_meta.refs;
+        // meta_.being_compacted = result.file_meta.being_compacted;
+        // meta_.init_stats_from_file = result.file_meta.init_stats_from_file;
+        // meta_.marked_for_compaction = result.file_meta.marked_for_compaction;
+        // meta_.oldest_blob_file_number =
+        //     result.file_meta.oldest_blob_file_number;
+        // meta_.oldest_ancester_time = result.file_meta.oldest_ancester_time;
+        // meta_.file_creation_time = result.file_meta.file_creation_time;
+        // meta_.epoch_number = result.file_meta.epoch_number;
+        // meta_.file_checksum = result.file_meta.file_checksum;
+        // meta_.tail_size = result.file_meta.tail_size;
+
+        // s = (Status)result.status;
+        // num_input_entries = result.num_input_entries;
+        // memtable_payload_bytes = result.memtable_payload_bytes;
+        // memtable_garbage_bytes = result.memtable_garbage_bytes;
+        // meta_.fd.packed_number_and_path_id =
+        // result.packed_number_and_path_id; meta_.fd.file_size =
+        // result.file_size; meta_.fd.smallest_seqno = result.smallest_seqno;
+        // meta_.fd.largest_seqno = result.largest_seqno;
 
         printf("meta.smallest.DebugString:%s\n",
                meta_.smallest.DebugString(true).c_str());
@@ -1645,9 +1706,6 @@ Status FlushJob::WriteLevel0Table() {
     size_t total_memory_usage = 0;
     // Used for testing:
     uint64_t mems_size = mems_.size();
-    if (mems_size != 1) {
-      fprintf(stderr, "mems_size:%d\n", mems_size);
-    }
     (void)mems_size;  // avoids unused variable error when
     // TEST_SYNC_POINT_CALLBACK not used.
     TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
@@ -1736,6 +1794,7 @@ Status FlushJob::WriteLevel0Table() {
       const ReadOptions read_options(Env::IOActivity::kFlush);
 
       auto a = std::chrono::high_resolution_clock::now();
+
       s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
                      read_options, cfd_->table_cache(), iter.get(),
                      std::move(range_del_iters), &meta_, &blob_file_additions,
@@ -1751,7 +1810,7 @@ Status FlushJob::WriteLevel0Table() {
       auto b = std::chrono::high_resolution_clock::now();
       uint64_t buildtable_time =
           std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
-      printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
+      // printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
 
       // TODO: Cleanup io_status in BuildTable and table builders
       assert(!s.ok() || io_s.ok());

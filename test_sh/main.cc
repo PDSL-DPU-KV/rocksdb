@@ -39,8 +39,16 @@ int main() {
                         rocksdb_low[size] += value;
                     }
                 }
-                if (db_bench[size] != 0 || rocksdb_high[size] != 0 || rocksdb_low[size] != 0)
-                    size++;
+                if ((db_bench[size] != 0 || rocksdb_high[size] != 0 ||
+                     rocksdb_low[size] != 0) &&
+                    db_bench[size] >= 200) {
+                  size++;
+                } else {
+                  db_bench[size] = 0;
+                  rocksdb_high[size] = 0;
+                  rocksdb_low[size] = 0;
+                }
+                    
             }
         }
         input_file.close();

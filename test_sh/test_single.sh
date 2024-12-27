@@ -7,13 +7,17 @@ block_array=(4096)
 op_array=("snappy")
 f_array=("8")
 wn_array=("8")
+# t_array=("16" "8" "4" "2" "1")
 t_array=("16")
 db_array=("1")
+# rw_array=(0 1 2 3 4 5 7 9 10)
+rw_array=(0 5 10)
+# rw_array=(0)
 
 ### Benchmark parameters
-db="/dc/$1"
+db="/home/zqy2023/zqy/$1"
 num_multi_db="1"
-wal_dir="/dc/$1"
+wal_dir="/home/lsc/hadoop/zqy/wal/$1"
 use_existing_db="true"
 threads="32"
 benchmarks="fillrandom,stats,wait,readrandom,stats"
@@ -23,7 +27,10 @@ writes="10000000"
 readwritepercent="50"
 key_size="16"
 value_size="100"
-batch_size="1"
+batch_size="4"
+mix_get_ratio=0.0
+mix_put_ratio=0.0
+mix_seek_ratio=0.0
 
 ### MemTable parameters
 memtablerep="skip_list"
@@ -40,22 +47,22 @@ compression_type="none" #"none,zlib,lz4,dpu"
 compression_parallel_threads="1"
 
 ### Compaction parameters
-allow_remote_compaction="false"
+allow_remote_compaction="true"
 #max_background_jobs="2"
 max_background_flushes="8"
 max_background_compactions="16"
 subcompactions="64"
 #level_compaction_dynamic_level_bytes="true"
-disable_auto_compactions="true"
+disable_auto_compactions="false"
 use_direct_io_for_flush_and_compaction="true"
 use_direct_reads="true"
 level0_slowdown_writes_trigger="20"
 level0_stop_writes_trigger="36"
 
 ### Write optimization parameters
-disable_wal="true"
-unordered_write="true"
-enable_pipelined_write="false"
+disable_wal="false"
+unordered_write="false"
+enable_pipelined_write="true"
 allow_concurrent_memtable_write="true"
 
 ### Read optimization parameters
@@ -336,6 +343,30 @@ function FILL_PARAMS() {
     if [ -n "$FEA_enable" ];then
         const_params=$const_params"--FEA_enable=$FEA_enable "
     fi
+
+    if [ -n "$load_num" ];then
+        const_params=$const_params"--load_num=$load_num "
+    fi
+
+    if [ -n "$running_num" ];then
+        const_params=$const_params"--running_num=$running_num "
+    fi
+
+    if [ -n "$ycsb_workload" ];then
+        const_params=$const_params"--ycsb_workload=$ycsb_workload "
+    fi
+
+    if [ -n "mix_get_ratio" ];then
+        const_params=$const_params"--mix_get_ratio=$mix_get_ratio "
+    fi
+
+    if [ -n "mix_put_ratio" ];then
+        const_params=$const_params"--mix_put_ratio=$mix_put_ratio "
+    fi
+
+    if [ -n "mix_seek_ratio" ];then
+        const_params=$const_params"--mix_seek_ratio=$mix_seek_ratio "
+    fi
 }
 
 function MONITOR_CPU() {
@@ -344,9 +375,10 @@ function MONITOR_CPU() {
     do
         sleep 0.5
     done
+    echo "$(pidof $1)"
     awk_str="\$1==\"top\";\$1==\"PID\"||\$1~/^[0-9]*$/{print \$12,\$9}"
-    # top -Hp "$(pidof $1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
-    top -Hp "$(ps aux | grep dc/$3 | awk '{print $2}' | head -n 1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
+    top -Hp "$(pidof $1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
+    # top -Hp "$(ps aux | grep zqy2023/$3 | awk '{print $2}' | head -n 1)" -b -d 1 -o -COMMAND | awk "$awk_str" > $2 &
     echo $!
 }
 
@@ -360,21 +392,22 @@ function MONITOR_NET() {
     mlnx_perf -i $target_net | tee $1 > /dev/null &
     echo $!
 }
-begin_numactl=$(( $1 * 8 ))
-end_numactl=$(( ($1 + 1) * 8 - 1 ))
-echo "begin_numactl=" $begin_numactl
-echo "end_numactl=" $end_numactl
+# begin_numactl=$(( $1 * 8 ))
+# end_numactl=$(( ($1 + 1) * 8 - 1 ))
+# echo "begin_numactl=" $begin_numactl
+# echo "end_numactl=" $end_numactl
 RUN_ONE_TEST() {
     const_params=""
     FILL_PARAMS
     #cmd="sudo $bench_file_path $const_params"
     cmd="$bench_file_path $const_params | tee -a out.out"
-    #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params | tee -a out.out"
+    # cmd="sudo perf record -F 99 -g -- $bench_file_path $const_params | tee -a out.out"
     if [ "$1" == "numa" ];then
-        cmd="numactl -C $begin_numactl-$end_numactl  $bench_file_path $const_params"
+        # cmd="numactl -C $begin_numactl-$end_numactl  $bench_file_path $const_params | tee -a out.out"
+        cmd="numactl -C 88-95 $bench_file_path $const_params | tee -a out.out"
         # cmd="numactl -C 0-63 $bench_file_path $const_params"
         # cmd=" $bench_file_path $const_params | tee -a out.out"
-        #cmd="sudo perf record -F 99 -g --call-graph dwarf -- $bench_file_path $const_params"
+        # cmd="sudo perf record -F 99 -g -- $bench_file_path $const_params"
     fi
     echo $cmd >>out.out
     echo $cmd
@@ -399,9 +432,10 @@ REMOUNT_SSD() {
 
 COPY_OUT_FILE() {
     mkdir $bench_file_dir/result_overall_$tdate > /dev/null 2>&1
-    res_dir=$bench_file_dir/result_overall_$tdate/$1_$2
+    res_dir=$bench_file_dir/result_overall_$tdate/$1_$2_$3_$4_$5_$6
     mkdir $res_dir > /dev/null 2>&1
     ./a.exe
+    ./a.out
     \cp -f $bench_file_dir/out.out $res_dir/
     \cp -f $bench_file_dir/*.csv $res_dir/
     \cp -f $bench_file_dir/*.log $res_dir/
@@ -419,20 +453,45 @@ COPY_OUT_FILE() {
 }
 
 LOAD() {
-    benchmarks="fillrandom,stats"
+    benchmarks="fillrandom,stats,wait"
+    report_csv_tmp="$report_csv"
+    report_csv="false"
+    batch_tmp="$batch_size"
+    batch_size="1"
+    writes_tmp="$writes"
     writes="$1"
+    threads_tmp="$threads"
     threads="$2"
     allow_remote_compaction="$3"
+    use_existing_db="false"
 
     RUN_ONE_TEST
     if [ $? -ne 0 ];then
         exit 1
     fi
+    threads="$threads_tmp"
+    writes="$writes_tmp"
+    batch_size="$batch_tmp"
+    report_csv="$report_csv_tmp"
     sleep 5
 }
 
 FILLSEQ() {
     benchmarks="fillseq,stats"
+    writes="$1"
+    use_existing_db="$2"
+
+    RUN_ONE_TEST numa "0-32"
+    #RUN_ONE_TEST
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE threads $3
+}
+
+FILLSEQ_V2() {
+    benchmarks="fillseq_v2,stats"
     writes="$1"
     use_existing_db="$2"
 
@@ -470,6 +529,19 @@ READRANDOM() {
     fi
     sleep 5
     COPY_OUT_FILE readrandom $3
+}
+
+MULTIREADRANDOM() {
+    benchmarks="multireadrandom,stats"
+    reads="$1"
+    use_existing_db="$2"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE multireadrandom $3
 }
 
 SEEKRANDOM() {
@@ -527,36 +599,137 @@ READWHILEWRITING() {
     COPY_OUT_FILE readwhilewriting $4
 }
 
+YCSBLOAD() {
+    benchmarks="ycsb_load,stats,wait"
+    # report_csv_tmp="$report_csv"
+    # report_csv="false"
+    load_num="$1"
+    use_existing_db="false"
+    # allow_remote_compaction="false"
+    ycsb_workload="ycsbload_workload"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    # report_csv="$report_csv_tmp"
+    sleep 5
+}
+
+YCSBRUN() {
+    benchmarks="ycsb_run,stats,wait"
+    running_num="$1"
+    use_existing_db="$2"
+    ycsb_workload="$3"
+    
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE ycsbrun $3
+}
+
+YCSB() {
+    benchmarks="ycsb,stats,wait"
+    load_num="$1"
+    running_num="$2"
+    use_existing_db="false"
+    ycsb_workload="ycsb_workload"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+}
+
+MIXGRAPH() {
+    benchmarks="mixgraph,stats"
+    reads="$1"
+    use_existing_db="$2"
+    mix_get_ratio="$3"
+    mix_put_ratio="$4"
+    mix_seek_ratio="$5"
+
+    RUN_ONE_TEST numa "0-32"
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+    sleep 5
+    COPY_OUT_FILE mixgraph_threads $6 read $3 write $4
+}
+
 RUN_ALL_TEST() {
     for op in ${op_array[@]}; do
         for t in ${t_array[@]}; do
             for wn in ${wn_array[@]}; do
                 for fth in ${f_array[@]}; do
                     for ndb in ${db_array[@]}; do
-                        #REMOUNT_SSD
-                        CLEAN_CACHE
-                        # set parameters
-                        compression_type="$op"
-                        blob_compression_type="$op"
-                        max_background_flushes="$fth"
-                        max_write_buffer_number="$wn"
-                        num_multi_db="$ndb"
-                        # run benchmark
-                        threads="$t"
-                        writes=$(((100000000/$threads)/$num_multi_db))
-                        # load data
-                        # LOAD 12500000 8 false
-                        MONITOR_CPU db_bench cpu-$1.log $1 &
-                        FILLRANDOM $writes false $t
-                        # allow_remote_compaction="true"
-                        # threads="16"
-                        # READRANDOMWRITERANDOM 1000000 1000000 true $op
-                        # READRANDOMWRITERANDOM 1000000 1000000 true $op
-                        # READWHILEWRITING 200000 1000000 true $op
-                        # READRANDOM 100000 true $op
-                        # READSEQ 10000000 true $op
-                        # SEEKRANDOM 10000 true $op
-                        sleep 5
+                        for rw in ${rw_array[@]}; do
+                            #REMOUNT_SSD
+                            # CLEAN_CACHE
+                            # set parameters
+                            rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
+                            compression_type="$op"
+                            blob_compression_type="$op"
+                            max_background_flushes="$fth"
+                            max_write_buffer_number="$wn"
+                            num_multi_db="$ndb"
+                            # run benchmark
+                            threads="$t"
+                            writes=$(((20000000/$threads)/$num_multi_db))
+                            reads_para=$(((20000000/$threads)/$num_multi_db))
+                            ycsb_running_num=$((10000000/$threads))
+                            # load data
+                            kill -9 $(pidof db_bench)
+                            kill -9 $(pidof top)
+                            # LOAD $writes 8 false
+                            YCSBLOAD 10000000
+                            # MONITOR_CPU db_bench cpu-$1.log $1 &
+                            # FILLRANDOM $writes false $t
+                            allow_remote_compaction="$2"
+                            # threads="16"
+                            # YCSBRUN 10000
+                            MONITOR_CPU db_bench cpu-$1.log $1 &  
+                            YCSBRUN $ycsb_running_num true workloada.spec
+                            YCSBRUN $ycsb_running_num true workloadb.spec
+                            YCSBRUN $ycsb_running_num true workloadc.spec
+                            YCSBRUN $ycsb_running_num true workloadd.spec
+                            YCSBRUN $ycsb_running_num true workloade.spec
+                            YCSBRUN $ycsb_running_num true workloadf.spec
+                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
+                            # MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
+                            # sleep 5
+                            # FILLRANDOM $writes false $t
+                            # FILLSEQ $writes false $t
+                            # FILLSEQ_V2 $writes_v2 false $t
+                            # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log 
+                            # kill -9 $(pidof db_bench)
+                            # kill -9 $(pidof top)
+                            # YCSBLOAD $writes
+                            # allow_remote_compaction="$2"
+                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
+                            # sleep 5
+                            # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
+                            # kill -9 $(pidof db_bench)
+                            # kill -9 $(pidof top)
+                            # YCSBLOAD $writes
+                            # allow_remote_compaction="$2"
+                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_uniform_$rw
+                            # MIXGRAPH $reads_para false 0 5 0 $t
+                            # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                            # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                            # READWHILEWRITING 200000 1000000 true $op
+                            # READRANDOM 2000000 true $op
+                            # MULTIREADRANDOM 2000000 true $op
+                            # READRANDOM 200000 true $op
+                            # READSEQ 10000000 true $op
+                            # SEEKRANDOM 10000 true $op
+                            sleep 5
+                        done
                     done
                 done
             done
@@ -564,4 +737,4 @@ RUN_ALL_TEST() {
     done
 }
 
-RUN_ALL_TEST $1
+RUN_ALL_TEST $1 $2

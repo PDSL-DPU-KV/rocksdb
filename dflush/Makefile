@@ -28,7 +28,7 @@ else
 endif
 DEVCC_DEV_LD_DIR:=$(shell pkg-config --libs-only-L doca-common doca-dpa doca-rdma doca-erasure-coding)
 DEVCC_DEV_INC_DIR:=$(shell pkg-config --cflags-only-I doca-common doca-dpa doca-rdma doca-erasure-coding) -Ikernels
-DEVCC_CFLAGS:=--hostcc=$(CC) --hostcc-options="$(DEVCC_HOST_CFLAGS)" --devicecc-options="$(DEVCC_DEV_CFLAGS)" $(DEVCC_DEV_INC_DIR) -flto
+DEVCC_CFLAGS:=--hostcc=$(CC) --hostcc-options="$(DEVCC_HOST_CFLAGS)" --devicecc-options="$(DEVCC_DEV_CFLAGS)" $(DEVCC_DEV_INC_DIR) -flto --mcpu=nv-dpa-bf3
 DEVCC_LDFLAGS:=--device-libs="$(DEVCC_DEV_LD_DIR)" -ldpa
 
 HOST_APP_OBJS:= $(addprefix $(BUILD_DIR)/,$(patsubst %.cpp,%.o,$(HOST_APP_SRCS)))

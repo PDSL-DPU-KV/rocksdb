@@ -9,9 +9,10 @@
 #include "core_workload.h"
 
 #include <algorithm>
+#include <iostream>
 #include <random>
 #include <string>
-#include <iostream>
+
 #include "const_generator.h"
 #include "random_byte_generator.h"
 #include "scrambled_zipfian_generator.h"
@@ -85,6 +86,7 @@ const string CoreWorkload::INSERT_START_PROPERTY = "insertstart";
 const string CoreWorkload::INSERT_START_DEFAULT = "0";
 
 const string CoreWorkload::RECORD_COUNT_PROPERTY = "recordcount";
+const string CoreWorkload::RECORD_COUNT_DEFAULT = "100000000";
 const string CoreWorkload::OPERATION_COUNT_PROPERTY = "operationcount";
 
 const std::string CoreWorkload::FIELD_NAME_PREFIX = "fieldnameprefix";
@@ -109,7 +111,8 @@ void CoreWorkload::Init(const utils::Properties &p) {
   double readmodifywrite_proportion = std::stod(p.GetProperty(
       READMODIFYWRITE_PROPORTION_PROPERTY, READMODIFYWRITE_PROPORTION_DEFAULT));
 
-  record_count_ = std::stoi(p.GetProperty(RECORD_COUNT_PROPERTY));
+  record_count_ =
+      std::stoi(p.GetProperty(RECORD_COUNT_PROPERTY, RECORD_COUNT_DEFAULT));
   std::string request_dist = p.GetProperty(REQUEST_DISTRIBUTION_PROPERTY,
                                            REQUEST_DISTRIBUTION_DEFAULT);
   int min_scan_len = std::stoi(
@@ -167,11 +170,10 @@ void CoreWorkload::Init(const utils::Properties &p) {
     int op_count = std::stoi(p.GetProperty(OPERATION_COUNT_PROPERTY));
     int new_keys = (int)(op_count * insert_proportion * 2);  // a fudge factor
     key_chooser_ = new ScrambledZipfianGenerator(record_count_ + new_keys);
-    std::cout << "insert start:" <<insert_start <<std::endl;
-    std::cout << "record count:" <<record_count_ <<std::endl;
-    std::cout << "op count:" <<op_count <<std::endl;
-    std::cout << "new keys:" <<new_keys <<std::endl;
- 
+    std::cout << "insert start:" << insert_start << std::endl;
+    std::cout << "record count:" << record_count_ << std::endl;
+    std::cout << "op count:" << op_count << std::endl;
+    std::cout << "new keys:" << new_keys << std::endl;
   } else if (request_dist == "latest") {
     key_chooser_ = new SkewedLatestGenerator(*transaction_insert_key_sequence_);
 
@@ -209,16 +211,20 @@ ycsbc::Generator<uint64_t> *CoreWorkload::GetFieldLenGenerator(
   }
 }
 std::string CoreWorkload::BuildKeyName() {
-  return BuildKeyName(insert_key_sequence_->Next());
+  uint64_t key_num = insert_key_sequence_->Next();
+  if (!ordered_inserts_) {
+    key_num = utils::Hash(key_num) % record_count_;
+  }
+  std::string prekey = "";
+  std::string value = std::to_string(key_num);
+  int fill = std::max(0, zero_padding_ - static_cast<int>(value.size()));
+  return prekey.append(fill, '0').append(value);
 }
 
 ycsbc::Operation CoreWorkload::NextOp() { return op_chooser_.Next(); }
 
 std::string CoreWorkload::BuildKeyName(uint64_t key_num) {
-  if (!ordered_inserts_) {
-    key_num = utils::Hash(key_num);
-  }
-  std::string prekey = "user";
+  std::string prekey = "";
   std::string value = std::to_string(key_num);
   int fill = std::max(0, zero_padding_ - static_cast<int>(value.size()));
   return prekey.append(fill, '0').append(value);
