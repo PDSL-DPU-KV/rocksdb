@@ -11,9 +11,9 @@ wn_array=("8")
 t_array=$3
 db_array=("1")
 # rw_array=$7
-rw_array=(0 1 2 3 4 5 7 9 10)
+# rw_array=(0 1 2 3 4 5 7 9 10)
 # rw_array=(0 5 10)
-# rw_array=(0)
+rw_array=(0)
 
 ### Benchmark parameters
 db="/home/zqy2023/zqy/$1"
@@ -682,28 +682,28 @@ RUN_ALL_TEST() {
                             num_multi_db="$ndb"
                             # run benchmark
                             threads="$t"
-                            writes=$(((20000000/$threads)/$num_multi_db))
+                            writes=$(((100000000/$threads)/$num_multi_db))
                             reads_para=$(((20000000/$threads)/$num_multi_db))
-                            ycsb_running_num=$((20000000/$threads))
+                            ycsb_running_num=$((100000000/$threads))
                             # load data
                             kill -9 $(pidof db_bench)
                             kill -9 $(pidof top)
-                            LOAD $writes 8 false
-                            # YCSBLOAD $writes
+                            # LOAD $writes 8 false
+                            YCSBLOAD $writes
                             # MONITOR_CPU db_bench cpu-$1.log $1 &
                             # FILLRANDOM $writes false $t
                             allow_remote_compaction="$2"
                             # threads="16"
                             # YCSBRUN 10000
                             MONITOR_CPU db_bench cpu-$1.log $1 &  
-                            # YCSBRUN $ycsb_running_num true workloada.spec
-                            # YCSBRUN $ycsb_running_num true workloadb.spec
-                            # YCSBRUN $ycsb_running_num true workloadc.spec
-                            # YCSBRUN $ycsb_running_num true workloadd.spec
-                            # YCSBRUN $ycsb_running_num true workloade.spec
-                            # YCSBRUN $ycsb_running_num true workloadf.spec
+                            YCSBRUN $ycsb_running_num true workloada.spec
+                            YCSBRUN $ycsb_running_num true workloadb.spec
+                            YCSBRUN $ycsb_running_num true workloadc.spec
+                            YCSBRUN $ycsb_running_num true workloadd.spec
+                            YCSBRUN $ycsb_running_num true workloade.spec
+                            YCSBRUN $ycsb_running_num true workloadf.spec
                             # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
-                            MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
+                            # MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
                             # sleep 5
                             # FILLRANDOM $writes false $t
                             # FILLSEQ $writes false $t
