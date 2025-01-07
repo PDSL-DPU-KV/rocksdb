@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -24,7 +25,7 @@ std::vector<BenchmarkResult> parseBenchmarkResults(
 
   std::string line;
   std::regex benchmarkRegex(
-      "(ycsb_run|mixgraph)\\s*:\\s*(\\d+\\.\\d+)\\s+micros/"
+      "(fillseq|fillrandom|ycsb_load|ycsb_run|mixgraph)\\s*:\\s*(\\d+\\.\\d+)\\s+micros/"
       "op\\s+(\\d+)\\s+ops/sec.*");
   std::regex latencyRegex("p90,(\\d+),p99,(\\d+),p999,(\\d+),p9999,.*");
 
@@ -67,9 +68,9 @@ void saveResultsToFile(const std::vector<BenchmarkResult>& results,
   outputFile << "基准测试名称,吞吐量 (ops/sec),P90延迟 (micros),P99延迟 "
                 "(micros),P999延迟 (micros)\n";
   for (const auto& result : results) {
-    outputFile << result.benchmarkName << ", \n" << result.throughput << ", "
-               << result.p90Latency << ", " << result.p99Latency << ", "
-               << result.p999Latency << "\n";
+    outputFile << std::fixed << result.benchmarkName << ", \n"
+               << (uint64_t)result.throughput << ", " << result.p90Latency << ", "
+               << result.p99Latency << ", " << result.p999Latency << "\n";
   }
 
   outputFile.close();
@@ -81,9 +82,11 @@ int main() {
   std::string outputFilePath = "output.csv";  // 替换为你想要的输出文件名
   saveResultsToFile(results, outputFilePath);
 
+  std::cout.setf(std::ios::fixed);
   for (const auto& result : results) {
     std::cout << "基准测试名称: " << result.benchmarkName << std::endl;
-    std::cout << "吞吐量 (ops/sec): " << result.throughput << std::endl;
+    std::cout << std::fixed << "吞吐量 (ops/sec): " << (uint64_t)result.throughput
+              << std::endl;
     std::cout << "P90延迟 (micros): " << result.p90Latency << std::endl;
     std::cout << "P99延迟 (micros): " << result.p99Latency << std::endl;
     std::cout << "P999延迟 (micros): " << result.p999Latency << std::endl;

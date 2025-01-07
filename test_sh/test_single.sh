@@ -2,18 +2,20 @@
 
 ### Test parameters
 key_array=(16)
-value_array=(1024)
+value_array=("100")
+# value_array=("64" "128" "256" "512" "1024")
 block_array=(4096)
 op_array=("snappy")
-f_array=("8")
+f_array=("1" "2" "4" "8")
+# f_array=("8")
 wn_array=("8")
 # t_array=("16" "8" "4" "2" "1")
 t_array=$3
 db_array=("1")
 # rw_array=$7
-rw_array=(0 1 2 3 4 5 7 9 10)
-# rw_array=(0 5 10)
-# rw_array=(0)
+# rw_array=(0 1 2 3 4 5 7 9 10)
+# rw_array=(5 9)
+rw_array=(0)
 
 ### Benchmark parameters
 db="/home/zqy2023/zqy/$1"
@@ -68,7 +70,7 @@ allow_concurrent_memtable_write="true"
 
 ### Read optimization parameters
 bloom_bits=10
-# cache_size=1073741824
+cache_size=1073741824
 
 ### BlobDB parameters
 # enable_blob_files="true"
@@ -490,7 +492,7 @@ FILLSEQ() {
         exit 1
     fi
     sleep 5
-    COPY_OUT_FILE threads $3
+    COPY_OUT_FILE threads $3 $4 $5
 }
 
 FILLSEQ_V2() {
@@ -518,7 +520,7 @@ FILLRANDOM() {
         exit 1
     fi
     sleep 5
-    COPY_OUT_FILE threads $3
+    COPY_OUT_FILE threads $3 $4 $5
 }
 
 READRANDOM() {
@@ -671,68 +673,76 @@ RUN_ALL_TEST() {
                 for fth in ${f_array[@]}; do
                     for ndb in ${db_array[@]}; do
                         for rw in ${rw_array[@]}; do
-                            #REMOUNT_SSD
-                            # CLEAN_CACHE
-                            # set parameters
-                            rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
-                            compression_type="$op"
-                            blob_compression_type="$op"
-                            max_background_flushes="$fth"
-                            max_write_buffer_number="$wn"
-                            num_multi_db="$ndb"
-                            # run benchmark
-                            threads="$t"
-                            writes=$(((20000000/$threads)/$num_multi_db))
-                            reads_para=$(((20000000/$threads)/$num_multi_db))
-                            ycsb_running_num=$((20000000/$threads))
-                            # load data
-                            kill -9 $(pidof db_bench)
-                            kill -9 $(pidof top)
-                            LOAD $writes 8 false
-                            # YCSBLOAD $writes
-                            # MONITOR_CPU db_bench cpu-$1.log $1 &
-                            # FILLRANDOM $writes false $t
-                            allow_remote_compaction="$2"
-                            # threads="16"
-                            # YCSBRUN 10000
-                            MONITOR_CPU db_bench cpu-$1.log $1 &  
-                            # YCSBRUN $ycsb_running_num true workloada.spec
-                            # YCSBRUN $ycsb_running_num true workloadb.spec
-                            # YCSBRUN $ycsb_running_num true workloadc.spec
-                            # YCSBRUN $ycsb_running_num true workloadd.spec
-                            # YCSBRUN $ycsb_running_num true workloade.spec
-                            # YCSBRUN $ycsb_running_num true workloadf.spec
-                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
-                            MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
-                            # sleep 5
-                            # FILLRANDOM $writes false $t
-                            # FILLSEQ $writes false $t
-                            # FILLSEQ_V2 $writes_v2 false $t
-                            # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log 
-                            # kill -9 $(pidof db_bench)
-                            # kill -9 $(pidof top)
-                            # YCSBLOAD $writes
-                            # allow_remote_compaction="$2"
-                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
-                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
-                            # sleep 5
-                            # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
-                            # kill -9 $(pidof db_bench)
-                            # kill -9 $(pidof top)
-                            # YCSBLOAD $writes
-                            # allow_remote_compaction="$2"
-                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
-                            # YCSBRUN $ycsb_running_num true ycsbrun_workload_uniform_$rw
-                            # MIXGRAPH $reads_para false 0 5 0 $t
-                            # READRANDOMWRITERANDOM 1000000 1000000 true $op
-                            # READRANDOMWRITERANDOM 1000000 1000000 true $op
-                            # READWHILEWRITING 200000 1000000 true $op
-                            # READRANDOM 2000000 true $op
-                            # MULTIREADRANDOM 2000000 true $op
-                            # READRANDOM 200000 true $op
-                            # READSEQ 10000000 true $op
-                            # SEEKRANDOM 10000 true $op
-                            sleep 5
+                            for v in ${value_array[@]}; do
+                                #REMOUNT_SSD
+                                # CLEAN_CACHE
+                                # set parameters
+                                rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
+                                compression_type="$op"
+                                blob_compression_type="$op"
+                                max_background_flushes="$fth"
+                                # if [ "$fth" -eq 1 ] || [ "$fth" -eq 2]; then
+                                #     max_write_buffer_number="2"
+                                # else 
+                                #     max_write_buffer_number="$wn"
+                                # fi
+                                max_write_buffer_number="$wn"
+                                num_multi_db="$ndb"
+                                # run benchmark
+                                threads="$t"
+                                value_size="$v"
+                                writes=$(((10000000000/$threads)/$v))
+                                reads_para=$(((20000000/$threads)/$num_multi_db))
+                                ycsb_running_num=$((20000000/$threads))
+                                # load data
+                                kill -9 $(pidof db_bench)
+                                kill -9 $(pidof top)
+                                # LOAD $writes 8 false
+                                # YCSBLOAD $writes
+                                # MONITOR_CPU db_bench cpu-$1.log $1 &
+                                # FILLRANDOM $writes false $t
+                                allow_remote_compaction="$2"
+                                # threads="16"
+                                # YCSBRUN 10000
+                                MONITOR_CPU db_bench cpu-$1.log $1 &  
+                                # YCSBRUN $ycsb_running_num true workloada.spec
+                                # YCSBRUN $ycsb_running_num true workloadb.spec
+                                # YCSBRUN $ycsb_running_num true workloadc.spec
+                                # YCSBRUN $ycsb_running_num true workloadd.spec
+                                # YCSBRUN $ycsb_running_num true workloade.spec
+                                # YCSBRUN $ycsb_running_num true workloadf.spec
+                                # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
+                                # MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
+                                # sleep 5
+                                # FILLRANDOM $writes false $t $v $fth
+                                FILLSEQ $writes false $t $v $fth
+                                # FILLSEQ_V2 $writes_v2 false $t
+                                # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log 
+                                # kill -9 $(pidof db_bench)
+                                # kill -9 $(pidof top)
+                                # YCSBLOAD $writes
+                                # allow_remote_compaction="$2"
+                                # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                                # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
+                                # sleep 5
+                                # rm -rf /home/lsc/hadoop/zqy/wal/$1/*.log
+                                # kill -9 $(pidof db_bench)
+                                # kill -9 $(pidof top)
+                                # YCSBLOAD $writes
+                                # allow_remote_compaction="$2"
+                                # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                                # YCSBRUN $ycsb_running_num true ycsbrun_workload_uniform_$rw
+                                # MIXGRAPH $reads_para false 0 5 0 $t
+                                # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                                # READRANDOMWRITERANDOM 1000000 1000000 true $op
+                                # READWHILEWRITING 200000 1000000 true $op
+                                # READRANDOM 2000000 true $op
+                                # MULTIREADRANDOM 2000000 true $op
+                                # READRANDOM 200000 true $op
+                                # READSEQ 10000000 true $op
+                                # SEEKRANDOM 10000 true $op
+                                sleep 5
+                            done
                         done
                     done
                 done

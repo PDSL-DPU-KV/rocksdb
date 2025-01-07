@@ -68,7 +68,7 @@ allow_concurrent_memtable_write="true"
 
 ### Read optimization parameters
 bloom_bits=10
-# cache_size=1073741824
+cache_size=1073741824
 
 ### BlobDB parameters
 # enable_blob_files="true"
@@ -617,7 +617,7 @@ YCSBLOAD() {
     fi
     # report_csv="$report_csv_tmp"
     sleep 5
-    COPY_OUT_FILE ycsbload
+    COPY_OUT_FILE ycsbload $1
 }
 
 YCSBRUN() {
@@ -632,7 +632,7 @@ YCSBRUN() {
         exit 1
     fi
     sleep 5
-    COPY_OUT_FILE ycsbrun $3
+    COPY_OUT_FILE ycsbrun $3 $1
 }
 
 YCSB() {
@@ -684,24 +684,60 @@ RUN_ALL_TEST() {
                             threads="$t"
                             writes=$(((100000000/$threads)/$num_multi_db))
                             reads_para=$(((20000000/$threads)/$num_multi_db))
-                            ycsb_running_num=$((100000000/$threads))
+                            ycsb_running_num=$((20000000/$threads))
                             # load data
                             kill -9 $(pidof db_bench)
                             kill -9 $(pidof top)
                             # LOAD $writes 8 false
+                            allow_remote_compaction="$2"
                             YCSBLOAD $writes
                             # MONITOR_CPU db_bench cpu-$1.log $1 &
                             # FILLRANDOM $writes false $t
-                            allow_remote_compaction="$2"
                             # threads="16"
                             # YCSBRUN 10000
                             MONITOR_CPU db_bench cpu-$1.log $1 &  
                             YCSBRUN $ycsb_running_num true workloada.spec
-                            YCSBRUN $ycsb_running_num true workloadb.spec
-                            YCSBRUN $ycsb_running_num true workloadc.spec
-                            YCSBRUN $ycsb_running_num true workloadd.spec
-                            YCSBRUN $ycsb_running_num true workloade.spec
-                            YCSBRUN $ycsb_running_num true workloadf.spec
+                            # YCSBRUN $ycsb_running_num true workloadb.spec
+                            # YCSBRUN $ycsb_running_num true workloadc.spec
+                            # YCSBRUN $ycsb_running_num true workloadd.spec
+                            # YCSBRUN $ycsb_running_num true workloade.spec
+                            # YCSBRUN $ycsb_running_num true workloadf.spec
+
+
+
+
+                            # writes=$(((20000000/$threads)/$num_multi_db))
+                            # ycsb_running_num=$((20000000/$threads))
+                            # # load data
+                            # kill -9 $(pidof db_bench)
+                            # kill -9 $(pidof top)
+                            # YCSBLOAD $writes
+                            # allow_remote_compaction="$2"
+                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                            # YCSBRUN $ycsb_running_num true workloada.spec
+                            # YCSBRUN $ycsb_running_num true workloadb.spec
+                            # YCSBRUN $ycsb_running_num true workloadc.spec
+                            # YCSBRUN $ycsb_running_num true workloadd.spec
+                            # YCSBRUN $ycsb_running_num true workloade.spec
+                            # YCSBRUN $ycsb_running_num true workloadf.spec
+
+
+                            # writes=$(((100000000/$threads)/$num_multi_db))
+                            # ycsb_running_num=$((100000000/$threads))
+                            # # load data
+                            # kill -9 $(pidof db_bench)
+                            # kill -9 $(pidof top)
+                            # YCSBLOAD $writes
+                            # allow_remote_compaction="$2"
+                            # MONITOR_CPU db_bench cpu-$1.log $1 &  
+                            # YCSBRUN $ycsb_running_num true workloada.spec
+                            # YCSBRUN $ycsb_running_num true workloadb.spec
+                            # YCSBRUN $ycsb_running_num true workloadc.spec
+                            # YCSBRUN $ycsb_running_num true workloadd.spec
+                            # YCSBRUN $ycsb_running_num true workloade.spec
+                            # YCSBRUN $ycsb_running_num true workloadf.spec
+
+
                             # YCSBRUN $ycsb_running_num true ycsbrun_workload_zipfian_$rw
                             # MIXGRAPH $reads_para true $rw $((10-$rw)) 0 $t 
                             # sleep 5

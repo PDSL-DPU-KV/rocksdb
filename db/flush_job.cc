@@ -1085,6 +1085,7 @@ std::chrono::high_resolution_clock::time_point host_time[8] = {
 double average_duration[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 Status FlushJob::WriteLevel0Table() {
+  printf("mems.size:%ld\n", mems_.size());
 #ifdef DFLUSH
   // int host_id;
   // if (dbname_[5] > '0') {
@@ -1453,38 +1454,6 @@ Status FlushJob::WriteLevel0Table() {
         send(client_fd, buffer, total_size, 0);
         read(client_fd, buffer, 1024);  // 通过 read 阻塞
 
-        // char buf[4096*1024];
-        // std::string buf;
-        // auto ec =
-        //     glz::write<glz::opts{.prettify = true}>(tboptions.ioptions, buf);
-
-        // MetaReq req;
-        // MetaResult result;
-        // DeSerializeReq(buffer, &req);
-
-        // BuildTable_new_new(
-        //     dbname_, versions_, db_options_, tboptions, file_options_,
-        //     read_options, cfd_->table_cache(), iter.get(),
-        //     std::move(range_del_iters), &meta_, &blob_file_additions,
-        //     existing_snapshots_, earliest_write_conflict_snapshot_,
-        //     job_snapshot_seq, snapshot_checker_,
-        //     mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
-        //     &io_s, io_tracer_, BlobFileCreationReason::kFlush,
-        //     seqno_to_time_mapping_, event_logger_, job_context_->job_id,
-        //     io_priority, &table_properties_, write_hint, full_history_ts_low,
-        //     blob_callback_, base_, &num_input_entries,
-        //     &memtable_payload_bytes, &memtable_garbage_bytes, offset, &req,
-        //     &result, 0, req.use_dpa);
-
-        // char* result_buffer = (char *)malloc(4096);
-        // auto result_size = SerializeResult(result_buffer, &result);
-
-        // auto d = std::chrono::high_resolution_clock::now();
-        // // printf("dpu build table time: %lu\n",
-        // //        std::chrono::duration_cast<std::chrono::nanoseconds>(d
-        // - c)
-        // //                .count() /
-        // //            1000 / 1000);
         ptr = buffer;
         meta_size = recv_meta(&meta_, ptr);
         ptr += meta_size;
@@ -1668,49 +1637,323 @@ Status FlushJob::WriteLevel0Table() {
   }
   return s;
 #else
-  AutoThreadOperationStageUpdater stage_updater(
-      ThreadStatus::STAGE_FLUSH_WRITE_L0);
-  db_mutex_->AssertHeld();
-  const uint64_t start_micros = clock_->NowMicros();
-  const uint64_t start_cpu_micros = clock_->CPUMicros();
+  // Status s;
+  // for (uint64_t index = 0; index < mems_.size(); index++) {
+  //   MemTable* m = mems_[index];
+  //   if (index > 0) {
+  //     edit_ = m->GetEdits();
+  //     edit_->SetPrevLogNumber(0);
+  //     edit_->SetColumnFamily(cfd_->GetID());
+  //     meta_ = FileMetaData();
+  //     meta_.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
+  //     meta_.epoch_number = cfd_->NewEpochNumber();
+  //     base_ = cfd_->current();
+  //     base_->Ref();
+  //   }
+  //   edit_->SetLogNumber(m->GetNextLogNumber());
+  //   AutoThreadOperationStageUpdater stage_updater(
+  //       ThreadStatus::STAGE_FLUSH_WRITE_L0);
+  //   db_mutex_->AssertHeld();
+  //   const uint64_t start_micros = clock_->NowMicros();
+  //   const uint64_t start_cpu_micros = clock_->CPUMicros();
+
+  //   SequenceNumber smallest_seqno = m->GetEarliestSequenceNumber();
+  //   if (!db_impl_seqno_time_mapping_.Empty()) {
+  //     // make a local copy, as the seqno_time_mapping from db_impl is not thread
+  //     // safe, which will be used while not holding the db_mutex.
+  //     seqno_to_time_mapping_ = db_impl_seqno_time_mapping_.Copy(smallest_seqno);
+  //   }
+
+  //   std::vector<BlobFileAddition> blob_file_additions;
+
+  //   {
+  //     auto write_hint = cfd_->CalculateSSTWriteHint(0);
+  //     Env::IOPriority io_priority = GetRateLimiterPriorityForWrite();
+  //     db_mutex_->Unlock();
+  //     if (log_buffer_) {
+  //       log_buffer_->FlushBufferToLog();
+  //     }
+  //     // memtables and range_del_iters store internal iterators over each data
+  //     // memtable and its associated range deletion memtable, respectively, at
+  //     // corresponding indexes.
+  //     std::vector<InternalIterator*> memtables;
+  //     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+  //         range_del_iters;
+  //     ReadOptions ro;
+  //     ro.total_order_seek = true;
+  //     ro.io_activity = Env::IOActivity::kFlush;
+  //     Arena arena;
+  //     uint64_t total_num_entries = 0, total_num_deletes = 0;
+  //     uint64_t total_data_size = 0;
+  //     size_t total_memory_usage = 0;
+  //     // Used for testing:
+  //     // uint64_t mems_size = mems_.size();
+  //     // (void)mems_size;  // avoids unused variable error when
+  //     // TEST_SYNC_POINT_CALLBACK not used.
+  //     // TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
+  //     //                          &mems_size);
+  //     assert(job_context_);
+
+  //     ROCKS_LOG_INFO(
+  //         db_options_.info_log,
+  //         "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 "\n",
+  //         cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber());
+  //     memtables.push_back(m->NewIterator(ro, &arena));
+  //     memtables[memtables.size() - 1]->SeekToFirst();
+  //     auto* range_del_iter = m->NewRangeTombstoneIterator(
+  //         ro, kMaxSequenceNumber, true /* immutable_memtable */);
+  //     if (range_del_iter != nullptr) {
+  //       range_del_iters.emplace_back(range_del_iter);
+  //     }
+  //     total_num_entries += m->num_entries();
+  //     total_num_deletes += m->num_deletes();
+  //     total_data_size += m->get_data_size();
+  //     total_memory_usage += m->ApproximateMemoryUsage();
+
+  //     event_logger_->Log() << "job" << job_context_->job_id << "event"
+  //                          << "flush_started"
+  //                          << "num_memtables" << 1 << "num_entries"
+  //                          << total_num_entries << "num_deletes"
+  //                          << total_num_deletes << "total_data_size"
+  //                          << total_data_size << "memory_usage"
+  //                          << total_memory_usage << "flush_reason"
+  //                          << GetFlushReasonString(flush_reason_);
+
+  //     {
+  //       ScopedArenaIterator iter(
+  //           NewMergingIterator(&cfd_->internal_comparator(), memtables.data(),
+  //                              static_cast<int>(memtables.size()), &arena));
+  //       ROCKS_LOG_INFO(db_options_.info_log,
+  //                      "[%s] [JOB %d] Level-0 flush table #%" PRIu64
+  //                      ": started",
+  //                      cfd_->GetName().c_str(), job_context_->job_id,
+  //                      meta_.fd.GetNumber());
+
+  //       TEST_SYNC_POINT_CALLBACK(
+  //           "FlushJob::WriteLevel0Table:output_compression",
+  //           &output_compression_);
+  //       int64_t _current_time = 0;
+  //       auto status = clock_->GetCurrentTime(&_current_time);
+  //       // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
+  //       if (!status.ok()) {
+  //         ROCKS_LOG_WARN(
+  //             db_options_.info_log,
+  //             "Failed to get current time to populate creation_time property. "
+  //             "Status: %s",
+  //             status.ToString().c_str());
+  //       }
+  //       const uint64_t current_time = static_cast<uint64_t>(_current_time);
+
+  //       uint64_t oldest_key_time = m->ApproximateOldestKeyTime();
+
+  //       // It's not clear whether oldest_key_time is always available. In case
+  //       // it is not available, use current_time.
+  //       uint64_t oldest_ancester_time = std::min(current_time, oldest_key_time);
+
+  //       TEST_SYNC_POINT_CALLBACK(
+  //           "FlushJob::WriteLevel0Table:oldest_ancester_time",
+  //           &oldest_ancester_time);
+  //       meta_.oldest_ancester_time = oldest_ancester_time;
+  //       meta_.file_creation_time = current_time;
+
+  //       uint64_t num_input_entries = 0;
+  //       uint64_t memtable_payload_bytes = 0;
+  //       uint64_t memtable_garbage_bytes = 0;
+  //       IOStatus io_s;
+
+  //       const std::string* const full_history_ts_low =
+  //           (full_history_ts_low_.empty()) ? nullptr : &full_history_ts_low_;
+  //       TableBuilderOptions tboptions(
+  //           *cfd_->ioptions(), mutable_cf_options_, cfd_->internal_comparator(),
+  //           cfd_->int_tbl_prop_collector_factories(), output_compression_,
+  //           mutable_cf_options_.compression_opts, cfd_->GetID(),
+  //           cfd_->GetName(), 0 /* level */, false /* is_bottommost */,
+  //           TableFileCreationReason::kFlush, oldest_key_time, current_time,
+  //           db_id_, db_session_id_, 0 /* target_file_size */,
+  //           meta_.fd.GetNumber());
+  //       const SequenceNumber job_snapshot_seq =
+  //           job_context_->GetJobSnapshotSequence();
+  //       const ReadOptions read_options(Env::IOActivity::kFlush);
+
+  //       auto a = std::chrono::high_resolution_clock::now();
+
+  //       s = BuildTable(
+  //           dbname_, versions_, db_options_, tboptions, file_options_,
+  //           read_options, cfd_->table_cache(), iter.get(),
+  //           std::move(range_del_iters), &meta_, &blob_file_additions,
+  //           existing_snapshots_, earliest_write_conflict_snapshot_,
+  //           job_snapshot_seq, snapshot_checker_,
+  //           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
+  //           &io_s, io_tracer_, BlobFileCreationReason::kFlush,
+  //           seqno_to_time_mapping_, event_logger_, job_context_->job_id,
+  //           io_priority, &table_properties_, write_hint, full_history_ts_low,
+  //           blob_callback_, base_, &num_input_entries, &memtable_payload_bytes,
+  //           &memtable_garbage_bytes);
+  //       auto b = std::chrono::high_resolution_clock::now();
+  //       uint64_t buildtable_time =
+  //           std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
+  //       // printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
+
+  //       // TODO: Cleanup io_status in BuildTable and table builders
+  //       assert(!s.ok() || io_s.ok());
+  //       io_s.PermitUncheckedError();
+  //       if (num_input_entries != total_num_entries && s.ok()) {
+  //         std::string msg = "Expected " + std::to_string(total_num_entries) +
+  //                           " entries in memtables, but read " +
+  //                           std::to_string(num_input_entries);
+  //         ROCKS_LOG_WARN(db_options_.info_log, "[%s] [JOB %d] Level-0 flush %s",
+  //                        cfd_->GetName().c_str(), job_context_->job_id,
+  //                        msg.c_str());
+  //         if (db_options_.flush_verify_memtable_count) {
+  //           s = Status::Corruption(msg);
+  //         }
+  //       }
+  //       if (tboptions.reason == TableFileCreationReason::kFlush) {
+  //         TEST_SYNC_POINT("DBImpl::FlushJob:Flush");
+  //         RecordTick(stats_, MEMTABLE_PAYLOAD_BYTES_AT_FLUSH,
+  //                    memtable_payload_bytes);
+  //         RecordTick(stats_, MEMTABLE_GARBAGE_BYTES_AT_FLUSH,
+  //                    memtable_garbage_bytes);
+  //       }
+  //       LogFlush(db_options_.info_log);
+  //     }
+  //     ROCKS_LOG_BUFFER(
+  //         log_buffer_,
+  //         "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": %" PRIu64
+  //         " bytes %s"
+  //         "%s",
+  //         cfd_->GetName().c_str(), job_context_->job_id, meta_.fd.GetNumber(),
+  //         meta_.fd.GetFileSize(), s.ToString().c_str(),
+  //         meta_.marked_for_compaction ? " (needs compaction)" : "");
+
+  //     if (s.ok() && output_file_directory_ != nullptr &&
+  //         sync_output_directory_) {
+  //       s = output_file_directory_->FsyncWithDirOptions(
+  //           IOOptions(), nullptr,
+  //           DirFsyncOptions(DirFsyncOptions::FsyncReason::kNewFileSynced));
+  //     }
+  //     // TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table", &mems_);
+  //     db_mutex_->Lock();
+  //   }
+  //   base_->Unref();
+
+  //   // Note that if file_size is zero, the file has been deleted and
+  //   // should not be added to the manifest.
+  //   const bool has_output = meta_.fd.GetFileSize() > 0;
+
+  //   if (s.ok() && has_output) {
+  //     // TEST_SYNC_POINT("DBImpl::FlushJob:SSTFileCreated");
+  //     // if we have more than 1 background thread, then we cannot
+  //     // insert files directly into higher levels because some other
+  //     // threads could be concurrently producing compacted files for
+  //     // that key range.
+  //     // Add file to L0
+  //     // printf("filesize:%lu\n", meta_.fd.GetFileSize());
+  //     edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
+  //                    meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
+  //                    meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
+  //                    meta_.marked_for_compaction, meta_.temperature,
+  //                    meta_.oldest_blob_file_number, meta_.oldest_ancester_time,
+  //                    meta_.file_creation_time, meta_.epoch_number,
+  //                    meta_.file_checksum, meta_.file_checksum_func_name,
+  //                    meta_.unique_id, meta_.compensated_range_deletion_size,
+  //                    meta_.tail_size);
+
+  //     // edit_->SetBlobFileAdditions(std::move(blob_file_additions));
+  //   }
+  //   // Piggyback FlushJobInfo on the first first flushed memtable.
+  //   m->SetFlushJobInfo(GetFlushJobInfo());
+
+  //   // Note that here we treat flush as level 0 compaction in internal stats
+  //   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
+  //   const uint64_t micros = clock_->NowMicros() - start_micros;
+  //   const uint64_t cpu_micros = clock_->CPUMicros() - start_cpu_micros;
+  //   stats.micros = micros;
+  //   stats.cpu_micros = cpu_micros;
+
+  //   ROCKS_LOG_INFO(db_options_.info_log,
+  //                  "[%s] [JOB %d] Flush lasted %" PRIu64
+  //                  " microseconds, and %" PRIu64 " cpu microseconds.\n",
+  //                  cfd_->GetName().c_str(), job_context_->job_id, micros,
+  //                  cpu_micros);
+
+  //   if (has_output) {
+  //     stats.bytes_written = meta_.fd.GetFileSize();
+  //     stats.num_output_files = 1;
+  //   }
+
+  //   const auto& blobs = edit_->GetBlobFileAdditions();
+  //   for (const auto& blob : blobs) {
+  //     stats.bytes_written_blob += blob.GetTotalBlobBytes();
+  //   }
+
+  //   stats.num_output_files_blob = static_cast<int>(blobs.size());
+
+  //   RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
+  //   cfd_->internal_stats()->AddCompactionStats(0 /* level */, thread_pri_,
+  //                                              stats);
+  //   cfd_->internal_stats()->AddCFStats(
+  //       InternalStats::BYTES_FLUSHED,
+  //       stats.bytes_written + stats.bytes_written_blob);
+  //   RecordFlushIOStats();
+
+  //   FlushMetrics metrics;
+  //   metrics.total_bytes = stats.bytes_written;
+  //   metrics.memtable_ratio = 0.0;
+  //   metrics.memtable_ratio += (double)m->ApproximateMemoryUsage() /
+  //                             mutable_cf_options_.write_buffer_size;
+  //   auto vfs = cfd_->current()->storage_info();
+  //   metrics.l0_files = vfs->NumLevelFiles(vfs->base_level());
+  //   metrics.memtable_ratio /= 1;
+  //   metrics.write_out_bandwidth = stats.bytes_written / stats.micros;
+
+  //   db_options_.flush_stats->push_back(metrics);
+  // }
+  // return s;
+
+    AutoThreadOperationStageUpdater stage_updater(
+        ThreadStatus::STAGE_FLUSH_WRITE_L0);
+    db_mutex_->AssertHeld();
+    const uint64_t start_micros = clock_->NowMicros();
+    const uint64_t start_cpu_micros = clock_->CPUMicros();
   Status s;
 
   SequenceNumber smallest_seqno = mems_.front()->GetEarliestSequenceNumber();
-  if (!db_impl_seqno_time_mapping_.Empty()) {
-    // make a local copy, as the seqno_time_mapping from db_impl is not thread
-    // safe, which will be used while not holding the db_mutex.
-    seqno_to_time_mapping_ = db_impl_seqno_time_mapping_.Copy(smallest_seqno);
-  }
-
-  std::vector<BlobFileAddition> blob_file_additions;
-
-  {
-    auto write_hint = cfd_->CalculateSSTWriteHint(0);
-    Env::IOPriority io_priority = GetRateLimiterPriorityForWrite();
-    db_mutex_->Unlock();
-    if (log_buffer_) {
-      log_buffer_->FlushBufferToLog();
+    if (!db_impl_seqno_time_mapping_.Empty()) {
+      // make a local copy, as the seqno_time_mapping from db_impl is not thread
+      // safe, which will be used while not holding the db_mutex.
+      seqno_to_time_mapping_ = db_impl_seqno_time_mapping_.Copy(smallest_seqno);
     }
-    // memtables and range_del_iters store internal iterators over each data
-    // memtable and its associated range deletion memtable, respectively, at
-    // corresponding indexes.
-    std::vector<InternalIterator*> memtables;
-    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        range_del_iters;
-    ReadOptions ro;
-    ro.total_order_seek = true;
-    ro.io_activity = Env::IOActivity::kFlush;
-    Arena arena;
-    uint64_t total_num_entries = 0, total_num_deletes = 0;
-    uint64_t total_data_size = 0;
-    size_t total_memory_usage = 0;
-    // Used for testing:
+
+    std::vector<BlobFileAddition> blob_file_additions;
+
+    {
+      auto write_hint = cfd_->CalculateSSTWriteHint(0);
+      Env::IOPriority io_priority = GetRateLimiterPriorityForWrite();
+      db_mutex_->Unlock();
+      if (log_buffer_) {
+        log_buffer_->FlushBufferToLog();
+      }
+      // memtables and range_del_iters store internal iterators over each data
+      // memtable and its associated range deletion memtable, respectively, at
+      // corresponding indexes.
+      std::vector<InternalIterator*> memtables;
+      std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+          range_del_iters;
+      ReadOptions ro;
+      ro.total_order_seek = true;
+      ro.io_activity = Env::IOActivity::kFlush;
+      Arena arena;
+      uint64_t total_num_entries = 0, total_num_deletes = 0;
+      uint64_t total_data_size = 0;
+      size_t total_memory_usage = 0;
+      // Used for testing:
     uint64_t mems_size = mems_.size();
     (void)mems_size;  // avoids unused variable error when
-    // TEST_SYNC_POINT_CALLBACK not used.
+      // TEST_SYNC_POINT_CALLBACK not used.
     TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
                              &mems_size);
-    assert(job_context_);
+      assert(job_context_);
 
     for (MemTable* m : mems_) {
       ROCKS_LOG_INFO(
@@ -1730,76 +1973,76 @@ Status FlushJob::WriteLevel0Table() {
       total_memory_usage += m->ApproximateMemoryUsage();
     }
 
-    event_logger_->Log() << "job" << job_context_->job_id << "event"
-                         << "flush_started"
+      event_logger_->Log() << "job" << job_context_->job_id << "event"
+                           << "flush_started"
                          << "num_memtables" << mems_.size() << "num_entries"
-                         << total_num_entries << "num_deletes"
-                         << total_num_deletes << "total_data_size"
-                         << total_data_size << "memory_usage"
-                         << total_memory_usage << "flush_reason"
-                         << GetFlushReasonString(flush_reason_);
+                           << total_num_entries << "num_deletes"
+                           << total_num_deletes << "total_data_size"
+                           << total_data_size << "memory_usage"
+                           << total_memory_usage << "flush_reason"
+                           << GetFlushReasonString(flush_reason_);
 
-    {
-      ScopedArenaIterator iter(
-          NewMergingIterator(&cfd_->internal_comparator(), memtables.data(),
-                             static_cast<int>(memtables.size()), &arena));
-      ROCKS_LOG_INFO(db_options_.info_log,
+      {
+        ScopedArenaIterator iter(
+            NewMergingIterator(&cfd_->internal_comparator(), memtables.data(),
+                               static_cast<int>(memtables.size()), &arena));
+        ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": started",
-                     cfd_->GetName().c_str(), job_context_->job_id,
-                     meta_.fd.GetNumber());
+                       cfd_->GetName().c_str(), job_context_->job_id,
+                       meta_.fd.GetNumber());
 
       TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:output_compression",
-                               &output_compression_);
-      int64_t _current_time = 0;
-      auto status = clock_->GetCurrentTime(&_current_time);
-      // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
-      if (!status.ok()) {
-        ROCKS_LOG_WARN(
-            db_options_.info_log,
-            "Failed to get current time to populate creation_time property. "
-            "Status: %s",
-            status.ToString().c_str());
-      }
-      const uint64_t current_time = static_cast<uint64_t>(_current_time);
+            &output_compression_);
+        int64_t _current_time = 0;
+        auto status = clock_->GetCurrentTime(&_current_time);
+        // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
+        if (!status.ok()) {
+          ROCKS_LOG_WARN(
+              db_options_.info_log,
+              "Failed to get current time to populate creation_time property. "
+              "Status: %s",
+              status.ToString().c_str());
+        }
+        const uint64_t current_time = static_cast<uint64_t>(_current_time);
 
       uint64_t oldest_key_time = mems_.front()->ApproximateOldestKeyTime();
 
-      // It's not clear whether oldest_key_time is always available. In case
-      // it is not available, use current_time.
-      uint64_t oldest_ancester_time = std::min(current_time, oldest_key_time);
+        // It's not clear whether oldest_key_time is always available. In case
+        // it is not available, use current_time.
+        uint64_t oldest_ancester_time = std::min(current_time, oldest_key_time);
 
-      TEST_SYNC_POINT_CALLBACK(
-          "FlushJob::WriteLevel0Table:oldest_ancester_time",
-          &oldest_ancester_time);
-      meta_.oldest_ancester_time = oldest_ancester_time;
-      meta_.file_creation_time = current_time;
+        TEST_SYNC_POINT_CALLBACK(
+            "FlushJob::WriteLevel0Table:oldest_ancester_time",
+            &oldest_ancester_time);
+        meta_.oldest_ancester_time = oldest_ancester_time;
+        meta_.file_creation_time = current_time;
 
-      uint64_t num_input_entries = 0;
-      uint64_t memtable_payload_bytes = 0;
-      uint64_t memtable_garbage_bytes = 0;
-      IOStatus io_s;
+        uint64_t num_input_entries = 0;
+        uint64_t memtable_payload_bytes = 0;
+        uint64_t memtable_garbage_bytes = 0;
+        IOStatus io_s;
 
-      const std::string* const full_history_ts_low =
-          (full_history_ts_low_.empty()) ? nullptr : &full_history_ts_low_;
-      TableBuilderOptions tboptions(
-          *cfd_->ioptions(), mutable_cf_options_, cfd_->internal_comparator(),
-          cfd_->int_tbl_prop_collector_factories(), output_compression_,
+        const std::string* const full_history_ts_low =
+            (full_history_ts_low_.empty()) ? nullptr : &full_history_ts_low_;
+        TableBuilderOptions tboptions(
+            *cfd_->ioptions(), mutable_cf_options_, cfd_->internal_comparator(),
+            cfd_->int_tbl_prop_collector_factories(), output_compression_,
           mutable_cf_options_.compression_opts, cfd_->GetID(), cfd_->GetName(),
           0 /* level */, false /* is_bottommost */,
-          TableFileCreationReason::kFlush, oldest_key_time, current_time,
-          db_id_, db_session_id_, 0 /* target_file_size */,
-          meta_.fd.GetNumber());
-      const SequenceNumber job_snapshot_seq =
-          job_context_->GetJobSnapshotSequence();
-      const ReadOptions read_options(Env::IOActivity::kFlush);
+            TableFileCreationReason::kFlush, oldest_key_time, current_time,
+            db_id_, db_session_id_, 0 /* target_file_size */,
+            meta_.fd.GetNumber());
+        const SequenceNumber job_snapshot_seq =
+            job_context_->GetJobSnapshotSequence();
+        const ReadOptions read_options(Env::IOActivity::kFlush);
 
-      auto a = std::chrono::high_resolution_clock::now();
+        auto a = std::chrono::high_resolution_clock::now();
 
       s = BuildTable(dbname_, versions_, db_options_, tboptions, file_options_,
-                     read_options, cfd_->table_cache(), iter.get(),
-                     std::move(range_del_iters), &meta_, &blob_file_additions,
-                     existing_snapshots_, earliest_write_conflict_snapshot_,
-                     job_snapshot_seq, snapshot_checker_,
+            read_options, cfd_->table_cache(), iter.get(),
+            std::move(range_del_iters), &meta_, &blob_file_additions,
+            existing_snapshots_, earliest_write_conflict_snapshot_,
+            job_snapshot_seq, snapshot_checker_,
                      mutable_cf_options_.paranoid_file_checks,
                      cfd_->internal_stats(), &io_s, io_tracer_,
                      BlobFileCreationReason::kFlush, seqno_to_time_mapping_,
@@ -1807,125 +2050,125 @@ Status FlushJob::WriteLevel0Table() {
                      &table_properties_, write_hint, full_history_ts_low,
                      blob_callback_, base_, &num_input_entries,
                      &memtable_payload_bytes, &memtable_garbage_bytes);
-      auto b = std::chrono::high_resolution_clock::now();
-      uint64_t buildtable_time =
-          std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
-      // printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
+        auto b = std::chrono::high_resolution_clock::now();
+        uint64_t buildtable_time =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
+        // printf("buildtable_time:%lu\n", buildtable_time / 1000 / 1000);
 
-      // TODO: Cleanup io_status in BuildTable and table builders
-      assert(!s.ok() || io_s.ok());
-      io_s.PermitUncheckedError();
-      if (num_input_entries != total_num_entries && s.ok()) {
-        std::string msg = "Expected " + std::to_string(total_num_entries) +
-                          " entries in memtables, but read " +
-                          std::to_string(num_input_entries);
-        ROCKS_LOG_WARN(db_options_.info_log, "[%s] [JOB %d] Level-0 flush %s",
-                       cfd_->GetName().c_str(), job_context_->job_id,
-                       msg.c_str());
-        if (db_options_.flush_verify_memtable_count) {
-          s = Status::Corruption(msg);
+        // TODO: Cleanup io_status in BuildTable and table builders
+        assert(!s.ok() || io_s.ok());
+        io_s.PermitUncheckedError();
+        if (num_input_entries != total_num_entries && s.ok()) {
+          std::string msg = "Expected " + std::to_string(total_num_entries) +
+                            " entries in memtables, but read " +
+                            std::to_string(num_input_entries);
+          ROCKS_LOG_WARN(db_options_.info_log, "[%s] [JOB %d] Level-0 flush %s",
+                         cfd_->GetName().c_str(), job_context_->job_id,
+                         msg.c_str());
+          if (db_options_.flush_verify_memtable_count) {
+            s = Status::Corruption(msg);
+          }
         }
+        if (tboptions.reason == TableFileCreationReason::kFlush) {
+          TEST_SYNC_POINT("DBImpl::FlushJob:Flush");
+          RecordTick(stats_, MEMTABLE_PAYLOAD_BYTES_AT_FLUSH,
+                     memtable_payload_bytes);
+          RecordTick(stats_, MEMTABLE_GARBAGE_BYTES_AT_FLUSH,
+                     memtable_garbage_bytes);
+        }
+        LogFlush(db_options_.info_log);
       }
-      if (tboptions.reason == TableFileCreationReason::kFlush) {
-        TEST_SYNC_POINT("DBImpl::FlushJob:Flush");
-        RecordTick(stats_, MEMTABLE_PAYLOAD_BYTES_AT_FLUSH,
-                   memtable_payload_bytes);
-        RecordTick(stats_, MEMTABLE_GARBAGE_BYTES_AT_FLUSH,
-                   memtable_garbage_bytes);
-      }
-      LogFlush(db_options_.info_log);
-    }
     ROCKS_LOG_BUFFER(log_buffer_,
-                     "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": %" PRIu64
-                     " bytes %s"
-                     "%s",
+          "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": %" PRIu64
+          " bytes %s"
+          "%s",
                      cfd_->GetName().c_str(), job_context_->job_id,
                      meta_.fd.GetNumber(), meta_.fd.GetFileSize(),
                      s.ToString().c_str(),
-                     meta_.marked_for_compaction ? " (needs compaction)" : "");
+          meta_.marked_for_compaction ? " (needs compaction)" : "");
 
     if (s.ok() && output_file_directory_ != nullptr && sync_output_directory_) {
-      s = output_file_directory_->FsyncWithDirOptions(
-          IOOptions(), nullptr,
-          DirFsyncOptions(DirFsyncOptions::FsyncReason::kNewFileSynced));
-    }
+        s = output_file_directory_->FsyncWithDirOptions(
+            IOOptions(), nullptr,
+            DirFsyncOptions(DirFsyncOptions::FsyncReason::kNewFileSynced));
+      }
     TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table", &mems_);
-    db_mutex_->Lock();
-  }
-  base_->Unref();
+      db_mutex_->Lock();
+    }
+    base_->Unref();
 
-  // Note that if file_size is zero, the file has been deleted and
-  // should not be added to the manifest.
-  const bool has_output = meta_.fd.GetFileSize() > 0;
+    // Note that if file_size is zero, the file has been deleted and
+    // should not be added to the manifest.
+    const bool has_output = meta_.fd.GetFileSize() > 0;
 
-  if (s.ok() && has_output) {
-    // TEST_SYNC_POINT("DBImpl::FlushJob:SSTFileCreated");
-    // if we have more than 1 background thread, then we cannot
-    // insert files directly into higher levels because some other
-    // threads could be concurrently producing compacted files for
-    // that key range.
-    // Add file to L0
-    // printf("filesize:%lu\n", meta_.fd.GetFileSize());
-    edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
-                   meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
-                   meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
-                   meta_.marked_for_compaction, meta_.temperature,
-                   meta_.oldest_blob_file_number, meta_.oldest_ancester_time,
-                   meta_.file_creation_time, meta_.epoch_number,
-                   meta_.file_checksum, meta_.file_checksum_func_name,
-                   meta_.unique_id, meta_.compensated_range_deletion_size,
-                   meta_.tail_size);
+    if (s.ok() && has_output) {
+      // TEST_SYNC_POINT("DBImpl::FlushJob:SSTFileCreated");
+      // if we have more than 1 background thread, then we cannot
+      // insert files directly into higher levels because some other
+      // threads could be concurrently producing compacted files for
+      // that key range.
+      // Add file to L0
+      // printf("filesize:%lu\n", meta_.fd.GetFileSize());
+      edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
+                     meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
+                     meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
+                     meta_.marked_for_compaction, meta_.temperature,
+                     meta_.oldest_blob_file_number, meta_.oldest_ancester_time,
+                     meta_.file_creation_time, meta_.epoch_number,
+                     meta_.file_checksum, meta_.file_checksum_func_name,
+                     meta_.unique_id, meta_.compensated_range_deletion_size,
+                     meta_.tail_size);
 
-    // edit_->SetBlobFileAdditions(std::move(blob_file_additions));
-  }
-  // Piggyback FlushJobInfo on the first first flushed memtable.
+      // edit_->SetBlobFileAdditions(std::move(blob_file_additions));
+    }
+    // Piggyback FlushJobInfo on the first first flushed memtable.
   mems_[0]->SetFlushJobInfo(GetFlushJobInfo());
 
-  // Note that here we treat flush as level 0 compaction in internal stats
-  InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
-  const uint64_t micros = clock_->NowMicros() - start_micros;
-  const uint64_t cpu_micros = clock_->CPUMicros() - start_cpu_micros;
-  stats.micros = micros;
-  stats.cpu_micros = cpu_micros;
+    // Note that here we treat flush as level 0 compaction in internal stats
+    InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
+    const uint64_t micros = clock_->NowMicros() - start_micros;
+    const uint64_t cpu_micros = clock_->CPUMicros() - start_cpu_micros;
+    stats.micros = micros;
+    stats.cpu_micros = cpu_micros;
 
-  ROCKS_LOG_INFO(db_options_.info_log,
-                 "[%s] [JOB %d] Flush lasted %" PRIu64
-                 " microseconds, and %" PRIu64 " cpu microseconds.\n",
-                 cfd_->GetName().c_str(), job_context_->job_id, micros,
-                 cpu_micros);
+    ROCKS_LOG_INFO(db_options_.info_log,
+                   "[%s] [JOB %d] Flush lasted %" PRIu64
+                   " microseconds, and %" PRIu64 " cpu microseconds.\n",
+                   cfd_->GetName().c_str(), job_context_->job_id, micros,
+                   cpu_micros);
 
-  if (has_output) {
-    stats.bytes_written = meta_.fd.GetFileSize();
-    stats.num_output_files = 1;
-  }
+    if (has_output) {
+      stats.bytes_written = meta_.fd.GetFileSize();
+      stats.num_output_files = 1;
+    }
 
-  const auto& blobs = edit_->GetBlobFileAdditions();
-  for (const auto& blob : blobs) {
-    stats.bytes_written_blob += blob.GetTotalBlobBytes();
-  }
+    const auto& blobs = edit_->GetBlobFileAdditions();
+    for (const auto& blob : blobs) {
+      stats.bytes_written_blob += blob.GetTotalBlobBytes();
+    }
 
-  stats.num_output_files_blob = static_cast<int>(blobs.size());
+    stats.num_output_files_blob = static_cast<int>(blobs.size());
 
-  RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
+    RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, thread_pri_, stats);
-  cfd_->internal_stats()->AddCFStats(
-      InternalStats::BYTES_FLUSHED,
-      stats.bytes_written + stats.bytes_written_blob);
-  RecordFlushIOStats();
+    cfd_->internal_stats()->AddCFStats(
+        InternalStats::BYTES_FLUSHED,
+        stats.bytes_written + stats.bytes_written_blob);
+    RecordFlushIOStats();
 
-  FlushMetrics metrics;
-  metrics.total_bytes = stats.bytes_written;
-  metrics.memtable_ratio = 0.0;
+    FlushMetrics metrics;
+    metrics.total_bytes = stats.bytes_written;
+    metrics.memtable_ratio = 0.0;
   for (auto mem : mems_) {
     metrics.memtable_ratio += (double)mem->ApproximateMemoryUsage() /
                               mutable_cf_options_.write_buffer_size;
   }
-  auto vfs = cfd_->current()->storage_info();
-  metrics.l0_files = vfs->NumLevelFiles(vfs->base_level());
+    auto vfs = cfd_->current()->storage_info();
+    metrics.l0_files = vfs->NumLevelFiles(vfs->base_level());
   metrics.memtable_ratio /= mems_.size();
-  metrics.write_out_bandwidth = stats.bytes_written / stats.micros;
+    metrics.write_out_bandwidth = stats.bytes_written / stats.micros;
 
-  db_options_.flush_stats->push_back(metrics);
+    db_options_.flush_stats->push_back(metrics);
   return s;
 #endif
 }

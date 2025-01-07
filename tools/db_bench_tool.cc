@@ -5090,27 +5090,28 @@ class Benchmark {
     int remain_loading = FLAGS_load_num;
     int remain_running = FLAGS_running_num;
     const int test_duration = FLAGS_duration;
-    int64_t ops_per_stage = 1;
 
     // load first, then run
     Duration loading_duration(FLAGS_load_duration, remain_loading,
-                              ops_per_stage);
-    Duration running_duration(test_duration, remain_running, ops_per_stage);
+                              remain_loading);
+    Duration running_duration(test_duration, remain_running, remain_running);
     int stage = 0;
     //    WriteBatch batch;
     Status s;
     RandomGenerator gen;
     int64_t bytes = 0;
     Duration duration = loading_duration;
-    rocksdb::ReadOptions r_op;
-    rocksdb::WriteOptions w_op;
+    rocksdb::ReadOptions r_op = read_options_;
+    rocksdb::WriteOptions w_op = write_options_;
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
     WriteBatch batch(/*reserved_bytes=*/0, /*max_bytes=*/0,
                      FLAGS_write_batch_protection_bytes_per_key,
                      user_timestamp_size_);
     batch.Clear();
 
     if (load) {
-      while (!duration.Done(1)) {
+      while (!duration.Done(entries_per_batch_)) {
         DB* db = SelectDB(thread);
         if (duration.GetStage() != stage) {
           stage = duration.GetStage();
@@ -5125,9 +5126,10 @@ class Benchmark {
         if (entries_per_batch_ > 1) {
           batch.Clear();
           for (int64_t j = 0; j < entries_per_batch_; j++) {
-            // int64_t key_num = GetRandomKey(&thread->rand);
+            int64_t key_num = GetRandomKey(&thread->rand);
+            // uint64_t key_num = workload->NextTransactionKeyNum();
+            GenerateKeyFromInt(key_num, FLAGS_num, &key);
             // std::string key = workload->BuildKeyName(key_num);
-            std::string key = workload->BuildKeyName();
             Slice val = gen.Generate();
             batch.Put(key, val);
             bytes += val.size() + key.size();
@@ -5144,13 +5146,15 @@ class Benchmark {
           thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
         } else {
           int64_t key_num = GetRandomKey(&thread->rand);
-          std::string key = workload->BuildKeyName(key_num);
+          // uint64_t key_num = workload->NextTransactionKeyNum();
+          GenerateKeyFromInt(key_num, FLAGS_num, &key);
+          // std::string key = workload->BuildKeyName(key_num);
           Slice val = gen.Generate();
           uint64_t per_write_start_time = 0;
           if (FLAGS_report_csv) {
             per_write_start_time = FLAGS_env->NowMicros();
           }
-          db_.db->Put(w_op, key, val);
+          db_.db->Put(write_options_, key, val);
           if (FLAGS_report_csv) {
             thread->shared->latencys[thread->shared->ops_num++] =
                 FLAGS_env->NowMicros() - per_write_start_time;
@@ -5196,14 +5200,15 @@ class Benchmark {
         }
         std::string data;
         uint64_t key_num = workload->NextTransactionKeyNum();
-        const std::string key = workload->BuildKeyName(key_num);
+        // const std::string key = workload->BuildKeyName(key_num);
+        GenerateKeyFromInt(key_num, FLAGS_num, &key);
         switch (workload->NextOp()) {
           case ycsbc::READ: {
             uint64_t per_write_start_time = 0;
             if (FLAGS_report_csv) {
               per_write_start_time = FLAGS_env->NowMicros();
             }
-            op_status = db_.db->Get(r_op, key, &data);
+            op_status = db_.db->Get(read_options_, key, &data);
             if (FLAGS_report_csv) {
               thread->shared->latencys[thread->shared->ops_num++] =
                   FLAGS_env->NowMicros() - per_write_start_time;
@@ -5227,7 +5232,7 @@ class Benchmark {
                 if (FLAGS_report_csv) {
                   per_write_start_time = FLAGS_env->NowMicros();
                 }
-                op_status = db_.db->Write(w_op, &batch);
+                op_status = db_.db->Write(write_options_, &batch);
                 if (FLAGS_report_csv) {
                   thread->shared->latencys[thread->shared->ops_num++] =
                       FLAGS_env->NowMicros() - per_write_start_time;
@@ -5244,7 +5249,7 @@ class Benchmark {
               if (FLAGS_report_csv) {
                 per_write_start_time = FLAGS_env->NowMicros();
               }
-              op_status = db_.db->Put(w_op, key, val);
+              op_status = db_.db->Put(write_options_, key, val);
               if (FLAGS_report_csv) {
                 thread->shared->latencys[thread->shared->ops_num++] =
                     FLAGS_env->NowMicros() - per_write_start_time;
@@ -5254,18 +5259,42 @@ class Benchmark {
             }
           } break;
           case ycsbc::UPDATE: {
-            Slice val = gen.Generate();
-            // In rocksdb, update is just another put operation.
-            uint64_t per_write_start_time = 0;
-            if (FLAGS_report_csv) {
-              per_write_start_time = FLAGS_env->NowMicros();
+            put_count++;
+            if (entries_per_batch_ > 1) {
+              Slice val = gen.Generate();
+              batch.Put(key, val);
+              bytes += key.size() + val.size();
+              cur_batch_num++;
+              if (cur_batch_num >= entries_per_batch_) {
+                uint64_t per_write_start_time = 0;
+                if (FLAGS_report_csv) {
+                  per_write_start_time = FLAGS_env->NowMicros();
+                }
+                op_status = db_.db->Write(write_options_, &batch);
+                if (FLAGS_report_csv) {
+                  thread->shared->latencys[thread->shared->ops_num++] =
+                      FLAGS_env->NowMicros() - per_write_start_time;
+                }
+                thread->stats.FinishedOps(nullptr, db, entries_per_batch_,
+                                          kWrite);
+                batch.Clear();
+                cur_batch_num = 0;
+              }
+            } else {
+              Slice val = gen.Generate();
+              // In rocksdb, update is just another put operation.
+              uint64_t per_write_start_time = 0;
+              if (FLAGS_report_csv) {
+                per_write_start_time = FLAGS_env->NowMicros();
+              }
+              op_status = db_.db->Put(write_options_, key, val);
+              if (FLAGS_report_csv) {
+                thread->shared->latencys[thread->shared->ops_num++] =
+                    FLAGS_env->NowMicros() - per_write_start_time;
+              }
+              bytes += key.size() + val.size();
+              thread->stats.FinishedOps(nullptr, db, cur_batch_num, kWrite);
             }
-            op_status = db_.db->Put(w_op, key, val);
-            if (FLAGS_report_csv) {
-              thread->shared->latencys[thread->shared->ops_num++] =
-                  FLAGS_env->NowMicros() - per_write_start_time;
-            }
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
           } break;
           case ycsbc::SCAN: {
             Iterator* db_iter = db_.db->NewIterator(rocksdb::ReadOptions());
@@ -5283,7 +5312,7 @@ class Benchmark {
               thread->shared->latencys[thread->shared->ops_num++] =
                   FLAGS_env->NowMicros() - per_write_start_time;
             }
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kSeek);
+            thread->stats.FinishedOps(nullptr, db, 1, kSeek);
             delete db_iter;
           } break;
           case ycsbc::READMODIFYWRITE: {
@@ -5291,30 +5320,30 @@ class Benchmark {
             if (FLAGS_report_csv) {
               per_write_start_time = FLAGS_env->NowMicros();
             }
-            op_status = db_.db->Get(r_op, key, &data);
+            op_status = db_.db->Get(read_options_, key, &data);
             read_count++;
             if (op_status.IsNotFound()) {
               blind_updates++;
             }
             Slice val = gen.Generate();
-            op_status = db_.db->Put(w_op, key, val);
+            op_status = db_.db->Put(write_options_, key, val);
             if (FLAGS_report_csv) {
               thread->shared->latencys[thread->shared->ops_num++] =
                   FLAGS_env->NowMicros() - per_write_start_time;
             }
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
+            thread->stats.FinishedOps(nullptr, db, 1, kUpdate);
           } break;
           case ycsbc::DELETE: {
             uint64_t per_write_start_time = 0;
             if (FLAGS_report_csv) {
               per_write_start_time = FLAGS_env->NowMicros();
             }
-            op_status = db_.db->Delete(w_op, key);
+            op_status = db_.db->Delete(write_options_, key);
             if (FLAGS_report_csv) {
               thread->shared->latencys[thread->shared->ops_num++] =
                   FLAGS_env->NowMicros() - per_write_start_time;
             }
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete);
+            thread->stats.FinishedOps(nullptr, db, 1, kDelete);
           } break;
           case ycsbc::MAXOPTYPE:
             throw ycsbc::utils::Exception(
@@ -5326,7 +5355,7 @@ class Benchmark {
         if (FLAGS_report_csv) {
           per_write_start_time = FLAGS_env->NowMicros();
         }
-        op_status = db_.db->Write(w_op, &batch);
+        op_status = db_.db->Write(write_options_, &batch);
         if (FLAGS_report_csv) {
           thread->shared->latencys[thread->shared->ops_num++] =
               FLAGS_env->NowMicros() - per_write_start_time;
